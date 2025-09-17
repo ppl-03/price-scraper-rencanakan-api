@@ -93,20 +93,8 @@ he search term is controlled by the `keyword` parameter.
 
 ---
 
-#### 2. Pagination
 
-* **Parameter**: `p=NUMBER`
-  Controls which result page is shown.
-  Uses the `/index/` style URL.
-
-**Example**:
-`https://www.depobangunan.co.id/catalogsearch/result/index/?p=2&q=cat`
-
----
-
-
-
-#### 3. Sort Search
+#### 2. Sort Search
 
 * **Parameter**: `product_list_order=low_to_high`
 
@@ -120,3 +108,42 @@ he search term is controlled by the `keyword` parameter.
 `https://www.depobangunan.co.id/catalogsearch/result/index/?q=cat&product_list_order=low_to_high`
 
 
+
+## Mitra10
+https://www.mitra10.com/
+
+#### **Directory Path**
+
+`div.MuiGrid-item` → `div.grid-item` → `span.price__final`
+
+---
+#### Path Breakdown
+
+1. **`div.MuiGrid-item`**
+    - This is the main container for a product card.  
+
+2.  **`div.grid-item`**
+    - This is a child container inside the `MuiGrid-item`. Each `grid-item` represents an individual product, making it the focused area for scraping.
+
+3.  **`span.price__final`**
+    - This is the target element inside the `grid-item`. The text inside the `<span>` is the actual price of the product and should be scraped.
+
+
+---
+#### URL Breakdown
+
+`https://www.mitra10.com/catalogsearch/result?q=ITEM&sort=%7B%22key%22:%22price%22,%22value%22:%22ASC%22%7D`
+
+The search term is controlled by the `q` parameter.
+
+- **Parameter**: `q=ITEM`
+- Search other itmes replace `ITEM` with serach keyword.
+
+**Example**: To search for a certain product, you can change the URL to:
+`https://www.mitra10.com/catalogsearch/result?q=semen`
+
+
+#### Sort Search
+
+- **Parameter**: `sort=%7B%22key%22:%22price%22,%22value%22:%22ASC%22%7D`
+- `ASC` will make the product sorted by cheapest first
