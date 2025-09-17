@@ -147,3 +147,56 @@ The search term is controlled by the `q` parameter.
 
 - **Parameter**: `sort=%7B%22key%22:%22price%22,%22value%22:%22ASC%22%7D`
 - `ASC` will make the product sorted by cheapest first
+
+
+## Juragan Material
+https://juraganmaterial.id/
+
+#### **Directory Path**
+
+`div.product-card` -> `div.product-card-price` -> `div.price`
+
+---
+
+#### Path Breakdown
+
+1.  **`div.product-card`**
+    - This is the main container for each product listing on the page. It's the starting point for navigating to the specific product details.
+
+2.  **`div.product-card-price`**
+    - This is a child container within the product card. It holds the price and other related information, making it the area of focus.
+
+3.  **`div.price`**
+    - This is the specific element that contains the product's price. The text within this div should be scraped.
+
+
+---
+#### URL Breakdown
+
+`https://juraganmaterial.id/produk?keyword=semen&page=1&sort=relevance`
+
+the search term is controlled by the `keyword` parameter.
+
+- **Parameter**: `keyword=ITEM`
+- Search other itmes replace `ITEM` with serach keyword.
+
+**Example**: To search for "cat", you would change the URL to:
+`https://juraganmaterial.id/produk?keyword=cat`
+
+---
+
+#### 2. Pagination
+
+* **Parameter**: `page=NUMBER`
+The page parameter specifies the page number of the search results. The value can be changed to navigate to different pages (e.g., page=2 for the second page).
+
+**Example**:
+`https://juraganmaterial.id/produk?keyword=cat&page=1`
+
+---
+
+#### 3. Sort Search
+
+- **Parameter**: `sort=lowest_price`
+- The value `price_asc` will prioritize cheapest first
+- To sort by **Highest Price** will find most expensive first.
