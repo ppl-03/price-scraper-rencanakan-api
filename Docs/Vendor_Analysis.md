@@ -183,20 +183,9 @@ the search term is controlled by the `keyword` parameter.
 **Example**: To search for "cat", you would change the URL to:
 `https://juraganmaterial.id/produk?keyword=cat`
 
----
 
-#### 2. Pagination
-
-* **Parameter**: `page=NUMBER`
-The page parameter specifies the page number of the search results. The value can be changed to navigate to different pages (e.g., page=2 for the second page).
-
-**Example**:
-`https://juraganmaterial.id/produk?keyword=cat&page=1`
-
----
-
-#### 3. Sort Search
+#### 2. Sort Search
 
 - **Parameter**: `sort=lowest_price`
-- The value `price_asc` will prioritize cheapest first
+- The value `lowest_price` will prioritize cheapest first
 - To sort by **Highest Price** will find most expensive first.
