@@ -698,3 +698,96 @@ class TestGemilangIntegration(TestCase):
         self.assertIsNotNone(scraper.http_client)
         self.assertIsNotNone(scraper.url_builder)
         self.assertIsNotNone(scraper.html_parser)
+
+class TestUrlBuilder(TestCase):
+    
+    def setUp(self):
+        self.url_builder = GemilangUrlBuilder()
+    
+    def test_basic_url_building(self):
+        url = self.url_builder.build_search_url("cat")
+        
+        self.assertIn("gemilang-store.com", url)
+        self.assertIn("keyword=cat", url)
+        self.assertIn("sort=price_asc", url)
+        self.assertIn("page=0", url)
+    
+    def test_url_building_with_pagination(self):
+        url = self.url_builder.build_search_url("cat", page=3)
+        
+        self.assertIn("page=3", url)
+    
+    def test_url_building_without_sorting(self):
+        url = self.url_builder.build_search_url("cat", sort_by_price=False)
+        
+        self.assertNotIn("sort=price_asc", url)
+    
+    def test_keyword_trimming(self):
+        url = self.url_builder.build_search_url("  cat  ")
+        
+        self.assertIn("keyword=cat", url)
+        self.assertNotIn("keyword=%20%20cat%20%20", url)
+
+
+class TestHtmlParser(TestCase):
+    
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        base = Path(__file__).parent
+        fixture_path = base / "tests/fixtures/gemilang_mock_results.html"
+        cls.mock_html = fixture_path.read_text(encoding="utf-8")
+    
+    def setUp(self):
+        self.parser = GemilangHtmlParser()
+    
+    def test_parse_fixture_html(self):
+        products = self.parser.parse_products(self.mock_html)
+        
+        self.assertEqual(len(products), 2)
+        
+        product1 = products[0]
+        self.assertEqual(product1.name, "GML KUAS CAT 1inch")
+        self.assertEqual(product1.price, 3600)
+        self.assertEqual(product1.url, "/pusat/gml-kuas-cat-1inch")
+    
+    def test_parse_empty_html(self):
+        products = self.parser.parse_products("")
+        self.assertEqual(len(products), 0)
+    
+    def test_parse_malformed_html(self):
+        malformed_html = "<div class='item-product'><a href='/test'><p>incomplete"
+        products = self.parser.parse_products(malformed_html)
+        # Should not raise exception, may return empty or partial results
+        self.assertIsInstance(products, list)
+
+
+class TestHttpClientMocked(TestCase):
+    
+    @patch('api.services.requests.Session')
+    def test_successful_request(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        
+        mock_response = Mock()
+        mock_response.content = b"<html>test content</html>"
+        mock_response.encoding = "utf-8"
+        mock_session.get.return_value = mock_response
+        
+        client = RequestsHttpClient()
+        
+        result = client.get("https://example.com")
+        
+        self.assertEqual(result, "<html>test content</html>")
+        mock_session.get.assert_called_once()
+    
+    @patch('api.services.requests.Session')
+    def test_request_timeout(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_session.get.side_effect = Exception("Timeout")
+        
+        client = RequestsHttpClient()
+        
+        with self.assertRaises(HttpClientError):
+            client.get("https://example.com")
