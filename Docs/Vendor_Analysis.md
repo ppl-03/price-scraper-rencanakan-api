@@ -49,7 +49,13 @@ he search term is controlled by the `keyword` parameter.
 
 #### **Directory Path**
 
-`li.item.product.product-item` -> `div.product-item-info` -> `div.product.details.product-item-details` -> `div.price-box.price-final_price` -> `span.price-wrapper[data-price-type="finalPrice"]` -> `span.price`
+`li.item.product.product-item` -> `div.product-item-info` -> `div.product.details.product-item-details` -> `div.price-box.price-final_price` 
+
+#### For regular prices:
+-> `span.price-wrapper[data-price-type="finalPrice"]` -> `span.price`
+
+#### For discounted prices:
+-> `span.special-price span.price-wrapper[data-price-type="finalPrice"]` -> `span.price`
 
 ---
 
@@ -78,6 +84,11 @@ he search term is controlled by the `keyword` parameter.
 6. **`span.price`**
 
    * Visible formatted price (e.g., `Rp 3.600`).
+
+7. **`span.special-price`**
+
+    * Appears only if the product is discounted.
+    * Contains the special (discounted) price.
 
 ---
 
