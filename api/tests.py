@@ -33,6 +33,15 @@ class ScraperLogicTests(TestCase):
         cleaned_price = clean_price_mitra10("IDR 12,000")
         self.assertEqual(cleaned_price, 12000)
 
+    def test_scrape_juraganmaterial(self):
+        """Test only Juragan Material scraper functionality"""
+        products_juragan = scrape_products_from_juraganmaterial_html(self.mock_html_juragan)
+        self.assertIsInstance(products_juragan, list)
+        self.assertEqual(len(products_juragan), 3)
+        self.assertEqual(products_juragan[0]["name"], "Semen Holcim 40Kg")
+        self.assertEqual(products_juragan[0]["price"], 60500)
+        self.assertEqual(products_juragan[0]["url"], "/products/semen-holcim-40kg")
+
     def test_scrape_products_returns_a_list(self):
         products = scrape_products_from_gemilang_html(self.mock_html)
         self.assertIsInstance(products, list)
@@ -44,13 +53,6 @@ class ScraperLogicTests(TestCase):
         self.assertEqual(products_depo[0]["name"], "Produk A")
         self.assertEqual(products_depo[0]["price"], 3600)
         self.assertTrue(products_depo[0]["url"]) 
-
-        products_juragan = scrape_products_from_juraganmaterial_html(self.mock_html_juragan)
-        self.assertIsInstance(products_juragan, list)
-        self.assertEqual(len(products_juragan), 3)
-        self.assertEqual(products_juragan[0]["name"], "Semen Holcim 40Kg")
-        self.assertEqual(products_juragan[0]["price"], 60500)
-        self.assertEqual(products_juragan[0]["url"], "/products/semen-holcim-40kg")
 
         products_mitra10 = scrape_products_from_mitra10_html(self.mock_html_mitra)
         self.assertIsInstance(products_mitra10, list)
@@ -72,8 +74,14 @@ class ScraperAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
 
+    def test_api_juraganmaterial_scraper_function_exists(self):
+        """Test that Juragan Material scraper function exists and works"""
+        from .scraper import scrape_products_from_juraganmaterial_html
+        
+        # Test with empty HTML to ensure function exists and returns list
+        result = scrape_products_from_juraganmaterial_html("")
+        self.assertIsInstance(result, list)
+
     def test_api_requires_keyword(self):
         response = self.client.get(self.api_endpoint)
         self.assertEqual(response.status_code, 400)
-
-
