@@ -79,7 +79,29 @@ def clean_price_mitra10(price_string: str) -> int:
     return int("".join(digits)) if digits else 0
 
 def scrape_products_from_mitra10_html(html_content: str):
-    return []
+    soup = BeautifulSoup(html_content, "html.parser")
+    products = []
+
+    for product in soup.select("div.MuiGrid-item div.grid-item"):
+
+        price_tag = product.select_one("span.price__final")
+        price_str = price_tag.get_text(strip=True) if price_tag else "0"
+        price = clean_price_mitra10(price_str)
+
+        name_tag = product.select_one("a.gtm_mitra10_cta_product p")
+        name = name_tag.get_text(strip=True) if name_tag else None
+
+        link_tag = product.select_one("a.gtm_mitra10_cta_product")
+        url = link_tag["href"] if link_tag and link_tag.has_attr("href") else None
+
+        if name and url:
+            products.append({
+                "name": name,
+                "price": price,
+                "url": url
+            })
+
+    return products
 
 def clean_price_juraganmaterial(price_string: str) -> int:
     digits = re.findall(r'\d+', price_string)
