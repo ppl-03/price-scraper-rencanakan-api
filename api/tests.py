@@ -27,8 +27,10 @@ class ScraperLogicTests(TestCase):
         self.assertEqual(cleaned_price, 55000)
     
     def test_clean_price_depo(self):
-        cleaned_price = clean_price_depo("Rp 125.000")
-        self.assertEqual(cleaned_price, 125000)
+        self.assertEqual(clean_price_depo("Rp 125.000"), 125000)
+        self.assertEqual(clean_price_depo("Rp 3.600"), 3600)
+        self.assertEqual(clean_price_depo("59,903"), 59903)
+        self.assertEqual(clean_price_depo(""), 0)
     
     def test_clean_price_juraganmaterial(self):
         cleaned_price = clean_price_juraganmaterial("Rp 75.000")
@@ -55,17 +57,30 @@ class ScraperLogicTests(TestCase):
         self.assertEqual(products_mitra10[0]["price"], 12000)
         self.assertTrue(products_mitra10[0]["url"])
 
+    def test_scrape_depobangunan(self):
+        products_depo = scrape_products_from_depo_html(self.mock_html_depo)
+
+        self.assertIsInstance(products_depo, list)
+        self.assertEqual(len(products_depo), 3)
+
+        self.assertEqual(products_depo[0]["name"], "Produk A")
+        self.assertEqual(products_depo[0]["price"], 3600)
+        self.assertEqual(products_depo[0]["url"], "/produk-a.html")
+
+        self.assertEqual(products_depo[1]["name"], "Produk B")
+        self.assertEqual(products_depo[1]["price"], 125000)
+        self.assertEqual(products_depo[1]["url"], "/produk-b.html")
+
+        self.assertIn("AQUA PROOF", products_depo[2]["name"])
+        self.assertEqual(products_depo[2]["price"], 59903)
+        self.assertTrue(products_depo[2]["url"])        
+        
+
     def test_scrape_products_returns_a_list(self):
         products = scrape_products_from_gemilang_html(self.mock_html)
         self.assertIsInstance(products, list)
         self.assertEqual(len(products), 2)
 
-        products_depo = scrape_products_from_depo_html(self.mock_html_depo)
-        self.assertIsInstance(products_depo, list)
-        self.assertEqual(len(products_depo), 2)
-        self.assertEqual(products_depo[0]["name"], "Produk A")
-        self.assertEqual(products_depo[0]["price"], 3600)
-        self.assertTrue(products_depo[0]["url"]) 
 
 class ScraperAPITests(TestCase):
     def setUp(self):
