@@ -47,6 +47,14 @@ class ScraperLogicTests(TestCase):
         self.assertEqual(products_juragan[0]["price"], 60500)
         self.assertEqual(products_juragan[0]["url"], "/products/semen-holcim-40kg")
 
+    def test_scrape_mitra10(self):
+        products_mitra10 = scrape_products_from_mitra10_html(self.mock_html_mitra)
+        self.assertIsInstance(products_mitra10, list)
+        self.assertEqual(len(products_mitra10), 2)
+        self.assertEqual(products_mitra10[0]["name"], "Demix Nat Ubin Dasar 1 Kg Ungu Borneo")
+        self.assertEqual(products_mitra10[0]["price"], 12000)
+        self.assertTrue(products_mitra10[0]["url"])
+
     def test_scrape_products_returns_a_list(self):
         products = scrape_products_from_gemilang_html(self.mock_html)
         self.assertIsInstance(products, list)
@@ -58,13 +66,6 @@ class ScraperLogicTests(TestCase):
         self.assertEqual(products_depo[0]["name"], "Produk A")
         self.assertEqual(products_depo[0]["price"], 3600)
         self.assertTrue(products_depo[0]["url"]) 
-
-        products_mitra10 = scrape_products_from_mitra10_html(self.mock_html_mitra)
-        self.assertIsInstance(products_mitra10, list)
-        self.assertEqual(len(products_mitra10), 2)
-        self.assertEqual(products_mitra10[0]["name"], "Demix Nat Ubin Dasar 1 Kg Ungu Borneo")
-        self.assertEqual(products_mitra10[0]["price"], 12000)
-        self.assertTrue(products_mitra10[0]["url"])
 
 class ScraperAPITests(TestCase):
     def setUp(self):
