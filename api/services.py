@@ -1,6 +1,10 @@
 import requests
 import logging
 import time
+import requests
+import time
+import logging
+import re
 from urllib.parse import urlencode, urljoin
 from typing import List, Optional
 from bs4 import BeautifulSoup
@@ -141,39 +145,76 @@ class GemilangHtmlParser(IHtmlParser):
             raise HtmlParserError(f"Failed to parse HTML: {str(e)}")
     
     def _extract_product_from_item(self, item) -> Optional[Product]:
-        name_link = item.find('a')
-        if not name_link:
-            return None
-            
-        name_element = name_link.find('p', class_='product-name')
-        if not name_element:
-            return None
-            
-        name = name_element.get_text(strip=True)
+        name = self._extract_product_name(item)
         if not name:
             return None
-            
-        url = name_link.get('href', '')
         
-        price_wrapper = item.find('div', class_='price-wrapper')
-        if not price_wrapper:
-            return None
-            
-        price_element = price_wrapper.find('p', class_='price')
-        if not price_element:
-            return None
-            
-        price_text = price_element.get_text(strip=True)
+        url = self._extract_product_url(item)
         
-        try:
-            price = clean_price_gemilang(price_text)
-        except (TypeError, ValueError):
+        price = self._extract_product_price(item)
+        if price <= 0:
             return None
         
-        if name and price > 0 and url:
-            return Product(name=name, price=price, url=url)
+        return Product(name=name, price=price, url=url)
+    
+    def _extract_product_name(self, item) -> Optional[str]:
+        name_element = item.find('p', class_=lambda x: x and 'product-name' in x)
+        if name_element:
+            name = name_element.get_text(strip=True)
+            if name:
+                return name
+        
+        name_link = item.find('a')
+        if name_link:
+            name_element = name_link.find('p', class_='product-name')
+            if name_element:
+                name = name_element.get_text(strip=True)
+                if name:
+                    return name
+        
+        img = item.find('img')
+        if img and img.get('alt'):
+            return img.get('alt').strip()
         
         return None
+    
+    def _extract_product_url(self, item) -> str:
+        name_link = item.find('a')
+        if name_link and name_link.get('href') and name_link.get('href') != '#xs-review-button':
+            return name_link.get('href', '')
+        
+        name_element = item.find('p', class_=lambda x: x and 'product-name' in x)
+        if name_element:
+            name = name_element.get_text(strip=True)
+            if name:
+                slug = name.lower().replace(' ', '-').replace('(', '').replace(')', '')
+                import re
+                slug = re.sub(r'[^a-z0-9\-]', '', slug)
+                return f"/pusat/{slug}"
+        
+        return "/pusat/product"
+    
+    def _extract_product_price(self, item) -> int:
+        price_wrapper = item.find('div', class_=lambda x: x and 'price-wrapper' in x)
+        if price_wrapper:
+            price_element = price_wrapper.find('p', class_=lambda x: x and 'price' in x)
+            if price_element:
+                price_text = price_element.get_text(strip=True)
+                try:
+                    return clean_price_gemilang(price_text)
+                except (TypeError, ValueError):
+                    pass
+        
+        price_texts = item.find_all(string=lambda text: text and 'Rp' in text)
+        for price_text in price_texts:
+            try:
+                price = clean_price_gemilang(price_text.strip())
+                if price > 0:
+                    return price
+            except (TypeError, ValueError):
+                continue
+        
+        return 0
 
 
 class GemilangPriceScraper(IPriceScraper):
