@@ -6,3 +6,4 @@ requests
 urllib3
 coverage
 django-coverage-plugin
+django-environ
