@@ -66,8 +66,7 @@ jobs:
           echo "Coverage details:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           coverage report --show-missing >> $GITHUB_STEP_SUMMARY
-          echo
-           "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
            
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
