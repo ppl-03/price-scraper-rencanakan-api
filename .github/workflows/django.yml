@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.13"]
     env:
       DJANGO_SETTINGS_MODULE: price_scraper_rencanakan_api.settings
       SECRET_KEY: ${{ secrets.SECRET_KEY || 'insecure-test-key' }}
@@ -54,7 +54,7 @@ jobs:
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
-        if: matrix.python-version == '3.12'  # Only run SonarCloud on one Python version
+        if: matrix.python-version == '3.13'  # Only run SonarCloud on Python 3.13
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
