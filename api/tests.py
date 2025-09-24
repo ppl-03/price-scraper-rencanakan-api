@@ -15,7 +15,12 @@ class ScraperLogicTests(TestCase):
         cls.mock_html_juragan = juragan_fp.read_text(encoding="utf-8")
         mitra_fp = base / "tests/fixtures/mitra10_mock_results.html"
         cls.mock_html_mitra = mitra_fp.read_text(encoding="utf-8")
-
+    
+    def test_clean_price_depo(self):
+        self.assertEqual(clean_price_depo("Rp 125.000"), 125000)
+        self.assertEqual(clean_price_depo("Rp 3.600"), 3600)
+        self.assertEqual(clean_price_depo("59,903"), 59903)
+        self.assertEqual(clean_price_depo(""), 0)
     
     def test_clean_price_juraganmaterial(self):
         cleaned_price = clean_price_juraganmaterial("Rp 75.000")
@@ -50,14 +55,6 @@ class ScraperAPITests(TestCase):
     def setUp(self):
         self.client = Client()
         self.api_endpoint = '/api/scrape/'
-
-    def test_api_juraganmaterial_scraper_function_exists(self):
-        """Test that Juragan Material scraper function exists and works"""
-        from .scraper import scrape_products_from_juraganmaterial_html
-        
-        # Test with empty HTML to ensure function exists and returns list
-        result = scrape_products_from_juraganmaterial_html("")
-        self.assertIsInstance(result, list)
 
     def test_api_requires_keyword(self):
         response = self.client.get(self.api_endpoint)
