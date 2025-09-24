@@ -22,6 +22,9 @@ class ScraperConfig:
     gemilang_base_url: str = 'https://gemilang-store.com'
     gemilang_search_path: str = '/pusat/shop'
     
+    juragan_material_base_url: str = 'https://juraganmaterial.id'
+    juragan_material_search_path: str = '/produk'
+    
     @classmethod
     def from_environment(cls) -> 'ScraperConfig':
         return cls(
@@ -37,6 +40,8 @@ class ScraperConfig:
             log_requests=os.getenv('SCRAPER_LOG_REQUESTS', 'true').lower() == 'true',
             gemilang_base_url=os.getenv('GEMILANG_BASE_URL', 'https://gemilang-store.com'),
             gemilang_search_path=os.getenv('GEMILANG_SEARCH_PATH', '/pusat/shop'),
+            juragan_material_base_url=os.getenv('JURAGAN_MATERIAL_BASE_URL', 'https://juraganmaterial.id'),
+            juragan_material_search_path=os.getenv('JURAGAN_MATERIAL_SEARCH_PATH', '/produk'),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -53,6 +58,8 @@ class ScraperConfig:
             'log_requests': self.log_requests,
             'gemilang_base_url': self.gemilang_base_url,
             'gemilang_search_path': self.gemilang_search_path,
+            'juragan_material_base_url': self.juragan_material_base_url,
+            'juragan_material_search_path': self.juragan_material_search_path,
         }
 
 

@@ -53,3 +53,23 @@ class TestJuraganMaterialUrlBuilder(TestCase):
         with self.assertRaises(UrlBuilderError) as context:
             self.url_builder.build_search_url("semen", page=-1)
         self.assertIn("Page number cannot be negative", str(context.exception))
+    
+    @patch('api.juragan_material.url_builder.config')
+    def test_uses_config_defaults(self, mock_config):
+        """Test that URL builder uses configuration defaults."""
+        mock_config.juragan_material_base_url = "https://test-juraganmaterial.com"
+        mock_config.juragan_material_search_path = "/test/produk"
+        
+        builder = JuraganMaterialUrlBuilder()
+        url = builder.build_search_url("test")
+        
+        self.assertIn("test-juraganmaterial.com", url)
+        self.assertIn("/test/produk", url)
+    
+    def test_juragan_material_specific_params(self):
+        """Test Juragan Material specific parameters."""
+        url = self.url_builder.build_search_url("test", sort_by_price=True)
+        self.assertIn("sort=lowest_price", url)
+        
+        url = self.url_builder.build_search_url("test", sort_by_price=False)
+        self.assertIn("sort=relevance", url)

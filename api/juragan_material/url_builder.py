@@ -1,4 +1,5 @@
 from api.core import BaseUrlBuilder
+from api.config import config
 
 
 class JuraganMaterialUrlBuilder(BaseUrlBuilder):
@@ -6,8 +7,8 @@ class JuraganMaterialUrlBuilder(BaseUrlBuilder):
     
     def __init__(self, base_url: str = None, search_path: str = None):
         super().__init__(
-            base_url or "https://juraganmaterial.id",
-            search_path or "/produk"
+            base_url or config.juragan_material_base_url,
+            search_path or config.juragan_material_search_path
         )
     
     def _build_params(self, keyword: str, sort_by_price: bool, page: int) -> dict:
