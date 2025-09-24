@@ -50,11 +50,20 @@ jobs:
         run: |
           coverage run --source='.' manage.py test --verbosity 2
           coverage xml
-          coverage report
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        if: matrix.python-version == '3.13'  # Only run SonarCloud on Python 3.13
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          coverage report --show-missing
+          
+      - name: Upload coverage results
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            .coverage
+            
+      - name: Coverage Summary
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage details:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          coverage report --show-missing >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
