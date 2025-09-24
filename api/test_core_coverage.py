@@ -3,14 +3,21 @@ from unittest.mock import Mock, patch
 from api.interfaces import HttpClientError, UrlBuilderError, HtmlParserError
 from api.core import BaseHttpClient, BaseUrlBuilder, BasePriceScraper, clean_price_digits
 class TestCoreModuleCoverage(TestCase):
-    def test_clean_price_digits_none_input(self):
-        with self.assertRaises(TypeError) as context:
+    def test_clean_price_digits_error_handling(self):
+        # Test None input through exception handling
+        try:
             clean_price_digits(None)
-        self.assertIn("price_string cannot be None", str(context.exception))
-    def test_clean_price_digits_non_string_input(self):
-        with self.assertRaises(TypeError) as context:
+            self.fail("Should have raised TypeError for None input")
+        except TypeError as e:
+            self.assertIn("price_string cannot be None", str(e))
+        
+        # Test non-string input through exception handling
+        try:
             clean_price_digits(123)
-        self.assertIn("price_string must be a string", str(context.exception))
+            self.fail("Should have raised TypeError for non-string input")
+        except TypeError as e:
+            self.assertIn("price_string must be a string", str(e))
+    
     def test_clean_price_digits_empty_string(self):
         result = clean_price_digits("")
         self.assertEqual(result, 0)
