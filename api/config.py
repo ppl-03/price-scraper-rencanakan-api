@@ -21,6 +21,9 @@ class ScraperConfig:
     
     gemilang_base_url: str = 'https://gemilang-store.com'
     gemilang_search_path: str = '/pusat/shop'
+
+    mitra10_base_url: str = 'https://www.mitra10.com'
+    mitra10_search_path: str = '/catalogsearch/result'
     
     @classmethod
     def from_environment(cls) -> 'ScraperConfig':
@@ -37,6 +40,8 @@ class ScraperConfig:
             log_requests=os.getenv('SCRAPER_LOG_REQUESTS', 'true').lower() == 'true',
             gemilang_base_url=os.getenv('GEMILANG_BASE_URL', 'https://gemilang-store.com'),
             gemilang_search_path=os.getenv('GEMILANG_SEARCH_PATH', '/pusat/shop'),
+            mitra10_base_url=os.getenv('MITRA10_BASE_URL', 'https://www.mitra10.com'),
+            mitra10_search_path=os.getenv('MITRA10_SEARCH_PATH', '/catalogsearch/result'),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -53,6 +58,8 @@ class ScraperConfig:
             'log_requests': self.log_requests,
             'gemilang_base_url': self.gemilang_base_url,
             'gemilang_search_path': self.gemilang_search_path,
+            'mitra10_base_url': self.mitra10_base_url,
+            'mitra10_search_path': self.mitra10_search_path
         }
 
 
