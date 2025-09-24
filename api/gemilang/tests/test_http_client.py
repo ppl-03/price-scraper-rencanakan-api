@@ -32,7 +32,7 @@ class TestHttpClient(TestCase):
         mock_response.encoding = "utf-8"
         mock_session.get.return_value = mock_response
         client = BaseHttpClient()
-        result = client.get("https://example.com")
+        client.get("https://example.com")
         mock_session.get.assert_called_once()
         call_args = mock_session.get.call_args
         self.assertEqual(call_args[0][0], "https://example.com")

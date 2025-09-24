@@ -96,7 +96,7 @@ class TestGemilangIntegration(TestCase):
         mock_http_client = Mock()
         mock_http_client.get.return_value = self.mock_html
         mock_url_builder = Mock()
-        mock_url_builder.build_search_url.return_value = "http://test.com/search?q=test"
+        mock_url_builder.build_search_url.return_value = "https://test.com/search?q=test"
         mock_html_parser = Mock()
         mock_html_parser.parse_products.return_value = [
             Product(name="Test Product", price=100, url="/test")
@@ -104,7 +104,7 @@ class TestGemilangIntegration(TestCase):
         scraper = GemilangPriceScraper(mock_http_client, mock_url_builder, mock_html_parser)
         result = scraper.scrape_products("test")
         mock_url_builder.build_search_url.assert_called_once_with("test", True, 0)
-        mock_http_client.get.assert_called_once_with("http://test.com/search?q=test")
+        mock_http_client.get.assert_called_once_with("https://test.com/search?q=test")
         mock_html_parser.parse_products.assert_called_once_with(self.mock_html)
         self.assertTrue(result.success)
         self.assertEqual(len(result.products), 1)

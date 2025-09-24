@@ -7,10 +7,12 @@ class TestCoreModuleCoverage(TestCase):
         with self.assertRaises(TypeError) as context:
             clean_price_digits(None)
         self.assertIn("price_string cannot be None", str(context.exception))
+    
     def test_clean_price_digits_non_string_input(self):
         with self.assertRaises(TypeError) as context:
             clean_price_digits(123)
         self.assertIn("price_string must be a string", str(context.exception))
+    
     def test_clean_price_digits_empty_string(self):
         result = clean_price_digits("")
         self.assertEqual(result, 0)
