@@ -103,7 +103,7 @@ class TestJuraganMaterialHtmlParser(TestCase):
         def mock_extract(item):
             name_elem = item.find('p', class_='product-name')
             if name_elem and 'Broken' in name_elem.get_text():
-                raise Exception("Simulated extraction error")
+                raise ValueError("Simulated extraction error")
             return original_method(item)
         
         with patch.object(self.parser, '_extract_product_from_item', side_effect=mock_extract):
@@ -220,7 +220,6 @@ class TestJuraganMaterialHtmlParser(TestCase):
         """
         
         # Mock price cleaner to raise TypeError first, then ValueError in fallback
-        original_clean_price = self.parser.price_cleaner.clean_price
         call_count = 0
         
         def mock_clean_price(price_str):
@@ -274,9 +273,8 @@ class TestJuraganMaterialHtmlParser(TestCase):
         def mock_clean_price(price_str):
             nonlocal call_count
             call_count += 1
-            if 'invalid' in price_str:
-                if call_count <= 2:
-                    raise ValueError(f"Invalid price: {price_str}")
+            if 'invalid' in price_str and call_count <= 2:
+                raise ValueError(f"Invalid price: {price_str}")
             return original_clean_price(price_str)
         
         with patch.object(self.parser.price_cleaner, 'clean_price', side_effect=mock_clean_price):
