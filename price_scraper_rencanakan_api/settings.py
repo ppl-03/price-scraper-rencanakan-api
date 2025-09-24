@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'dashboard',
     "db_pricing",
+    "api",
 ]
 
 MIDDLEWARE = [
