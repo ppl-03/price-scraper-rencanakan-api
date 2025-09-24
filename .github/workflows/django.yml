@@ -39,8 +39,11 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run migrations (optional for sqlite)
+      - name: Apply database migrations
         run: |
+          python manage.py makemigrations dashboard --noinput
+          python manage.py makemigrations db_pricing --noinput
+          python manage.py makemigrations security --noinput
           python manage.py migrate --noinput
 
       - name: Run tests with coverage
