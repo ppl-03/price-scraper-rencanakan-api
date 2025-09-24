@@ -1,4 +1,6 @@
+from bs4 import BeautifulSoup
 from django.test import TestCase
+import unittest.mock
 from api.mitra10.html_parser import Mitra10HtmlParser
 
 
@@ -156,7 +158,7 @@ class TestsMitra10HTMLParser(TestCase):
         </div>
         '''
         products = self.parser.parse_products(html)
-        self.assertEqual(len(products), 0)  # Products with 0 price should be filtered out
+        self.assertEqual(len(products), 0)  
 
     def test_mitra10_product_name_exact_match(self):
         html = '''
@@ -258,7 +260,7 @@ class TestsMitra10HTMLParser(TestCase):
         '''
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
-        self.assertEqual(len(products), 2)  # Both containers have MuiGrid-item class
+        self.assertEqual(len(products), 2)  
         self.assertEqual(products_dict[0]['name'], 'Correct Product')
         self.assertEqual(products_dict[0]['price'], 15000)
 
@@ -356,8 +358,6 @@ class TestsMitra10HTMLParser(TestCase):
                 self.assertEqual(products, expected_output)
 
     def test_html_parser_exception_in_item_extraction(self):
-        """Test that exceptions during item extraction are caught and logged"""
-        # Create HTML that will cause an exception in _extract_product_from_item
         html = '''
         <div class="MuiGrid-item">
             <div class="jss273 grid-item">
@@ -377,23 +377,17 @@ class TestsMitra10HTMLParser(TestCase):
             </div>
         </div>
         '''
-        # Mock the price cleaner to raise an exception
-        import unittest.mock
+
         with unittest.mock.patch.object(self.parser.price_cleaner, 'clean_price', side_effect=Exception("Mock exception")):
             products = self.parser.parse_products(html)
-            # Should still return some products despite exceptions
             self.assertIsInstance(products, list)
 
     def test_html_parser_general_parsing_exception(self):
-        """Test that general parsing exceptions are properly raised"""
-        # Mock BeautifulSoup to raise an exception
-        import unittest.mock
         with unittest.mock.patch('api.mitra10.html_parser.BeautifulSoup', side_effect=Exception("BeautifulSoup error")):
-            with self.assertRaises(Exception):  # Should raise HtmlParserError
+            with self.assertRaises(Exception):  
                 self.parser.parse_products("<div>test</div>")
 
     def test_extract_product_name_fallback_to_img_alt(self):
-        """Test fallback to img alt attribute when p tag is missing"""
         html = '''
         <div class="MuiGrid-item">
             <div class="jss273 grid-item">
@@ -410,7 +404,6 @@ class TestsMitra10HTMLParser(TestCase):
         self.assertEqual(products_dict[0]['name'], 'Product from Image Alt')
 
     def test_extract_price_fallback_to_text_search(self):
-        """Test price extraction fallback to searching for Rp/IDR in text"""
         html = '''
         <div class="MuiGrid-item">
             <div class="jss273 grid-item">
@@ -429,7 +422,6 @@ class TestsMitra10HTMLParser(TestCase):
         self.assertEqual(products_dict[0]['price'], 35000)
 
     def test_extract_price_with_price_cleaner_exception(self):
-        """Test price extraction when price cleaner raises exception"""
         html = '''
         <div class="MuiGrid-item">
             <div class="jss273 grid-item">
@@ -440,8 +432,7 @@ class TestsMitra10HTMLParser(TestCase):
             </div>
         </div>
         '''
-        # Mock price cleaner to raise TypeError for main price element
-        import unittest.mock
+
         with unittest.mock.patch.object(self.parser.price_cleaner, 'clean_price', side_effect=[TypeError("Mock error"), 30000]):
             products = self.parser.parse_products(html)
             products_dict = self._products_to_dicts(products)
@@ -449,7 +440,6 @@ class TestsMitra10HTMLParser(TestCase):
             self.assertEqual(products_dict[0]['price'], 30000)
 
     def test_extract_price_fallback_exception_handling(self):
-        """Test exception handling in fallback price extraction"""
         html = '''
         <div class="MuiGrid-item">
             <div class="jss273 grid-item">
@@ -460,10 +450,35 @@ class TestsMitra10HTMLParser(TestCase):
             </div>
         </div>
         '''
-        # Mock price cleaner to raise exception for all calls
-        import unittest.mock
+
         with unittest.mock.patch.object(self.parser.price_cleaner, 'clean_price', side_effect=ValueError("Always fails")):
             products = self.parser.parse_products(html)
-            # Should return empty list since no valid price found and exceptions caught
             self.assertEqual(len(products), 0)
-  
+
+    def test_extract_url_fallback_to_unknown(self):
+        html = '''
+        <div class="MuiGrid-item">
+            <a class="gtm_mitra10_cta_product">
+                <!-- No href attribute -->
+            </a>
+        </div>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one("div.MuiGrid-item")
+        
+        url = self.parser._extract_product_url(item)
+        self.assertEqual(url, "/product/unknown")
+
+    def test_generate_slug_with_special_characters(self):
+        test_cases = [
+            ("Product Name", "product-name"),
+            ("Product (New) & Special!", "product-new--special"),
+            ("Product 123 Test", "product-123-test"),
+            ("Cat Tembok 5Kg (Premium)", "cat-tembok-5kg-premium"),
+            ("@#$%^&*()", ""),  # All special chars should be removed
+        ]
+        
+        for name, expected_slug in test_cases:
+            with self.subTest(name=name):
+                slug = self.parser._generate_slug(name)
+                self.assertEqual(slug, expected_slug)
