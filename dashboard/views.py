@@ -1,101 +1,106 @@
+# dashboard/views.py
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib import messages
 
+# We only use this to probe HTML length for diagnostics in toasts
+from api.core import BaseHttpClient
 
+# ---------------- GEMILANG (use its own factory + url builder) ----------------
+from api.gemilang.factory import create_gemilang_scraper
+from api.gemilang.url_builder import GemilangUrlBuilder
 
-# GEMILANG 
-from api.core import BaseHttpClient, BaseUrlBuilder
-from api.gemilang.scraper import GemilangPriceScraper
-from api.gemilang.html_parser import GemilangHtmlParser
-
-# DEPO BANGUNAN
+# ---------------- DEPO BANGUNAN ----------------
 from api.depobangunan.factory import create_depo_scraper
 from api.depobangunan.url_builder import DepoUrlBuilder
 
 
-
-GEMILANG_BASE_URL = "https://gemilang-store.com"
-GEMILANG_SEARCH_PATH = "/pusat/shop"
-
-
-class GemilangUrlBuilder(BaseUrlBuilder):
-    # Only override how query params are built
-    def _build_params(self, keyword: str, sort_by_price: bool, page: int) -> dict:
-        params = {"keyword": keyword, "page": page}
-        if sort_by_price:
-            params["sort"] = "price_asc"
-        return params
-
-
+# ---------- Helpers ----------
 def _make_gemilang_scraper():
-    http_client = BaseHttpClient()
-    url_builder = GemilangUrlBuilder(
-        base_url=GEMILANG_BASE_URL,
-        search_path=GEMILANG_SEARCH_PATH,
-    )
-    html_parser = GemilangHtmlParser()
-    scraper = GemilangPriceScraper(http_client, url_builder, html_parser)
-    return scraper, http_client, url_builder
+    """
+    Use Gemilang's own factory (like Depo) for the scraper,
+    and a GemilangUrlBuilder for building/logging URLs.
+    """
+    scraper = create_gemilang_scraper()   # ready-to-use GemilangPriceScraper
+    url_builder = GemilangUrlBuilder()    # for building/logging URLs
+    return scraper, url_builder
 
 
 def _make_depo_scraper():
-    # Factory returns an IPriceScraper (DepoPriceScraper)
     scraper = create_depo_scraper()
-    url_builder = DepoUrlBuilder()  # uses defaults from api.config.config
+    url_builder = DepoUrlBuilder()
     return scraper, url_builder
 
 
 def _build_url_defensively(url_builder, keyword: str, sort_by_price: bool, page: int) -> str:
-    # Handle builders that might expose build_search_url or build_url
+    """
+    Works with UrlBuilders that implement build_search_url() (preferred)
+    or build_url(keyword).
+    """
     if hasattr(url_builder, "build_search_url"):
         return url_builder.build_search_url(keyword, sort_by_price=sort_by_price, page=page)
     if hasattr(url_builder, "build_url"):
         return url_builder.build_url(keyword)
     raise AttributeError("URL builder has no supported build methods.")
 
+
+# ---------- Views ----------
 def home(request):
-    # Show product name, price, vendor by scraping Gemilang + Depo Bangunan
+    """
+    Show product name, price, vendor by scraping Gemilang + Depo Bangunan.
+    """
     prices = []
     keyword = request.GET.get("q", "semen")
 
-    # GEMILANG
+    # ---- GEMILANG ----
     try:
-        g_scraper, g_http, g_urlb = _make_gemilang_scraper()
+        g_scraper, g_urlb = _make_gemilang_scraper()
         g_url = _build_url_defensively(g_urlb, keyword, sort_by_price=True, page=0)
-        g_html = g_http.get(g_url)  # optional: to show HTML length in messages
+
+        # Optional: probe HTML size for diagnostics in the toast
+        try:
+            g_html_len = len(BaseHttpClient().get(g_url) or "")
+        except Exception:
+            g_html_len = 0
+
         g_res = g_scraper.scrape_products(keyword=keyword, sort_by_price=True, page=0)
 
-        messages.info(request, f"[Gemilang] URL: {g_url} | HTML: {len(g_html)} bytes")
-
+        messages.info(request, f"[Gemilang] URL: {g_url} | HTML: {g_html_len} bytes")
         if getattr(g_res, "success", False) and getattr(g_res, "products", None):
             for p in g_res.products:
-                prices.append({"item": p.name, "value": p.price, "source": "Gemilang Store"})
+                prices.append({
+                    "item": p.name,
+                    "value": p.price,
+                    "source": "Gemilang Store",
+                    "url": getattr(p, "url", "")
+                })
         else:
             messages.warning(request, f"[Gemilang] {getattr(g_res, 'error_message', 'No products parsed')}")
     except Exception as e:
         messages.error(request, f"[Gemilang] Scraper error: {e}")
 
-    # DEPO BANGUNAN
+    # ---- DEPO BANGUNAN ----
     try:
         d_scraper, d_urlb = _make_depo_scraper()
-        # Depo builder adds ?q=... and product_list_order=low_to_high if sort_by_price=True
         d_url = _build_url_defensively(d_urlb, keyword, sort_by_price=True, page=0)
-        # For debugging consistency.
         d_res = d_scraper.scrape_products(keyword=keyword, sort_by_price=True, page=0)
 
         messages.info(request, f"[Depo] URL: {d_url}")
-
         if getattr(d_res, "success", False) and getattr(d_res, "products", None):
             for p in d_res.products:
-                prices.append({"item": p.name, "value": p.price, "source": "Depo Bangunan"})
+                prices.append({
+                    "item": p.name,
+                    "value": p.price,
+                    "source": "Depo Bangunan",
+                    "url": getattr(p, "url", "")
+                })
         else:
             messages.warning(request, f"[Depo] {getattr(d_res, 'error_message', 'No products parsed')}")
     except Exception as e:
         messages.error(request, f"[Depo] Scraper error: {e}")
 
-    # Optional: sort combined results by ascending price (None last)
+    # Sort combined list by ascending price (None last)
     try:
         prices.sort(key=lambda x: (x["value"] is None, x["value"]))
     except Exception:
@@ -106,18 +111,16 @@ def home(request):
 
 @require_POST
 def trigger_scrape(request):
-    # Manually trigger a scrape (both vendors) then redirect to home.
-
+    """
+    POST endpoint behind your 'Search' button: runs both scrapers and reports counts.
+    """
     keyword = request.POST.get("q", "semen")
-
-    counters = {"gemilang": 0, "depo": 0}
-    errors = []
+    counters, errors = {"gemilang": 0, "depo": 0}, []
 
     # Gemilang
     try:
-        g_scraper, g_http, g_urlb = _make_gemilang_scraper()
+        g_scraper, g_urlb = _make_gemilang_scraper()
         g_url = _build_url_defensively(g_urlb, keyword, sort_by_price=True, page=0)
-        _ = g_http.get(g_url)
         g_res = g_scraper.scrape_products(keyword=keyword, sort_by_price=True, page=0)
         messages.info(request, f"[Gemilang] URL: {g_url}")
         if getattr(g_res, "success", False) and getattr(g_res, "products", None):
@@ -144,5 +147,8 @@ def trigger_scrape(request):
         messages.error(request, " | ".join(errors))
         return JsonResponse({"status": "error", "message": errors}, status=500)
 
-    messages.success(request, f"Scrape completed. Gemilang={counters['gemilang']}, Depo={counters['depo']}.")
+    messages.success(
+        request,
+        f"Scrape completed. Gemilang={counters['gemilang']}, Depo={counters['depo']}."
+    )
     return redirect("home")
