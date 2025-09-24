@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Harga Satuan – Rencanakan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body { background-color:#f7f9fb; font-family: Arial, sans-serif; color:#333; }
+    /* Navbar */
+    .navbar{ background:#fff; box-shadow:0 2px 4px rgba(0,0,0,.05); }
+    .navbar-brand{ font-weight:600; color:#003366!important; position:absolute; left:50%; transform:translateX(-50%); }
+    .navbar-right{ margin-left:auto; }
+
+    /* Tabs */
+    .nav-pills .nav-link{ color:#000; font-weight:500; border-radius:50px; padding:6px 16px; }
+    .nav-pills .nav-link.active{ background:#003366; color:#fff!important; }
+
+    /* Card + table */
+    .content-wrapper{ margin-top:30px; }
+    .card{ border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.06); border:none; }
+    .table thead{ background:#fff; border-bottom:2px solid #e5e7eb; }
+    .table thead th{ color:#444; font-weight:600; font-size:.9rem; border:none; }
+    .table tbody td{ font-size:.9rem; border-color:#f0f0f0; }
+    .search-bar{ border:1px solid #ddd; border-radius:6px; padding:6px 10px; width:100%; }
+    .filter-options{ font-size:.9rem; color:#555; }
+    .filter-options input{ margin-right:4px; }
+    .footer{ margin-top:40px; font-size:.8rem; color:#888; text-align:center; }
+    .action-link{ color:#003366; text-decoration:none; font-weight:500; }
+    .action-link:hover{ text-decoration:underline; }
+
+    /* Modals */
+    .review-modal .modal-content,
+    .edit-modal .modal-content{ border-radius:14px; }
+    .review-modal .modal-header,
+    .edit-modal   .modal-header{ border-bottom:1px solid #e6e6e6; }
+    .title-xl{ font-size:2rem; font-weight:700; line-height:1.1; }
+    .label-col{ color:#555; }
+
+    .btn-pill{ border-radius:999px; padding:10px 22px; font-weight:600; }
+    .btn-approve{ background:#062e56; color:#fff; border:none; }
+    .btn-approve:hover{ background:#042443; color:#fff; }
+    .btn-reject, .btn-edit-primary{ background:#0a56cf; color:#fff; border:none; }
+    .btn-reject:hover, .btn-edit-primary:hover{ background:#094ab4; color:#fff; }
+
+    /* Edit modal input styled to look clean/right aligned */
+    .idr-input{
+      text-align:right;
+      border:1px solid #dcdcdc;
+      border-radius:8px;
+      padding:8px 12px;
+      width:100%;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top navbar -->
+  <nav class="navbar navbar-light bg-white shadow-sm px-4">
+    <a class="navbar-brand" href="#">Rencanakan</a>
+    <div class="d-flex align-items-center navbar-right">
+      <span class="me-2">John Doe</span>
+      <img src="https://via.placeholder.com/32" class="rounded-circle" alt="profile">
+    </div>
+  </nav>
+
+  <div class="container content-wrapper">
+    <!-- Navigation tabs -->
+    <ul class="nav nav-pills mb-4 justify-content-center">
+      <li class="nav-item"><a class="nav-link" href="#">RAB</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">AHSP</a></li>
+      <li class="nav-item"><a class="nav-link active" href="#">Harga Satuan</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">Analisa Harga Peralatan</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">Jadwal Pelaksanaan</a></li>
+      <li class="nav-item"><a class="nav-link" href="#">Hitung Bahan</a></li>
+    </ul>
+
+    <!-- Search & filters -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <input type="text" class="search-bar" placeholder="Search">
+      </div>
+      <div class="col-md-6 d-flex align-items-center filter-options">
+        <input type="radio" id="nama" name="filter" checked>
+        <label for="nama" class="me-3">Nama Barang</label>
+        <input type="radio" id="kategori" name="filter">
+        <label for="kategori">Kategori</label>
+      </div>
+    </div>
+
+    <!-- Data card -->
+    <div class="card">
+      <div class="card-body p-0">
+        <h6 class="p-3 fw-semibold">1. KELOMPOK TANAH - AIR - BATU - SEMEN</h6>
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th style="width:5%;">No.</th>
+              <th>Uraian</th>
+              <th>Satuan</th>
+              <th>Kode</th>
+              <th>Harga Lama</th>
+              <th>Harga Baru</th>
+              <th>Δ Harga</th>
+              <th>Sumber</th>
+              <th>Status Update</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in prices %}
+            <tr data-rowid="{{ forloop.counter0 }}">
+              <td>{{ forloop.counter }}</td>
+              <td class="c-nama">{{ r.item }}</td>
+              <td>{{ r.unit }}</td>
+              <td>{{ r.code|default:"—" }}</td>
+              <td class="c-lama">{{ r.old_price|default:"—" }}</td>
+              <td class="c-baru">{{ r.value }}</td>
+              <td class="c-delta">{{ r.delta|default:"—" }}</td>
+              <td>{{ r.source|default:"—" }}</td>
+              <td>{{ r.status|default:"NeedsReview" }}</td>
+              <td>
+                <a href="#"
+                   class="action-link review-btn"
+                   data-bs-toggle="modal"
+                   data-bs-target="#reviewModal"
+                   data-rowid="{{ forloop.counter0 }}"
+                   >Tinjau lebih lanjut</a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="10" class="text-center text-muted py-4">No data</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer">© 2025 rencanakan.id</div>
+  </div>
+
+  <!-- Review Modal -->
+  <div class="modal fade review-modal" id="reviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:720px;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <div class="title-xl">Konfirmasi</div>
+            <div class="title-xl">Perubahan Harga</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row gy-2">
+            <div class="col-6 label-col">Nama :</div>
+            <div class="col-6 text-end" id="m-nama">—</div>
+
+            <div class="col-6 label-col mt-3">Harga Sekarang :</div>
+            <div class="col-6 text-end" id="m-lama">—</div>
+
+            <div class="col-6 label-col">Harga Terbaru :</div>
+            <div class="col-6 text-end" id="m-baru">—</div>
+
+            <div class="col-6 label-col">Perubahan :</div>
+            <div class="col-6 text-end" id="m-perubahan">—</div>
+          </div>
+
+          <div class="mt-4">Apakah anda ingin menyetujui perubahan harga ini?</div>
+        </div>
+
+        <div class="modal-footer justify-content-between" style="border-top:1px solid #e6e6e6;">
+          <div></div>
+          <div class="d-flex gap-3">
+            <button type="button" class="btn btn-pill btn-approve" id="btn-approve" data-bs-dismiss="modal">Simpan</button>
+            <button type="button" class="btn btn-pill btn-reject"  id="btn-reject"  data-bs-dismiss="modal">Tolak</button>
+            <button type="button" class="btn btn-pill btn-edit-primary" id="btn-edit">Edit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal fade edit-modal" id="editModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:720px;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="title-xl">Edit Harga</div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row gy-2">
+            <div class="col-6 label-col">Nama :</div>
+            <div class="col-6 text-end" id="e-nama">—</div>
+
+            <div class="col-6 label-col mt-3">Harga Sekarang :</div>
+            <div class="col-6 text-end" id="e-lama">—</div>
+
+            <div class="col-6 label-col">Harga Terbaru :</div>
+            <div class="col-6">
+              <input id="e-baru" type="text" class="idr-input" placeholder="Rp0">
+            </div>
+
+            <div class="col-6 label-col">Perubahan :</div>
+            <div class="col-6 text-end" id="e-perubahan">—</div>
+          </div>
+        </div>
+
+        <div class="modal-footer justify-content-center" style="border-top:1px solid #e6e6e6;">
+          <button type="button" class="btn btn-pill btn-approve" id="btn-edit-save">Simpan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Modals logic -->
+  <script>
+    // Helpers
+    const idf = new Intl.NumberFormat("id-ID", { style:"currency", currency:"IDR", minimumFractionDigits: 0 });
+
+    function fmtIDR(val){
+      if(val === null || val === undefined || val === "" || val === "—") return "—";
+      const num = parseIDR(val);
+      if (!isFinite(num)) return String(val);
+      return idf.format(num);
+    }
+    function parseIDR(str){
+      // Turn "Rp100.000,00" / "100000" / "100,000" into number
+      if (typeof str === "number") return str;
+      if (!str) return NaN;
+      const cleaned = String(str).replace(/[^\d.-]/g, "");
+      return Number(cleaned);
+    }
+    function pctDelta(oldVal, newVal){
+      const o = parseIDR(oldVal), n = parseIDR(newVal);
+      if (!isFinite(o) || !isFinite(n) || o === 0) return "—";
+      const pct = ((n - o) / o) * 100;
+      const sign = pct > 0 ? "+" : "";
+      return sign + pct.toFixed(1) + "%";
+    }
+
+    // Keep state for the currently selected row
+    let currentRow = null;
+
+    // Open Review modal with row data
+    document.querySelectorAll(".review-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest("tr");
+        currentRow = row;
+
+        const nama = row.querySelector(".c-nama")?.textContent?.trim() ?? "—";
+        const lama = row.querySelector(".c-lama")?.textContent?.trim() ?? "—";
+        const baru = row.querySelector(".c-baru")?.textContent?.trim() ?? "—";
+
+        document.getElementById("m-nama").textContent = nama;
+        document.getElementById("m-lama").textContent = fmtIDR(lama);
+        document.getElementById("m-baru").textContent = fmtIDR(baru);
+        document.getElementById("m-perubahan").textContent = pctDelta(lama, baru);
+      });
+    });
+
+    // When clicking "Edit" inside the Review modal → open Edit modal with same data
+    const reviewModalEl = document.getElementById("reviewModal");
+    const reviewModal    = new bootstrap.Modal(reviewModalEl);
+    const editModalEl    = document.getElementById("editModal");
+    const editModal      = new bootstrap.Modal(editModalEl);
+
+    document.getElementById("btn-edit").addEventListener("click", () => {
+      if (!currentRow) return;
+
+      const nama = currentRow.querySelector(".c-nama")?.textContent?.trim() ?? "—";
+      const lama = currentRow.querySelector(".c-lama")?.textContent?.trim() ?? "—";
+      const baru = currentRow.querySelector(".c-baru")?.textContent?.trim() ?? "—";
+
+      // Prefill Edit modal
+      document.getElementById("e-nama").textContent = nama;
+      document.getElementById("e-lama").textContent = fmtIDR(lama);
+      const input = document.getElementById("e-baru");
+      input.value = parseIDR(baru) ? idf.format(parseIDR(baru)) : "";
+
+      // Compute initial delta
+      document.getElementById("e-perubahan").textContent = pctDelta(lama, baru);
+
+      // Hide review, show edit
+      reviewModal.hide();
+      editModal.show();
+    });
+
+    // Format IDR while typing & update delta
+    const eBaru = document.getElementById("e-baru");
+    eBaru.addEventListener("blur", () => {
+      const val = parseIDR(eBaru.value);
+      if (isFinite(val)) eBaru.value = idf.format(val);
+      const lamaTxt = document.getElementById("e-lama").textContent;
+      document.getElementById("e-perubahan").textContent = pctDelta(lamaTxt, val);
+    });
+
+    // Save from Edit modal → update table row, close modal
+    document.getElementById("btn-edit-save").addEventListener("click", () => {
+      if (!currentRow) return;
+      const lamaTxt = currentRow.querySelector(".c-lama").textContent.trim();
+      const newVal  = parseIDR(document.getElementById("e-baru").value);
+
+      // Update table cells
+      currentRow.querySelector(".c-baru").textContent  = isFinite(newVal) ? idf.format(newVal) : "—";
+      currentRow.querySelector(".c-delta").textContent = pctDelta(lamaTxt, newVal);
+
+      // Also update the review button's data (so if they open again, it shows latest)
+      editModal.hide();
+    });
+
+    // Optional: wire Approve / Reject
+    document.getElementById("btn-approve").onclick = () => { /* TODO: POST approve */ };
+    document.getElementById("btn-reject").onclick  = () => { /* TODO: POST reject  */ };
+  </script>
+</body>
+</html>
