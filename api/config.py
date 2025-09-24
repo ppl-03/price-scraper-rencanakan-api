@@ -25,6 +25,12 @@ class ScraperConfig:
     mitra10_base_url: str = 'https://www.mitra10.com'
     mitra10_search_path: str = '/catalogsearch/result'
     
+    juragan_material_base_url: str = 'https://juraganmaterial.id'
+    juragan_material_search_path: str = '/produk'
+
+    depobangunan_base_url: str = 'https://www.depobangunan.co.id'
+    depobangunan_search_path: str = '/catalogsearch/result/'
+    
     @classmethod
     def from_environment(cls) -> 'ScraperConfig':
         return cls(
@@ -42,6 +48,10 @@ class ScraperConfig:
             gemilang_search_path=os.getenv('GEMILANG_SEARCH_PATH', '/pusat/shop'),
             mitra10_base_url=os.getenv('MITRA10_BASE_URL', 'https://www.mitra10.com'),
             mitra10_search_path=os.getenv('MITRA10_SEARCH_PATH', '/catalogsearch/result'),
+            juragan_material_base_url=os.getenv('JURAGAN_MATERIAL_BASE_URL', 'https://juraganmaterial.id'),
+            juragan_material_search_path=os.getenv('JURAGAN_MATERIAL_SEARCH_PATH', '/produk'),
+            depobangunan_base_url=os.getenv('DEPOBANGUNAN_BASE_URL', 'https://www.depobangunan.co.id'),
+            depobangunan_search_path=os.getenv('DEPOBANGUNAN_SEARCH_PATH', '/catalogsearch/result/'),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -60,6 +70,10 @@ class ScraperConfig:
             'gemilang_search_path': self.gemilang_search_path,
             'mitra10_base_url': self.mitra10_base_url,
             'mitra10_search_path': self.mitra10_search_path
+            'juragan_material_base_url': self.juragan_material_base_url,
+            'juragan_material_search_path': self.juragan_material_search_path,
+            'depobangunan_base_url': self.depobangunan_base_url,
+            'depobangunan_search_path': self.depobangunan_search_path,
         }
 
 

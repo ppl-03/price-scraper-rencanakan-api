@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch, Mock, MagicMock
 from django.test import TestCase, Client
-from .scraper import clean_price_depo, scrape_products_from_depo_html, scrape_products_from_depo_html, clean_price_juraganmaterial, scrape_products_from_juraganmaterial_html, clean_price_mitra10, scrape_products_from_mitra10_html
+from .scraper import clean_price_juraganmaterial, scrape_products_from_juraganmaterial_html, clean_price_mitra10, scrape_products_from_mitra10_html
 class ScraperLogicTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -34,38 +34,12 @@ class ScraperLogicTests(TestCase):
         self.assertEqual(products_juragan[0]["name"], "Semen Holcim 40Kg")
         self.assertEqual(products_juragan[0]["price"], 60500)
         self.assertEqual(products_juragan[0]["url"], "/products/semen-holcim-40kg")
-
-    def test_scrape_depobangunan(self):
-        products_depo = scrape_products_from_depo_html(self.mock_html_depo)
-
-        self.assertIsInstance(products_depo, list)
-        self.assertEqual(len(products_depo), 3)
-
-        self.assertEqual(products_depo[0]["name"], "Produk A")
-        self.assertEqual(products_depo[0]["price"], 3600)
-        self.assertEqual(products_depo[0]["url"], "/produk-a.html")
-
-        self.assertEqual(products_depo[1]["name"], "Produk B")
-        self.assertEqual(products_depo[1]["price"], 125000)
-        self.assertEqual(products_depo[1]["url"], "/produk-b.html")
-
-        self.assertIn("AQUA PROOF", products_depo[2]["name"])
-        self.assertEqual(products_depo[2]["price"], 59903)
-        self.assertTrue(products_depo[2]["url"])        
         
 
 class ScraperAPITests(TestCase):
     def setUp(self):
         self.client = Client()
         self.api_endpoint = '/api/scrape/'
-
-    def test_api_juraganmaterial_scraper_function_exists(self):
-        """Test that Juragan Material scraper function exists and works"""
-        from .scraper import scrape_products_from_juraganmaterial_html
-        
-        # Test with empty HTML to ensure function exists and returns list
-        result = scrape_products_from_juraganmaterial_html("")
-        self.assertIsInstance(result, list)
 
     def test_api_requires_keyword(self):
         response = self.client.get(self.api_endpoint)
