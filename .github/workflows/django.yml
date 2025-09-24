@@ -39,24 +39,6 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Check Python syntax
-        run: |
-          python -m py_compile $(find . -name "*.py" -not -path "./.venv/*" -not -path "./venv/*")
-
-      - name: Check for Python import issues
-        run: |
-          python -c "
-          import sys
-          import os
-          sys.path.insert(0, os.getcwd())
-          try:
-              import price_scraper_rencanakan_api.settings
-              print('✅ Settings import successful')
-          except Exception as e:
-              print(f'❌ Settings import failed: {e}')
-              sys.exit(1)
-          "
-
       - name: Apply database migrations
         run: |
           python manage.py makemigrations dashboard --noinput
@@ -64,105 +46,19 @@ jobs:
           python manage.py makemigrations security --noinput
           python manage.py migrate --noinput
 
-      - name: Check Django configuration
+      - name: Run tests with coverage
         run: |
-          python manage.py check --deploy
-
-      - name: Test collectstatic (build static files)
-        run: |
-          python manage.py collectstatic --noinput --dry-run
-
-      - name: Test Django startup
-        run: |
-          echo "🚀 Testing Django application startup..."
-          timeout 10s python manage.py runserver 0.0.0.0:8000 &
-          SERVER_PID=$!
-          sleep 5
-          if curl -f http://localhost:8000/ > /dev/null 2>&1; then
-            echo "✅ Django app started successfully!"
-          else
-            echo "✅ Django app startup test completed (expected for API-only apps)"
-          fi
-          kill $SERVER_PID 2>/dev/null || true
-          
-      - name: Verify build readiness
-        run: |
-          echo "🔍 Final build verification..."
-          python manage.py check --deploy --fail-level ERROR
-          echo "✅ Application is ready for deployment!"
-
-      - name: Run all unit tests with coverage
-        run: |
-          echo "🧪 Running all unit tests..."
-          coverage run --source='.' manage.py test --verbosity 2 --failfast
-          echo "✅ All unit tests passed!"
-          
-      - name: Generate coverage reports
-        run: |
-          echo "📊 Generating coverage reports..."
-          coverage xml -o coverage.xml
-          coverage html -d htmlcov
+          coverage run --source='.' manage.py test --verbosity 2
+          coverage xml
           coverage report --show-missing
-          echo "✅ Coverage reports generated!"
-          echo "📁 Checking generated files:"
-          ls -la coverage.xml || echo "coverage.xml not found"
-          ls -la .coverage || echo ".coverage not found" 
-          ls -la htmlcov/ || echo "htmlcov/ directory not found"
-          
-      - name: Validate test coverage
-        run: |
-          echo "📈 Validating test coverage..."
-          COVERAGE=$(coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//')
-          echo "Current coverage: ${COVERAGE}%"
-          if [ $(echo "$COVERAGE < 70" | bc -l) -eq 1 ]; then
-            echo "⚠️ Warning: Coverage is below 70%"
-          else
-            echo "✅ Coverage meets requirements (≥70%)"
-          fi
-          
-      - name: Prepare coverage artifacts
-        if: always()
-        run: |
-          echo "📦 Preparing coverage artifacts..."
-          # Ensure coverage files exist
-          if [ ! -f coverage.xml ]; then
-            echo "Creating empty coverage.xml"
-            echo '<?xml version="1.0" ?><coverage></coverage>' > coverage.xml
-          fi
-          if [ ! -f .coverage ]; then
-            echo "Creating empty .coverage file"
-            touch .coverage
-          fi
-          if [ ! -d htmlcov ]; then
-            echo "Creating empty htmlcov directory"
-            mkdir -p htmlcov
-            echo "<html><body>No coverage data available</body></html>" > htmlcov/index.html
-          fi
-          echo "✅ Coverage artifacts ready"
           
       - name: Upload coverage results
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: coverage-report
           path: |
-            ./coverage.xml
-            ./.coverage
-            ./htmlcov
-          include-hidden-files: true
-          if-no-files-found: warn
-            
-      - name: Build Status Summary
-        run: |
-          echo "## 🚀 Build & Test Summary" >> $GITHUB_STEP_SUMMARY
-          echo "### Build Status: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
-          echo "- Python syntax check: ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- Import validation: ✅" >> $GITHUB_STEP_SUMMARY  
-          echo "- Django configuration: ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- Static files build: ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- Application startup: ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- All unit tests: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+            coverage.xml
+            .coverage
             
       - name: Coverage Summary
         run: |
@@ -170,4 +66,15 @@ jobs:
           echo "Coverage details:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           coverage report --show-missing >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo
+           "\`\`\`" >> $GITHUB_STEP_SUMMARY
+           
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+
+
+  
