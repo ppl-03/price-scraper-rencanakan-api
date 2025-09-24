@@ -165,7 +165,6 @@ class TestMitra10HttpClient(TestCase):
             mock_session_class.return_value = mock_session
             
             client = BaseHttpClient()
-            result = client.get(self.search_url)
             
             self.assertIsNotNone(client.session.headers.get('User-Agent'))
     

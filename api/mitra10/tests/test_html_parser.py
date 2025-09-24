@@ -4,7 +4,7 @@ import unittest.mock
 from api.mitra10.html_parser import Mitra10HtmlParser
 
 
-class TestsMitra10HTMLParser(TestCase):
+class TestMitra10HTMLParser(TestCase):
 
     def setUp(self):
         self.parser = Mitra10HtmlParser()
