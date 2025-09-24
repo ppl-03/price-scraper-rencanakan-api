@@ -19,24 +19,49 @@ class TestsMitra10HTMLParser(TestCase):
             }
             for product in products
         ]
-
-    def test_scrape_mitra10_valid_products(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6 MuiGrid-grid-sm-4 MuiGrid-grid-md-3">
+    
+    def _create_product_html(self, name=None, price=None, url=None, img_alt=None, 
+                           price_class="price__final", grid_classes="MuiGrid-grid-xs-6"):
+        """Helper method to create HTML for a single product with customizable fields"""
+        name_html = f'<p class="MuiTypography-root">{name}</p>' if name else ''
+        if img_alt:
+            name_html = f'<img alt="{img_alt}" src="test.jpg">'
+        
+        price_html = f'<span class="{price_class}">{price}</span>' if price else ''
+        href_attr = f'href="{url}"' if url else ''
+        
+        return f'''
+        <div class="MuiGrid-root MuiGrid-item {grid_classes}">
           <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/test-product">
-              <p class="MuiTypography-root MuiTypography-body1 MuiTypography-alignLeft">
-                Test Product
-              </p>
+            <a class="gtm_mitra10_cta_product" {href_attr}>
+              {name_html}
             </a>
             <div class="jss298">
-              <span class="MuiTypography-root price__final MuiTypography-caption MuiTypography-alignLeft">
-                IDR 25,000
-              </span>
+              {price_html}
             </div>
           </div>
         </div>
         '''
+    
+    def _create_multiple_products_html(self, products_data):
+        """Helper method to create HTML with multiple products"""
+        products_html = []
+        for product in products_data:
+            products_html.append(self._create_product_html(**product))
+        
+        return f'''
+        <div class="product-list">
+            {''.join(products_html)}
+        </div>
+        '''
+
+    def test_scrape_mitra10_valid_products(self):
+        html = self._create_product_html(
+            name="Test Product", 
+            price="IDR 25,000", 
+            url="/test-product",
+            grid_classes="MuiGrid-grid-xs-6 MuiGrid-grid-sm-4 MuiGrid-grid-md-3"
+        )
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertIsInstance(products, list)
@@ -62,78 +87,28 @@ class TestsMitra10HTMLParser(TestCase):
         self.assertIsInstance(products, list)
 
     def test_scrape_mitra10_missing_name(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/test-product">
-            </a>
-            <div class="jss298">
-              <span class="price__final">IDR 25,000</span>
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(price="IDR 25,000", url="/test-product")
         products = self.parser.parse_products(html)
         self.assertEqual(len(products), 0)
 
     def test_scrape_mitra10_missing_price(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/test-product">
-              <p>Test Product</p>
-            </a>
-            <div class="jss298">
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(name="Test Product", url="/test-product")
         products = self.parser.parse_products(html)
         self.assertEqual(len(products), 0)  # Products with no price should be filtered out
 
     def test_scrape_mitra10_missing_url(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product">
-              <p>Test Product</p>
-            </a>
-            <div class="jss298">
-              <span class="price__final">IDR 25,000</span>
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(name="Test Product", price="IDR 25,000")
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertEqual(len(products), 1)  # Should generate fallback URL
         self.assertEqual(products_dict[0]['url'], '/product/test-product')  
 
     def test_scrape_mitra10_multiple_products(self):
-        html = '''
-        <div class="product-list">
-            <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-              <div class="jss273 grid-item">
-                <a class="gtm_mitra10_cta_product" href="/product-1">
-                  <p>Product 1</p>
-                </a>
-                <div class="jss298">
-                  <span class="price__final">IDR 10,000</span>
-                </div>
-              </div>
-            </div>
-            <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-              <div class="jss273 grid-item">
-                <a class="gtm_mitra10_cta_product" href="/product-2">
-                  <p>Product 2</p>
-                </a>
-                <div class="jss298">
-                  <span class="price__final">IDR 20,000</span>
-                </div>
-              </div>
-            </div>
-        </div>
-        '''
+        products_data = [
+            {"name": "Product 1", "price": "IDR 10,000", "url": "/product-1"},
+            {"name": "Product 2", "price": "IDR 20,000", "url": "/product-2"}
+        ]
+        html = self._create_multiple_products_html(products_data)
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertEqual(len(products), 2)
@@ -145,90 +120,33 @@ class TestsMitra10HTMLParser(TestCase):
         self.assertEqual(products_dict[1]['url'], '/product-2')
 
     def test_scrape_mitra10_zero_price(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/test-product">
-              <p>Test Product</p>
-            </a>
-            <div class="jss298">
-              <span class="price__final">IDR 0</span>
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(name="Test Product", price="IDR 0", url="/test-product")
         products = self.parser.parse_products(html)
         self.assertEqual(len(products), 0)  
 
     def test_mitra10_product_name_exact_match(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/exact-product-name">
-              <p class="MuiTypography-root MuiTypography-body1 MuiTypography-alignLeft">
-                Exact Product Name
-              </p>
-            </a>
-            <div class="jss298">
-              <span class="price__final">IDR 15,000</span>
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(name="Exact Product Name", price="IDR 15,000", url="/exact-product-name")
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertEqual(len(products), 1)
         self.assertEqual(products_dict[0]['name'], 'Exact Product Name')
 
     def test_mitra10_product_name_with_special_characters(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/special-product">
-              <p>Product & Tools 100%</p>
-            </a>
-            <div class="jss298">
-              <span class="price__final">IDR 25,000</span>
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(name="Product & Tools 100%", price="IDR 25,000", url="/special-product")
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertEqual(len(products), 1)
         self.assertEqual(products_dict[0]['name'], 'Product & Tools 100%')
 
     def test_mitra10_product_name_with_numbers(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/numbered-product">
-              <p>Cat Tembok 5Kg Premium 2024</p>
-            </a>
-            <div class="jss298">
-              <span class="price__final">IDR 45,000</span>
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(name="Cat Tembok 5Kg Premium 2024", price="IDR 45,000", url="/numbered-product")
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertEqual(len(products), 1)
         self.assertEqual(products_dict[0]['name'], 'Cat Tembok 5Kg Premium 2024')
 
     def test_mitra10_product_name_with_whitespace(self):
-        html = '''
-        <div class="MuiGrid-root MuiGrid-item MuiGrid-grid-xs-6">
-          <div class="jss273 grid-item">
-            <a class="gtm_mitra10_cta_product" href="/whitespace-product">
-              <p>  Product With Spaces  </p>
-            </a>
-            <div class="jss298">
-              <span class="price__final">IDR 12,000</span>
-            </div>
-          </div>
-        </div>
-        '''
+        html = self._create_product_html(name="  Product With Spaces  ", price="IDR 12,000", url="/whitespace-product")
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertEqual(len(products), 1)
@@ -388,16 +306,7 @@ class TestsMitra10HTMLParser(TestCase):
                 self.parser.parse_products("<div>test</div>")
 
     def test_extract_product_name_fallback_to_img_alt(self):
-        html = '''
-        <div class="MuiGrid-item">
-            <div class="jss273 grid-item">
-                <a class="gtm_mitra10_cta_product" href="/img-product">
-                    <img alt="Product from Image Alt" src="test.jpg">
-                </a>
-                <span class="price__final">IDR 15,000</span>
-            </div>
-        </div>
-        '''
+        html = self._create_product_html(img_alt="Product from Image Alt", price="IDR 15,000", url="/img-product")
         products = self.parser.parse_products(html)
         products_dict = self._products_to_dicts(products)
         self.assertEqual(len(products), 1)
@@ -422,16 +331,7 @@ class TestsMitra10HTMLParser(TestCase):
         self.assertEqual(products_dict[0]['price'], 35000)
 
     def test_extract_price_with_price_cleaner_exception(self):
-        html = '''
-        <div class="MuiGrid-item">
-            <div class="jss273 grid-item">
-                <a class="gtm_mitra10_cta_product" href="/exception-product">
-                    <p>Product With Problematic Price</p>
-                </a>
-                <span class="price__final">IDR 30,000</span>
-            </div>
-        </div>
-        '''
+        html = self._create_product_html(name="Product With Problematic Price", price="IDR 30,000", url="/exception-product")
 
         with unittest.mock.patch.object(self.parser.price_cleaner, 'clean_price', side_effect=[TypeError("Mock error"), 30000]):
             products = self.parser.parse_products(html)

@@ -26,20 +26,37 @@ class TestMitra10Integration(TestCase):
             self.url_builder, 
             self.html_parser
         )
-        
-    def test_complete_scraping_pipeline_success(self):
-        keyword = "semen"
+    
+    def _setup_successful_http_response(self):
+        """Helper to setup successful HTTP response with mock HTML"""
         self.mock_http_client.get.return_value = self.mock_html
-        
-        result = self.scraper.scrape_products(keyword)
-        
+    
+    def _setup_http_error(self, error_message="Connection timeout"):
+        """Helper to setup HTTP error response"""
+        self.mock_http_client.get.side_effect = HttpClientError(error_message)
+    
+    def _assert_successful_result(self, result, expected_url_fragment):
+        """Helper to assert successful scraping result"""
         self.assertTrue(result.success)
         self.assertIsNone(result.error_message)
         self.assertIsNotNone(result.url)
-        self.assertIn("q=semen", result.url)
-        self.assertIn("sort=", result.url)
-        
+        self.assertIn(expected_url_fragment, result.url)
         self.assertGreater(len(result.products), 0)
+    
+    def _assert_failed_result(self, result, expected_error_fragment):
+        """Helper to assert failed scraping result"""
+        self.assertFalse(result.success)
+        self.assertIn(expected_error_fragment, result.error_message)
+        self.assertEqual(len(result.products), 0)
+        
+    def test_complete_scraping_pipeline_success(self):
+        keyword = "semen"
+        self._setup_successful_http_response()
+        
+        result = self.scraper.scrape_products(keyword)
+        
+        self._assert_successful_result(result, "q=semen")
+        self.assertIn("sort=", result.url)
         
         product = result.products[0]
         self.assertIsInstance(product, Product)
@@ -53,12 +70,11 @@ class TestMitra10Integration(TestCase):
         
     def test_scraping_with_price_sorting(self):
         keyword = "semen"
-        self.mock_http_client.get.return_value = self.mock_html
+        self._setup_successful_http_response()
         
         result = self.scraper.scrape_products(keyword, sort_by_price=True)
         
-        self.assertTrue(result.success)
-        self.assertIn("q=semen", result.url)
+        self._assert_successful_result(result, "q=semen")
         self.assertIn("sort=", result.url)
         # Check for the correct URL-encoded JSON sort parameter
         self.assertTrue(
@@ -68,13 +84,11 @@ class TestMitra10Integration(TestCase):
         
     def test_scraping_with_http_error(self):
         keyword = "semen"
-        self.mock_http_client.get.side_effect = HttpClientError("Connection timeout")
+        self._setup_http_error()
         
         result = self.scraper.scrape_products(keyword)
         
-        self.assertFalse(result.success)
-        self.assertIn("Connection timeout", result.error_message)
-        self.assertEqual(len(result.products), 0)
+        self._assert_failed_result(result, "Connection timeout")
         
     def test_scraping_with_empty_html(self):
         keyword = "semen"
@@ -87,8 +101,7 @@ class TestMitra10Integration(TestCase):
         
     def test_scraping_with_no_products_found(self):
         keyword = "nonexistent"
-        html_no_products = "<html><body><div>No products found</div></body></html>"
-        self.mock_http_client.get.return_value = html_no_products
+        self.mock_http_client.get.return_value = "<html><body><div>No products found</div></body></html>"
         
         result = self.scraper.scrape_products(keyword)
         
