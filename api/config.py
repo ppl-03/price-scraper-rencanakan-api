@@ -22,6 +22,9 @@ class ScraperConfig:
     gemilang_base_url: str = 'https://gemilang-store.com'
     gemilang_search_path: str = '/pusat/shop'
     
+    depobangunan_base_url: str = 'https://www.depobangunan.co.id'
+    depobangunan_search_path: str = '/catalogsearch/result/'
+    
     @classmethod
     def from_environment(cls) -> 'ScraperConfig':
         return cls(
@@ -37,6 +40,8 @@ class ScraperConfig:
             log_requests=os.getenv('SCRAPER_LOG_REQUESTS', 'true').lower() == 'true',
             gemilang_base_url=os.getenv('GEMILANG_BASE_URL', 'https://gemilang-store.com'),
             gemilang_search_path=os.getenv('GEMILANG_SEARCH_PATH', '/pusat/shop'),
+            depobangunan_base_url=os.getenv('DEPOBANGUNAN_BASE_URL', 'https://www.depobangunan.co.id'),
+            depobangunan_search_path=os.getenv('DEPOBANGUNAN_SEARCH_PATH', '/catalogsearch/result/'),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -53,6 +58,8 @@ class ScraperConfig:
             'log_requests': self.log_requests,
             'gemilang_base_url': self.gemilang_base_url,
             'gemilang_search_path': self.gemilang_search_path,
+            'depobangunan_base_url': self.depobangunan_base_url,
+            'depobangunan_search_path': self.depobangunan_search_path,
         }
 
 
