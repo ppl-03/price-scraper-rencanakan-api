@@ -167,7 +167,7 @@ class TestInterfaceMethodSignatures(unittest.TestCase):
         
         class PassTestClient(IHttpClient):
             def get(self, url: str, timeout: int = 30) -> str:
-                result = super().get(url, timeout)
+                super().get(url, timeout)
                 return "test"
         
         client = PassTestClient()
@@ -178,7 +178,7 @@ class TestInterfaceMethodSignatures(unittest.TestCase):
         
         class PassTestBuilder(IUrlBuilder):
             def build_search_url(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> str:
-                result = super().build_search_url(keyword, sort_by_price, page)
+                super().build_search_url(keyword, sort_by_price, page)
                 return "test"
         
         builder = PassTestBuilder()
@@ -189,7 +189,7 @@ class TestInterfaceMethodSignatures(unittest.TestCase):
         
         class PassTestParser(IHtmlParser):
             def parse_products(self, html_content: str) -> list:
-                result = super().parse_products(html_content)
+                super().parse_products(html_content)
                 return []
         
         parser = PassTestParser()
@@ -200,7 +200,7 @@ class TestInterfaceMethodSignatures(unittest.TestCase):
         
         class PassTestScraper(IPriceScraper):
             def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> ScrapingResult:
-                result = super().scrape_products(keyword, sort_by_price, page)
+                super().scrape_products(keyword, sort_by_price, page)
                 return ScrapingResult(products=[], success=True)
         
         scraper = PassTestScraper()

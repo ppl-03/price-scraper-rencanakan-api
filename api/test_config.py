@@ -109,6 +109,7 @@ class TestScraperConfig(unittest.TestCase):
         
         self.assertTrue(config_obj.cache_enabled)
         self.assertTrue(config_obj.log_requests)
+        self.assertEqual(config_obj.log_level, 'INFO')
 
     @patch.dict(os.environ, {
         'SCRAPER_CACHE_ENABLED': 'True',
@@ -119,6 +120,7 @@ class TestScraperConfig(unittest.TestCase):
         
         self.assertTrue(config_obj.cache_enabled)
         self.assertTrue(config_obj.log_requests)
+        self.assertEqual(config_obj.request_timeout, 30)
 
     @patch.dict(os.environ, {
         'SCRAPER_CACHE_ENABLED': 'false',
@@ -129,6 +131,7 @@ class TestScraperConfig(unittest.TestCase):
         
         self.assertFalse(config_obj.cache_enabled)
         self.assertFalse(config_obj.log_requests)
+        self.assertEqual(config_obj.max_retries, 3)
 
     @patch.dict(os.environ, {
         'SCRAPER_CACHE_ENABLED': 'invalid',
@@ -139,6 +142,7 @@ class TestScraperConfig(unittest.TestCase):
         
         self.assertFalse(config_obj.cache_enabled)
         self.assertFalse(config_obj.log_requests)
+        self.assertEqual(config_obj.retry_delay, 1.0)
 
     def test_to_dict_method(self):
         config_obj = ScraperConfig(
