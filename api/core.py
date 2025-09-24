@@ -2,7 +2,7 @@ import requests
 import logging
 import time
 import re
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 from urllib.parse import urlencode, urljoin
 
 from .interfaces import (
@@ -151,7 +151,7 @@ class BasePriceScraper(IPriceScraper):
             )
 
 
-def clean_price_digits(price_string: str) -> int:
+def clean_price_digits(price_string: Union[str, Any]) -> int:
     if price_string is None:
         raise TypeError("price_string cannot be None")
     
