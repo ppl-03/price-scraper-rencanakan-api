@@ -100,10 +100,14 @@ jobs:
       - name: Generate coverage reports
         run: |
           echo "📊 Generating coverage reports..."
-          coverage xml
+          coverage xml -o coverage.xml
+          coverage html -d htmlcov
           coverage report --show-missing
-          coverage html
           echo "✅ Coverage reports generated!"
+          echo "📁 Checking generated files:"
+          ls -la coverage.xml || echo "coverage.xml not found"
+          ls -la .coverage || echo ".coverage not found" 
+          ls -la htmlcov/ || echo "htmlcov/ directory not found"
           
       - name: Validate test coverage
         run: |
@@ -116,15 +120,37 @@ jobs:
             echo "✅ Coverage meets requirements (≥70%)"
           fi
           
+      - name: Prepare coverage artifacts
+        if: always()
+        run: |
+          echo "📦 Preparing coverage artifacts..."
+          # Ensure coverage files exist
+          if [ ! -f coverage.xml ]; then
+            echo "Creating empty coverage.xml"
+            echo '<?xml version="1.0" ?><coverage></coverage>' > coverage.xml
+          fi
+          if [ ! -f .coverage ]; then
+            echo "Creating empty .coverage file"
+            touch .coverage
+          fi
+          if [ ! -d htmlcov ]; then
+            echo "Creating empty htmlcov directory"
+            mkdir -p htmlcov
+            echo "<html><body>No coverage data available</body></html>" > htmlcov/index.html
+          fi
+          echo "✅ Coverage artifacts ready"
+          
       - name: Upload coverage results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
           path: |
-            coverage.xml
-            .coverage
-            htmlcov/
+            ./coverage.xml
+            ./.coverage
+            ./htmlcov
+          include-hidden-files: true
+          if-no-files-found: warn
             
       - name: Build Status Summary
         run: |
