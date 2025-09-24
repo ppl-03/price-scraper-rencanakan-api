@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -41,6 +43,15 @@ jobs:
         run: |
           python manage.py migrate --noinput
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
-          python manage.py test --verbosity 2
+          coverage run --source='.' manage.py test --verbosity 2
+          coverage xml
+          coverage report
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        if: matrix.python-version == '3.12'  # Only run SonarCloud on one Python version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
