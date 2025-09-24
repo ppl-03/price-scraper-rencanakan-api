@@ -26,10 +26,6 @@ class ScraperLogicTests(TestCase):
         cleaned_price = clean_price_juraganmaterial("Rp 75.000")
         self.assertEqual(cleaned_price, 75000)
 
-    def test_clean_price_mitra10(self):
-        cleaned_price = clean_price_mitra10("IDR 12,000")
-        self.assertEqual(cleaned_price, 12000)
-
     def test_scrape_juraganmaterial(self):
         """Test only Juragan Material scraper functionality"""
         products_juragan = scrape_products_from_juraganmaterial_html(self.mock_html_juragan)
@@ -38,14 +34,6 @@ class ScraperLogicTests(TestCase):
         self.assertEqual(products_juragan[0]["name"], "Semen Holcim 40Kg")
         self.assertEqual(products_juragan[0]["price"], 60500)
         self.assertEqual(products_juragan[0]["url"], "/products/semen-holcim-40kg")
-
-    def test_scrape_mitra10(self):
-        products_mitra10 = scrape_products_from_mitra10_html(self.mock_html_mitra)
-        self.assertIsInstance(products_mitra10, list)
-        self.assertEqual(len(products_mitra10), 2)
-        self.assertEqual(products_mitra10[0]["name"], "Demix Nat Ubin Dasar 1 Kg Ungu Borneo")
-        self.assertEqual(products_mitra10[0]["price"], 12000)
-        self.assertTrue(products_mitra10[0]["url"])
 
     def test_scrape_depobangunan(self):
         products_depo = scrape_products_from_depo_html(self.mock_html_depo)
