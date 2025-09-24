@@ -86,21 +86,38 @@ WSGI_APPLICATION = 'price_scraper_rencanakan_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': env("MYSQL_NAME"),
-        "USER": env("MYSQL_USER"),
-        "PASSWORD": env("MYSQL_PASSWORD"),
-        "HOST": env("MYSQL_HOST"),
-        "PORT": env("MYSQL_PORT"),
-        # good defaults for emoji / wide characters & stable time behavior
-        "OPTIONS": {
-            "charset": "utf8mb4",
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
-        },
+# Use SQLite for testing when MySQL env vars aren't available
+if all([
+    env("MYSQL_NAME", default=None),
+    env("MYSQL_USER", default=None), 
+    env("MYSQL_PASSWORD", default=None),
+    env("MYSQL_HOST", default=None),
+    env("MYSQL_PORT", default=None)
+]):
+    # Production/Development MySQL configuration
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': env("MYSQL_NAME"),
+            "USER": env("MYSQL_USER"),
+            "PASSWORD": env("MYSQL_PASSWORD"),
+            "HOST": env("MYSQL_HOST"),
+            "PORT": env("MYSQL_PORT"),
+            # good defaults for emoji / wide characters & stable time behavior
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
+            },
+        }
     }
-}
+else:
+    # Test/CI SQLite configuration
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
