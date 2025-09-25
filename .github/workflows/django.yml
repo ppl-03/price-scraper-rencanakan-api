@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -37,12 +39,31 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run migrations (optional for sqlite)
+      - name: Apply database migrations
         run: |
+          python manage.py makemigrations dashboard --noinput
+          python manage.py makemigrations db_pricing --noinput
+          python manage.py makemigrations security --noinput
           python manage.py migrate --noinput
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
-          python manage.py test --verbosity 2
-
+          coverage run --source='.' manage.py test --verbosity 2
+          coverage xml
+          coverage report --show-missing
           
+      - name: Upload coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            .coverage
+            
+      - name: Coverage Summary
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage details:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          coverage report --show-missing >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
