@@ -156,3 +156,54 @@ class TestGemilangAPI(TestCase):
             sort_by_price=True,
             page=-1
         )
+        
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_sort_by_price_variations(self, mock_create_scraper):
+        mock_scraper = Mock()
+        mock_result = ScrapingResult(products=[], success=True)
+        mock_scraper.scrape_products.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        test_cases = [
+            ('1', True),
+            ('yes', True),
+            ('True', True),
+            ('false', False),
+            ('0', False),
+            ('no', False),
+            ('invalid', False),
+            ('', False)
+        ]
+        
+        for sort_value, expected in test_cases:
+            with self.subTest(sort_value=sort_value, expected=expected):
+                mock_scraper.reset_mock()
+                response = self.client.get('/api/gemilang/scrape/', {
+                    'keyword': 'test',
+                    'sort_by_price': sort_value
+                })
+                
+                self.assertEqual(response.status_code, 200)
+                mock_scraper.scrape_products.assert_called_once_with(
+                    keyword='test',
+                    sort_by_price=expected,
+                    page=0
+                )
+                
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_keyword_with_leading_trailing_spaces(self, mock_create_scraper):
+        mock_scraper = Mock()
+        mock_result = ScrapingResult(products=[], success=True)
+        mock_scraper.scrape_products.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/gemilang/scrape/', {
+            'keyword': '  test keyword  '
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        mock_scraper.scrape_products.assert_called_once_with(
+            keyword='test keyword',
+            sort_by_price=True,
+            page=0
+        )
