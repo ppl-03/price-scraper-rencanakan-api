@@ -29,7 +29,7 @@ class TestGemilangAPI(TestCase):
         mock_result = ScrapingResult(
             products=mock_products,
             success=True,
-            url="http://example.com/search?keyword=test"
+            url="https://example.com/search?keyword=test"
         )
         mock_scraper.scrape_products.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
@@ -44,7 +44,7 @@ class TestGemilangAPI(TestCase):
         self.assertEqual(data['products'][0]['name'], "Test Product 1")
         self.assertEqual(data['products'][0]['price'], 10000)
         self.assertEqual(data['products'][0]['url'], "/product1")
-        self.assertEqual(data['url'], "http://example.com/search?keyword=test")
+        self.assertEqual(data['url'], "https://example.com/search?keyword=test")
         self.assertIsNone(data['error_message'])
         
         mock_scraper.scrape_products.assert_called_once_with(
@@ -59,7 +59,7 @@ class TestGemilangAPI(TestCase):
         mock_result = ScrapingResult(
             products=[],
             success=True,
-            url="http://example.com"
+            url="https://example.com"
         )
         mock_scraper.scrape_products.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
