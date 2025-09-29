@@ -1,11 +1,11 @@
 from unittest import TestCase
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from api.interfaces import IPriceScraper, HttpClientError, Product
+from api.selenium_client import SeleniumHttpClient
 from api.mitra10.factory import create_mitra10_scraper
 from api.mitra10.scraper import Mitra10PriceScraper
 from api.mitra10.url_builder import Mitra10UrlBuilder
 from api.mitra10.html_parser import Mitra10HtmlParser
-from api.core import BaseHttpClient
 from pathlib import Path
 
 
@@ -18,7 +18,7 @@ class TestMitra10Integration(TestCase):
         cls.mock_html = fixture_path.read_text(encoding="utf-8")
         
     def setUp(self):
-        self.mock_http_client = Mock(spec=BaseHttpClient)
+        self.mock_http_client = Mock(spec=SeleniumHttpClient)
         self.url_builder = Mitra10UrlBuilder()
         self.html_parser = Mitra10HtmlParser()
         self.scraper = Mitra10PriceScraper(
@@ -28,15 +28,12 @@ class TestMitra10Integration(TestCase):
         )
     
     def _setup_successful_http_response(self):
-        """Helper to setup successful HTTP response with mock HTML"""
         self.mock_http_client.get.return_value = self.mock_html
     
     def _setup_http_error(self, error_message="Connection timeout"):
-        """Helper to setup HTTP error response"""
         self.mock_http_client.get.side_effect = HttpClientError(error_message)
     
     def _assert_successful_result(self, result, expected_url_fragment):
-        """Helper to assert successful scraping result"""
         self.assertTrue(result.success)
         self.assertIsNone(result.error_message)
         self.assertIsNotNone(result.url)
@@ -44,7 +41,6 @@ class TestMitra10Integration(TestCase):
         self.assertGreater(len(result.products), 0)
     
     def _assert_failed_result(self, result, expected_error_fragment):
-        """Helper to assert failed scraping result"""
         self.assertFalse(result.success)
         self.assertIn(expected_error_fragment, result.error_message)
         self.assertEqual(len(result.products), 0)
@@ -125,9 +121,11 @@ class TestMitra10Integration(TestCase):
         self.assertIsNotNone(scraper.http_client)
         self.assertIsNotNone(scraper.url_builder)
         self.assertIsNotNone(scraper.html_parser)
-        self.assertIsInstance(scraper.http_client, BaseHttpClient)
+
+        self.assertIsInstance(scraper.http_client, SeleniumHttpClient)
         self.assertIsInstance(scraper.url_builder, Mitra10UrlBuilder)
         self.assertIsInstance(scraper.html_parser, Mitra10HtmlParser)
+        scraper.http_client.close()
         
     def test_dependency_injection_flexibility(self):
         mock_http_client = Mock()
@@ -162,7 +160,7 @@ class TestMitra10Integration(TestCase):
         self.assertFalse(result.success)
         self.assertIn("Unexpected error", result.error_message)
         
-    @patch('api.mitra10.factory.BaseHttpClient')
+    @patch('api.mitra10.factory.SeleniumHttpClient')
     @patch('api.mitra10.factory.Mitra10UrlBuilder')
     @patch('api.mitra10.factory.Mitra10HtmlParser')
     def test_factory_creates_new_instances(self, mock_parser_class, mock_builder_class, mock_client_class):

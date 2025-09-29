@@ -21,4 +21,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/gemilang/', include('api.gemilang.urls')),
     path('api/depobangunan/', include('api.depobangunan.urls')),
+    path('api/mitra10/', include('api.mitra10.urls')),
 ]
