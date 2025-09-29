@@ -1,8 +1,8 @@
 from django import forms
-from dashboard import models
+from . import models
 
 class ItemPriceProvinceForm(forms.ModelForm):
-    # Hints from scrape (not saved)
+    # not persisted; just to show where it came from
     source = forms.CharField(required=False)
     url = forms.URLField(required=False)
 
