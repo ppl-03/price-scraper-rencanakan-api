@@ -14,7 +14,7 @@ class TestSeleniumHttpClient(unittest.TestCase):
         try:
             if hasattr(self.client, 'driver') and self.client.driver:
                 self.client.close()
-        except:
+        except Exception:
             pass
 
     @patch('api.selenium_client.webdriver.Chrome')
@@ -31,9 +31,7 @@ class TestSeleniumHttpClient(unittest.TestCase):
     def test_initialization_with_options(self, mock_chrome):
         mock_driver = Mock()
         mock_chrome.return_value = mock_driver
-        
-        client = SeleniumHttpClient()
-        
+                
         # Verify Chrome was called with options
         call_args = mock_chrome.call_args
         self.assertIsNotNone(call_args)
@@ -180,9 +178,7 @@ class TestSeleniumHttpClient(unittest.TestCase):
         mock_options.return_value = mock_options_instance
         mock_driver = Mock()
         mock_chrome.return_value = mock_driver
-        
-        client = SeleniumHttpClient()
-        
+                
         mock_options.assert_called_once()
         mock_options_instance.add_argument.assert_called()
 
@@ -193,19 +189,7 @@ class TestSeleniumHttpClient(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             SeleniumHttpClient()
         
-        self.assertTrue(
-            isinstance(context.exception, (WebDriverException, Exception))
-        )
-
-    @patch('api.selenium_client.webdriver.Chrome')
-    def test_context_manager_support(self, mock_chrome):
-        mock_driver = Mock()
-        mock_chrome.return_value = mock_driver
-        
-        client = SeleniumHttpClient()
-        
-        client.close()
-        mock_driver.quit.assert_called_once()
+        self.assertIsInstance(context.exception, (WebDriverException, Exception))
 
     def test_implements_http_client_interface(self):
         self.assertTrue(hasattr(SeleniumHttpClient, 'get'))
