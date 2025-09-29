@@ -69,7 +69,7 @@ class ScraperConfig:
             'gemilang_base_url': self.gemilang_base_url,
             'gemilang_search_path': self.gemilang_search_path,
             'mitra10_base_url': self.mitra10_base_url,
-            'mitra10_search_path': self.mitra10_search_path
+            'mitra10_search_path': self.mitra10_search_path,
             'juragan_material_base_url': self.juragan_material_base_url,
             'juragan_material_search_path': self.juragan_material_search_path,
             'depobangunan_base_url': self.depobangunan_base_url,
