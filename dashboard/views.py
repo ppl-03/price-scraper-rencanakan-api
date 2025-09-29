@@ -1,4 +1,3 @@
-# dashboard/views.py
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -308,3 +307,19 @@ def trigger_scrape(request):
         )
     )
     return redirect("home")
+
+def curated_price_list(request):
+    return HttpResponse("not implemented", status=501)
+
+def curated_price_create(request):
+    return HttpResponse("not implemented", status=501)
+
+def curated_price_update(request, pk):
+    return HttpResponse("not implemented", status=501)
+
+def curated_price_delete(request, pk):
+    return HttpResponse("not implemented", status=501)
+
+@require_POST
+def curated_price_from_scrape(request):
+    return HttpResponse("not implemented", status=501)
