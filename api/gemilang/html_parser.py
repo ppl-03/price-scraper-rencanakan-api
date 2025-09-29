@@ -8,6 +8,10 @@ from .price_cleaner import GemilangPriceCleaner
 
 logger = logging.getLogger(__name__)
 
+class RegexCache:
+    SLUG_PATTERN = re.compile(r'[^a-zA-Z0-9\s]')
+    WHITESPACE_PATTERN = re.compile(r'\s+')
+
 
 class GemilangHtmlParser(IHtmlParser):
     
