@@ -2,7 +2,7 @@ import requests
 import logging
 import time
 import re
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 from urllib.parse import urlencode, urljoin
 
 from .interfaces import (
@@ -34,38 +34,43 @@ class BaseHttpClient(IHttpClient):
         
         for attempt in range(self.max_retries):
             try:
-                if config.log_requests:
-                    logger.info(f"Fetching URL (attempt {attempt + 1}/{self.max_retries}): {url}")
-                
-                response = self.session.get(url, timeout=timeout)
-                response.raise_for_status()
-                
-                if not response.content:
-                    raise HttpClientError(f"Empty response from {url}")
-                
-                encoding = response.encoding or 'utf-8'
-                html_content = response.content.decode(encoding, errors='ignore')
-                
-                if config.log_requests:
-                    logger.info(f"Successfully fetched {len(html_content)} characters from {url}")
-                return html_content
-                
-            except requests.exceptions.Timeout as e:
-                last_exception = HttpClientError(f"Request timeout after {timeout} seconds for {url}")
-            except requests.exceptions.ConnectionError as e:
-                last_exception = HttpClientError(f"Connection error for {url}: {str(e)}")
-            except requests.exceptions.HTTPError as e:
-                last_exception = HttpClientError(f"HTTP error {e.response.status_code} for {url}")
-            except requests.exceptions.RequestException as e:
-                last_exception = HttpClientError(f"Request failed for {url}: {str(e)}")
-            except Exception as e:
-                last_exception = HttpClientError(f"Unexpected error fetching {url}: {str(e)}")
-            
-            if attempt < self.max_retries - 1:
-                logger.warning(f"Request failed, retrying in {self.retry_delay} seconds: {last_exception}")
-                time.sleep(self.retry_delay)
+                return self._attempt_request(url, timeout, attempt)
+            except HttpClientError as e:
+                last_exception = e
+                if attempt < self.max_retries - 1:
+                    logger.warning(f"Request failed, retrying in {self.retry_delay} seconds: {last_exception}")
+                    time.sleep(self.retry_delay)
         
         raise last_exception
+    
+    def _attempt_request(self, url: str, timeout: int, attempt: int) -> str:
+        try:
+            if config.log_requests:
+                logger.info(f"Fetching URL (attempt {attempt + 1}/{self.max_retries}): {url}")
+            
+            response = self.session.get(url, timeout=timeout)
+            response.raise_for_status()
+            
+            if not response.content:
+                raise HttpClientError(f"Empty response from {url}")
+            
+            encoding = response.encoding or 'utf-8'
+            html_content = response.content.decode(encoding, errors='ignore')
+            
+            if config.log_requests:
+                logger.info(f"Successfully fetched {len(html_content)} characters from {url}")
+            return html_content
+            
+        except requests.exceptions.Timeout:
+            raise HttpClientError(f"Request timeout after {timeout} seconds for {url}")
+        except requests.exceptions.ConnectionError as e:
+            raise HttpClientError(f"Connection error for {url}: {str(e)}")
+        except requests.exceptions.HTTPError as e:
+            raise HttpClientError(f"HTTP error {e.response.status_code} for {url}")
+        except requests.exceptions.RequestException as e:
+            raise HttpClientError(f"Request failed for {url}: {str(e)}")
+        except Exception as e:
+            raise HttpClientError(f"Unexpected error fetching {url}: {str(e)}")
     
     def _rate_limit(self):
         current_time = time.time()
@@ -151,7 +156,7 @@ class BasePriceScraper(IPriceScraper):
             )
 
 
-def clean_price_digits(price_string: str) -> int:
+def clean_price_digits(price_string: Union[str, Any]) -> int:
     if price_string is None:
         raise TypeError("price_string cannot be None")
     
