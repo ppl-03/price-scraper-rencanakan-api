@@ -87,12 +87,11 @@ class GemilangProfiler:
         real_html = self._fetch_real_html(self.test_keywords[0])
         
         profiler.enable()
-        for i in range(iterations):
+        for _ in range(iterations):
             try:
-                products = parser.parse_products(real_html)
+                parser.parse_products(real_html)
             except Exception as e:
                 print(f"Parse error: {e}")
-                pass
         profiler.disable()
         
         stats = pstats.Stats(profiler)
@@ -127,11 +126,11 @@ class GemilangProfiler:
         profiler = cProfile.Profile()
         
         profiler.enable()
-        for i in range(iterations):
+        for _ in range(iterations):
             for price in test_prices:
                 try:
-                    cleaned = cleaner.clean_price(price)
-                except:
+                    cleaner.clean_price(price)
+                except (TypeError, ValueError, AttributeError):
                     pass
         profiler.disable()
         
@@ -171,7 +170,7 @@ class GemilangProfiler:
         for i in range(iterations):
             keyword = test_keywords[i % len(test_keywords)]
             try:
-                url = builder.build_search_url(keyword, True, i % 5)
+                builder.build_search_url(keyword, True, i % 5)
             except Exception:
                 pass
         profiler.disable()
@@ -245,9 +244,9 @@ class GemilangProfiler:
         profiler = cProfile.Profile()
         
         profiler.enable()
-        for i in range(iterations):
+        for _ in range(iterations):
             try:
-                scraper = create_gemilang_scraper()
+                create_gemilang_scraper()
             except Exception:
                 pass
         profiler.disable()
