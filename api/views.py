@@ -20,6 +20,9 @@ from .validation import (
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Constants
+INTERNAL_SERVER_ERROR_MSG = 'Internal server error'
+
 # API Token Configuration
 # In production, move these to environment variables or database
 LEGACY_API_TOKENS = {
@@ -51,7 +54,7 @@ def _validate_api_token(token: str, client_ip: str) -> bool:
     """
     # Check if token exists in configuration
     if token not in LEGACY_API_TOKENS:
-        logger.warning(f"Unknown API token attempt from {client_ip}: {token[:10]}...")
+        logger.warning(f"Unknown API token attempt from {client_ip}")
         return False
     
     token_info = LEGACY_API_TOKENS[token]
@@ -210,7 +213,7 @@ def validate_scraper_input(request):
         logger.error(f"Error in validate_scraper_input: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error',
+            'error': INTERNAL_SERVER_ERROR_MSG,
             'code': 'INTERNAL_ERROR'
         }, status=500)
 
@@ -254,10 +257,10 @@ def validate_scraper_input_json(request):
         
         return JsonResponse(response_data)
         
-    except Exception as e:
+    except Exception:
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error',
+            'error': INTERNAL_SERVER_ERROR_MSG,
             'code': 'INTERNAL_ERROR'
         }, status=500)
 
@@ -327,7 +330,7 @@ def validate_scraper_input_api(request):
         logger.error(f"Error in validate_scraper_input_api: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error',
+            'error': INTERNAL_SERVER_ERROR_MSG,
             'code': 'INTERNAL_ERROR'
         }, status=500)
 
@@ -450,7 +453,7 @@ def validate_scraper_input_legacy_api(request):
         logger.error(f"Error in validate_scraper_input_legacy_api: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error',
+            'error': INTERNAL_SERVER_ERROR_MSG,
             'code': 'INTERNAL_ERROR'
         }, status=500)
 
