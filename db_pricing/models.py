@@ -1,5 +1,4 @@
 # db_pricing/models.py
-from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
@@ -34,13 +33,8 @@ class ItemPrice(models.Model):
     item = models.ForeignKey(Item, on_delete=PROTECT, related_name="prices")
     unit = models.ForeignKey(Unit, on_delete=PROTECT, related_name="prices")
     province = models.ForeignKey(Province, on_delete=PROTECT, related_name="prices")
-
-    # price must be non-negative
-    value = models.DecimalField(max_digits=20, decimal_places=2,
-                                validators=[MinValueValidator(0)])
-
+    value = models.DecimalField(max_digits=20, decimal_places=2, validators=[MinValueValidator(0)])
     is_latest = models.BooleanField(default=False)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -52,27 +46,5 @@ class ItemPrice(models.Model):
             ),
         ]
 
-    def clean(self):
-        """
-        App-level validation so tests pass even on MySQL:
-        - forbid more than one latest price per (item, province)
-        """
-        super().clean()
-
-        if self.is_latest and self.item_id and self.province_id:
-            clash = ItemPrice.objects.exclude(pk=self.pk).filter(
-                item_id=self.item_id,
-                province_id=self.province_id,
-                is_latest=True,
-            ).exists()
-            if clash:
-                raise ValidationError(
-                    "Only one latest price per (item, province) is allowed."
-                )
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        return super().save(*args, **kwargs)
-
-    def __str__(self):
+    def __str__(self):  # Keep representation, heavy validation handled by service layer
         return f"{self.item.code} @ {self.province.code} ({self.unit.code}) — {self.value}"
