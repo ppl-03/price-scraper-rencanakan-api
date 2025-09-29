@@ -20,4 +20,5 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/gemilang/', include('api.gemilang.urls')),
+    path('api/juragan_material/', include('api.juragan_material.urls')),
 ]
