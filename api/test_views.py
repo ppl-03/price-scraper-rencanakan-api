@@ -224,7 +224,7 @@ class ValidateScraperInputApiViewTests(ViewsTestCase):
 
 
 class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
-    """Tests for validate_scraper_input_legacy_api view (CSRF exempt)"""
+    """Tests for validate_scraper_input_legacy_api view (API token authentication)"""
     
     def test_validate_scraper_input_legacy_api_success(self):
         """Test successful legacy API validation"""
@@ -232,13 +232,14 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.valid_data),
             content_type='application/json',
-            HTTP_USER_AGENT='TestClient/1.0'
+            HTTP_USER_AGENT='TestClient/1.0',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data['success'])
-        self.assertIn('WARNING', data['note'])
+        self.assertIn('SECURE', data['note'])
         
         # Check security headers
         self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
@@ -250,7 +251,8 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
         response = self.client.post(
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.valid_data),
-            content_type='text/plain'
+            content_type='text/plain',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         self.assertEqual(response.status_code, 400)
@@ -263,7 +265,8 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.valid_data),
             content_type='application/json',
-            HTTP_USER_AGENT='Mozilla/5.0 (Chrome browser test)'
+            HTTP_USER_AGENT='Mozilla/5.0 (Chrome browser test)',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         self.assertEqual(response.status_code, 403)
@@ -277,7 +280,8 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.valid_data),
             content_type='application/json',
-            HTTP_USER_AGENT='curl/7.68.0'
+            HTTP_USER_AGENT='curl/7.68.0',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         # Should log development tool detection
@@ -289,7 +293,8 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
             reverse('validate_scraper_input_legacy_api'),
             data='invalid json',
             content_type='application/json',
-            HTTP_USER_AGENT='TestClient/1.0'
+            HTTP_USER_AGENT='TestClient/1.0',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         self.assertEqual(response.status_code, 400)
@@ -302,12 +307,57 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.invalid_data),
             content_type='application/json',
-            HTTP_USER_AGENT='TestClient/1.0'
+            HTTP_USER_AGENT='TestClient/1.0',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
         self.assertEqual(data['code'], 'VALIDATION_ERROR')
+
+    def test_validate_scraper_input_legacy_api_missing_token(self):
+        """Test missing API token"""
+        response = self.client.post(
+            reverse('validate_scraper_input_legacy_api'),
+            data=json.dumps(self.valid_data),
+            content_type='application/json',
+            HTTP_USER_AGENT='TestClient/1.0'
+        )
+        
+        self.assertEqual(response.status_code, 401)
+        data = response.json()
+        self.assertEqual(data['code'], 'MISSING_API_TOKEN')
+        self.assertIn('X-API-Token', data['help'])
+
+    def test_validate_scraper_input_legacy_api_invalid_token(self):
+        """Test invalid API token"""
+        response = self.client.post(
+            reverse('validate_scraper_input_legacy_api'),
+            data=json.dumps(self.valid_data),
+            content_type='application/json',
+            HTTP_USER_AGENT='TestClient/1.0',
+            HTTP_X_API_TOKEN='invalid-token'
+        )
+        
+        self.assertEqual(response.status_code, 401)
+        data = response.json()
+        self.assertEqual(data['code'], 'INVALID_API_TOKEN')
+        self.assertIn('X-API-Token', data['help'])
+
+    def test_validate_scraper_input_legacy_api_valid_token_alternative_header(self):
+        """Test valid API token using alternative header format"""
+        # Test that both HTTP_X_API_TOKEN and X-API-Token header work
+        response = self.client.post(
+            reverse('validate_scraper_input_legacy_api'),
+            data=json.dumps(self.valid_data),
+            content_type='application/json',
+            HTTP_USER_AGENT='TestClient/1.0',
+            **{'HTTP_X_API_TOKEN': 'legacy-api-token-67890'}
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
 
 
 class GetCsrfTokenViewTests(ViewsTestCase):
@@ -627,7 +677,7 @@ class HelperFunctionTests(ViewsTestCase):
             'sort_by_price': True
         }
         scraper_info = {'available': True, 'class_name': 'TestScraper'}
-        scraping_url = 'http://example.com/search'
+        scraping_url = 'https://example.com/search'
         message = 'Test success'
         note = 'Test note'
         
@@ -694,7 +744,8 @@ class EdgeCaseTests(ViewsTestCase):
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(large_data),
             content_type='application/json',
-            HTTP_USER_AGENT='TestClient/1.0'
+            HTTP_USER_AGENT='TestClient/1.0',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         # Should fail validation due to keyword length
@@ -707,8 +758,9 @@ class EdgeCaseTests(ViewsTestCase):
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.valid_data),
             content_type='application/json',
-            HTTP_USER_AGENT='TestClient/1.0'
+            HTTP_USER_AGENT='TestClient/1.0',
+            HTTP_X_API_TOKEN='dev-token-12345'
         )
         
         # Verify logging was called
-        mock_logger.warning.assert_called()
+        mock_logger.info.assert_called()

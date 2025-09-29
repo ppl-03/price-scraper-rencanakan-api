@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.cache import cache_page
 import json
@@ -20,6 +19,52 @@ from .validation import (
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# API Token Configuration
+# In production, move these to environment variables or database
+LEGACY_API_TOKENS = {
+    'dev-token-12345': {
+        'name': 'Development Token',
+        'allowed_ips': [],  # Empty list means any IP
+        'created': '2024-01-01',
+        'expires': None  # None means no expiration
+    },
+    'legacy-api-token-67890': {
+        'name': 'Legacy Client Token',
+        'allowed_ips': [],  # Could restrict to specific IPs
+        'created': '2024-01-01', 
+        'expires': None
+    }
+}
+
+def _validate_api_token(token: str, client_ip: str) -> bool:
+    """
+    Validate API token for legacy endpoints
+    
+    In production, implement proper token validation:
+    - Check against database of valid tokens
+    - Implement token expiration
+    - Rate limiting per token
+    - Token rotation mechanism
+    
+    For now, this is a basic implementation for security compliance
+    """
+    # Check if token exists in configuration
+    if token not in LEGACY_API_TOKENS:
+        logger.warning(f"Unknown API token attempt from {client_ip}: {token[:10]}...")
+        return False
+    
+    token_info = LEGACY_API_TOKENS[token]
+    
+    # Check IP restrictions if configured
+    allowed_ips = token_info.get('allowed_ips', [])
+    if allowed_ips and client_ip not in allowed_ips:
+        logger.warning(f"IP {client_ip} not allowed for token {token_info['name']}")
+        return False
+    
+    
+    logger.info(f"Valid API token used from {client_ip}: {token_info['name']}")
+    return True
 
 def get_scraper_factory(vendor: str) -> IPriceScraper:
     """
@@ -147,7 +192,7 @@ def validate_scraper_input(request):
             errors_dict = get_validation_errors_dict(validation_result)
             return JsonResponse({
                 'success': False,
-                'error': 'Input validation failed',
+                'error': 'GET parameter validation failed',
                 'validation_errors': errors_dict,
                 'code': 'VALIDATION_ERROR'
             }, status=400)
@@ -195,7 +240,7 @@ def validate_scraper_input_json(request):
             errors_dict = get_validation_errors_dict(validation_result)
             return JsonResponse({
                 'success': False,
-                'error': 'Input validation failed',
+                'error': 'JSON input validation failed',
                 'validation_errors': errors_dict,
                 'code': 'VALIDATION_ERROR'
             }, status=400)
@@ -264,7 +309,7 @@ def validate_scraper_input_api(request):
             errors_dict = get_validation_errors_dict(validation_result)
             return JsonResponse({
                 'success': False,
-                'error': 'Input validation failed',
+                'error': 'Secure API input validation failed',
                 'validation_errors': errors_dict,
                 'code': 'VALIDATION_ERROR'
             }, status=400)
@@ -286,16 +331,54 @@ def validate_scraper_input_api(request):
             'code': 'INTERNAL_ERROR'
         }, status=500)
 
-
-@csrf_exempt
 @require_http_methods(["POST"])
 def validate_scraper_input_legacy_api(request):
+    """
+    Legacy API endpoint with API token authentication for external services
+    
+    SECURITY: This endpoint uses API token authentication instead of CSRF exemption.
+    
+    Authentication:
+    - Requires X-API-Token header with valid API token
+    - Content-Type must be application/json
+    - Blocks browser requests (User-Agent validation)
+    
+    Usage:
+    1. Include X-API-Token header with your assigned API token
+    2. Set Content-Type to application/json
+    3. Send POST request with JSON payload
+    
+    For better security, consider migrating to /api/validate-input-api/ which 
+    provides full CSRF protection for modern API clients.
+    """
     try:
         # Enhanced security logging
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
         user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')
         
-        logger.warning(f"CSRF-exempt API access from IP: {client_ip}, User-Agent: {user_agent}")
+        logger.info(f"Legacy API access from IP: {client_ip}, User-Agent: {user_agent}")
+        
+        # API Token Authentication (replacing CSRF exemption for better security)
+        api_token = request.META.get('HTTP_X_API_TOKEN') or request.headers.get('X-API-Token')
+        if not api_token:
+            logger.warning(f"Missing API token from {client_ip}")
+            return JsonResponse({
+                'success': False,
+                'error': 'API token required for legacy endpoint access',
+                'code': 'MISSING_API_TOKEN',
+                'help': 'Include X-API-Token header with your API token'
+            }, status=401)
+        
+        # Simple API token validation (in production, use proper token management)
+        # This is a basic implementation - replace with your actual token validation logic
+        if not _validate_api_token(api_token, client_ip):
+            logger.warning(f"Invalid API token from {client_ip}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API token',
+                'code': 'INVALID_API_TOKEN',
+                'help': 'Provide a valid API token in X-API-Token header'
+            }, status=401)
         
         # Strict Content-Type validation
         content_type = request.content_type
@@ -313,15 +396,15 @@ def validate_scraper_input_legacy_api(request):
         if any(agent in user_agent.lower() for agent in suspicious_agents):
             logger.info(f"Development/testing tool detected: {user_agent} from {client_ip}")
         
-        # Block obvious browser requests
+        # Block obvious browser requests (API endpoint should not be accessed by browsers)
         browser_indicators = ['mozilla', 'chrome', 'safari', 'edge', 'firefox']
         if any(browser in user_agent.lower() for browser in browser_indicators):
-            logger.warning(f"Browser request to CSRF-exempt endpoint from {client_ip}")
+            logger.warning(f"Browser request to API token endpoint from {client_ip}")
             return JsonResponse({
                 'success': False,
-                'error': 'Browser requests not allowed on this endpoint',
+                'error': 'Browser requests not allowed on this API endpoint',
                 'code': 'BROWSER_REQUEST_BLOCKED',
-                'help': 'Use /api/validate-input-json/ for browser requests'
+                'help': 'Use /api/validate-input-json/ for browser requests or /api/validate-input-api/ for secure API access'
             }, status=403)
         
         # Parse JSON data
@@ -343,7 +426,7 @@ def validate_scraper_input_legacy_api(request):
             errors_dict = get_validation_errors_dict(validation_result)
             return JsonResponse({
                 'success': False,
-                'error': 'Input validation failed',
+                'error': 'Legacy API input validation failed',
                 'validation_errors': errors_dict,
                 'code': 'VALIDATION_ERROR'
             }, status=400)
@@ -352,7 +435,7 @@ def validate_scraper_input_legacy_api(request):
         response_data = create_validation_success_response(
             cleaned_data, scraper_info, scraping_url,
             'Legacy API validation successful - parameters valid for scraping',
-            'WARNING: This endpoint bypasses CSRF protection. Consider migrating to /api/validate-input-api/'
+            'SECURE: This endpoint now uses API token authentication instead of CSRF exemption. Consider migrating to /api/validate-input-api/ for full CSRF protection.'
         )
         
         # Add security headers to response
