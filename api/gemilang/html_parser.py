@@ -23,7 +23,8 @@ class GemilangHtmlParser(IHtmlParser):
             if not html_content:
                 return []
             
-            soup = BeautifulSoup(html_content, 'html.parser')
+            parser = 'lxml' if self._has_lxml() else 'html.parser'
+            soup = BeautifulSoup(html_content, parser)
             products = []
             
             product_items = soup.find_all('div', class_='item-product')
@@ -96,6 +97,13 @@ class GemilangHtmlParser(IHtmlParser):
         slug = name.lower().replace(' ', '-').replace('(', '').replace(')', '')
         slug = re.sub(r'[^a-z0-9\-]', '', slug)
         return slug
+    
+    def _has_lxml(self) -> bool:
+        try:
+            import lxml
+            return True
+        except ImportError:
+            return False
     
     def _extract_product_price(self, item) -> int:
         price_wrapper = item.find('div', class_=lambda x: x and 'price-wrapper' in x)

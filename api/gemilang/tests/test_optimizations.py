@@ -9,12 +9,32 @@ class TestHtmlParserOptimizations(unittest.TestCase):
     def setUp(self):
         self.parser = GemilangHtmlParser()
     
-    def test_parser_uses_html_parser(self):
+    def test_has_lxml_with_lxml_available(self):
+        with patch('builtins.__import__') as mock_import:
+            mock_import.return_value = Mock()
+            result = self.parser._has_lxml()
+            self.assertTrue(result)
+    
+    def test_has_lxml_with_lxml_unavailable(self):
+        with patch('builtins.__import__', side_effect=ImportError):
+            result = self.parser._has_lxml()
+            self.assertFalse(result)
+    
+    def test_parser_uses_lxml_when_available(self):
         html = '<div class="item-product"><h3>Test Product</h3><span>Rp 10000</span></div>'
-        with patch('api.gemilang.html_parser.BeautifulSoup') as mock_soup:
-            mock_soup.return_value.find_all.return_value = []
-            self.parser.parse_products(html)
-            mock_soup.assert_called_once_with(html, 'html.parser')
+        with patch.object(self.parser, '_has_lxml', return_value=True):
+            with patch('api.gemilang.html_parser.BeautifulSoup') as mock_soup:
+                mock_soup.return_value.find_all.return_value = []
+                self.parser.parse_products(html)
+                mock_soup.assert_called_once_with(html, 'lxml')
+    
+    def test_parser_falls_back_to_html_parser_when_lxml_unavailable(self):
+        html = '<div class="item-product"><h3>Test Product</h3><span>Rp 10000</span></div>'
+        with patch.object(self.parser, '_has_lxml', return_value=False):
+            with patch('api.gemilang.html_parser.BeautifulSoup') as mock_soup:
+                mock_soup.return_value.find_all.return_value = []
+                self.parser.parse_products(html)
+                mock_soup.assert_called_once_with(html, 'html.parser')
 
 
 class TestRegexCache(unittest.TestCase):
