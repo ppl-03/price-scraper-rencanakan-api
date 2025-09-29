@@ -6,14 +6,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _create_error_response(message, status=400):
+    return JsonResponse({'error': message}, status=status)
+
+
 @require_http_methods(["GET"])
 def scrape_products(request):
     try:
         keyword = request.GET.get('keyword')
         if not keyword or not keyword.strip():
-            return JsonResponse({
-                'error': 'Keyword parameter is required'
-            }, status=400)
+            return _create_error_response('Keyword parameter is required')
         
         keyword = keyword.strip()
         
@@ -24,9 +26,7 @@ def scrape_products(request):
         try:
             page = int(page_param)
         except ValueError:
-            return JsonResponse({
-                'error': 'Page parameter must be a valid integer'
-            }, status=400)
+            return _create_error_response('Page parameter must be a valid integer')
         
         scraper = create_depo_scraper()
         result = scraper.scrape_products(
@@ -55,6 +55,4 @@ def scrape_products(request):
         
     except Exception as e:
         logger.error(f"Unexpected error in Depo Bangunan scraper: {str(e)}")
-        return JsonResponse({
-            'error': 'Internal server error occurred'
-        }, status=500)
+        return _create_error_response('Internal server error occurred', 500)
