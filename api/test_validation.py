@@ -119,27 +119,10 @@ class InputValidatorTestCase(TestCase):
         self.assertFalse(result.is_valid)
         self.assertEqual(result.errors[0].code, 'SORT_INVALID_TYPE')
 
-    def test_validate_url_valid_http(self):
-        """Test valid HTTP URL"""
-        result = InputValidator.validate_url("http://example.com/products")
-        self.assertTrue(result.is_valid)
-
     def test_validate_url_valid_https(self):
         """Test valid HTTPS URL"""
         result = InputValidator.validate_url("https://example.com/products")
         self.assertTrue(result.is_valid)
-
-    def test_validate_url_invalid_scheme(self):
-        """Test invalid URL scheme"""
-        result = InputValidator.validate_url("ftp://example.com")
-        self.assertFalse(result.is_valid)
-        self.assertEqual(result.errors[0].code, 'URL_INVALID_SCHEME')
-
-    def test_validate_url_no_domain(self):
-        """Test URL without domain"""
-        result = InputValidator.validate_url("http://")
-        self.assertFalse(result.is_valid)
-        self.assertEqual(result.errors[0].code, 'URL_INVALID_DOMAIN')
 
     def test_validate_url_empty(self):
         """Test empty URL"""

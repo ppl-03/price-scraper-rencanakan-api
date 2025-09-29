@@ -49,30 +49,19 @@ def health_check(request):
     })
 
 
-@csrf_exempt
-@require_http_methods(["POST", "GET"])
+@require_http_methods(["GET"])
 def validate_scraper_input(request):
     """
-    Endpoint for scraper input validation only (without actual scraping)
+    GET endpoint for scraper input validation only 
     """
     try:
-        # Get request data
-        if request.method == 'POST':
-            try:
-                data = json.loads(request.body)
-            except json.JSONDecodeError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Invalid JSON format',
-                    'code': 'INVALID_JSON'
-                }, status=400)
-        else:  # GET request
-            data = {
-                'keyword': request.GET.get('keyword', ''),
-                'vendor': request.GET.get('vendor', ''),
-                'page': request.GET.get('page', 0),
-                'sort_by_price': request.GET.get('sort_by_price', 'true')
-            }
+        # Get request data from query parameters
+        data = {
+            'keyword': request.GET.get('keyword', ''),
+            'vendor': request.GET.get('vendor', ''),
+            'page': request.GET.get('page', 0),
+            'sort_by_price': request.GET.get('sort_by_price', 'true')
+        }
         
         # Validate input using validation system
         validation_result = InputValidator.validate_scraping_request(data)
@@ -107,10 +96,8 @@ def validate_scraper_input(request):
                 'error': str(e)
             }
         
-        # Build URL untuk scraping (tanpa melakukan request)
         if scraper_available:
             try:
-                # Ambil url_builder dari scraper untuk generate URL
                 url_builder = scraper._url_builder if hasattr(scraper, '_url_builder') else None
                 if url_builder:
                     scraping_url = url_builder.build_search_url(
@@ -152,7 +139,200 @@ def validate_scraper_input(request):
 
 
 @require_http_methods(["POST"])
+def validate_scraper_input_json(request):
+    """
+    POST endpoint for JSON-based scraper input validation
+    """
+    try:
+        # Parse JSON data
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON format',
+                'code': 'INVALID_JSON'
+            }, status=400)
+        
+        # Validate input using validation system
+        validation_result = InputValidator.validate_scraping_request(data)
+        
+        if not validation_result.is_valid:
+            errors_dict = get_validation_errors_dict(validation_result)
+            return JsonResponse({
+                'success': False,
+                'error': 'Input validation failed',
+                'validation_errors': errors_dict,
+                'code': 'VALIDATION_ERROR'
+            }, status=400)
+        
+        # Get cleaned data
+        cleaned_data = validation_result.cleaned_data
+        
+        # Log the validated request
+        logger.info(f"JSON input validation successful: {cleaned_data}")
+        
+        # Check scraper availability
+        try:
+            scraper = get_scraper_factory(cleaned_data['vendor'])
+            scraper_available = True
+            scraper_info = {
+                'class_name': scraper.__class__.__name__,
+                'available': True
+            }
+        except ValueError as e:
+            scraper_available = False
+            scraper_info = {
+                'available': False,
+                'error': str(e)
+            }
+     
+        if scraper_available:
+            try:
+                url_builder = scraper._url_builder if hasattr(scraper, '_url_builder') else None
+                if url_builder:
+                    scraping_url = url_builder.build_search_url(
+                        keyword=cleaned_data['keyword'],
+                        sort_by_price=cleaned_data['sort_by_price'], 
+                        page=cleaned_data['page']
+                    )
+                else:
+                    scraping_url = f"URL will be generated for vendor {cleaned_data['vendor']}"
+            except Exception as e:
+                scraping_url = f"Error generating URL: {str(e)}"
+        else:
+            scraping_url = None
+        
+        # Success response
+        response_data = {
+            'success': True,
+            'message': 'JSON input validation successful - parameters valid for scraping',
+            'validated_data': {
+                'keyword': cleaned_data['keyword'],
+                'vendor': cleaned_data['vendor'],
+                'page': cleaned_data['page'],
+                'sort_by_price': cleaned_data['sort_by_price']
+            },
+            'scraper_info': scraper_info,
+            'would_scrape_url': scraping_url,
+            'note': 'This is JSON input validation only - no actual scraping performed'
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error',
+            'code': 'INTERNAL_ERROR'
+        }, status=500)
+
+
 @csrf_exempt
+@require_http_methods(["POST"])
+def validate_scraper_input_api(request):
+    """
+    API endpoint for external services - CSRF exempt but with additional security
+    This endpoint is specifically for API clients that cannot handle CSRF tokens
+    Use validate_scraper_input_json for web applications
+    """
+    try:
+        # Additional security: Check for API usage patterns
+        content_type = request.content_type
+        if not content_type or 'application/json' not in content_type:
+            return JsonResponse({
+                'success': False,
+                'error': 'Content-Type must be application/json for API access',
+                'code': 'INVALID_CONTENT_TYPE'
+            }, status=400)
+        
+        # Parse JSON data
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON format',
+                'code': 'INVALID_JSON'
+            }, status=400)
+        
+        # Validate input using validation system
+        validation_result = InputValidator.validate_scraping_request(data)
+        
+        if not validation_result.is_valid:
+            errors_dict = get_validation_errors_dict(validation_result)
+            return JsonResponse({
+                'success': False,
+                'error': 'Input validation failed',
+                'validation_errors': errors_dict,
+                'code': 'VALIDATION_ERROR'
+            }, status=400)
+        
+        # Get cleaned data
+        cleaned_data = validation_result.cleaned_data
+        
+        # Log the validated request (for security monitoring)
+        logger.info(f"API validation successful from {request.META.get('REMOTE_ADDR', 'unknown')}: {cleaned_data}")
+        
+        # Check scraper availability
+        try:
+            scraper = get_scraper_factory(cleaned_data['vendor'])
+            scraper_available = True
+            scraper_info = {
+                'class_name': scraper.__class__.__name__,
+                'available': True
+            }
+        except ValueError as e:
+            scraper_available = False
+            scraper_info = {
+                'available': False,
+                'error': str(e)
+            }
+        
+        # Build URL for scraping (without making request)
+        if scraper_available:
+            try:
+                url_builder = scraper._url_builder if hasattr(scraper, '_url_builder') else None
+                if url_builder:
+                    scraping_url = url_builder.build_search_url(
+                        keyword=cleaned_data['keyword'],
+                        sort_by_price=cleaned_data['sort_by_price'], 
+                        page=cleaned_data['page']
+                    )
+                else:
+                    scraping_url = f"URL will be generated for vendor {cleaned_data['vendor']}"
+            except Exception as e:
+                scraping_url = f"Error generating URL: {str(e)}"
+        else:
+            scraping_url = None
+        
+        # Success response
+        response_data = {
+            'success': True,
+            'message': 'API validation successful - parameters valid for scraping',
+            'validated_data': {
+                'keyword': cleaned_data['keyword'],
+                'vendor': cleaned_data['vendor'],
+                'page': cleaned_data['page'],
+                'sort_by_price': cleaned_data['sort_by_price']
+            },
+            'scraper_info': scraper_info,
+            'would_scrape_url': scraping_url,
+            'note': 'This is API validation only - no actual scraping performed'
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error in validate_scraper_input_api: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error',
+            'code': 'INTERNAL_ERROR'
+        }, status=500)
+
+
+@require_http_methods(["POST"])
 def validate_scraping_params_endpoint(request):
     """
     Endpoint to validate scraping parameters without actually scraping
@@ -252,7 +432,6 @@ def get_supported_vendors(request):
     })
 
 
-@csrf_exempt 
 @require_http_methods(["POST"])
 def validate_vendor_input(request, vendor):
     """
