@@ -13,17 +13,22 @@ class Mitra10HtmlParser(IHtmlParser):
     
     def __init__(self, price_cleaner: Mitra10PriceCleaner = None):
         self.price_cleaner = price_cleaner or Mitra10PriceCleaner()
+        self._product_selector = "div.MuiGrid-item"
+        self._name_selector = 'a.gtm_mitra10_cta_product p'  
+        self._link_selector = "a.gtm_mitra10_cta_product"
+        self._price_selector = "span.price__final"
+        self._image_selector = "img"
+        self._description_selector = "p.MuiTypography-root"
     
     def parse_products(self, html_content: str) -> List[Product]:
         try:
             if not html_content:
                 return []
             
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(html_content, 'lxml')
             products = []
             
-            # Updated selector based on actual HTML structure
-            product_items = soup.select("div.MuiGrid-item")
+            product_items = soup.select(self._product_selector)
             logger.info(f"Found {len(product_items)} product items in HTML")
             
             for item in product_items:
@@ -39,7 +44,20 @@ class Mitra10HtmlParser(IHtmlParser):
             return products
             
         except Exception as e:
-            raise HtmlParserError(f"Failed to parse HTML: {str(e)}")
+            try:
+                soup = BeautifulSoup(html_content, 'html.parser')
+                product_items = soup.select(self._product_selector)
+                products = []
+                for item in product_items:
+                    try:
+                        product = self._extract_product_from_item(item)
+                        if product:
+                            products.append(product)
+                    except Exception:
+                        continue
+                return products
+            except Exception:
+                raise HtmlParserError(f"Failed to parse HTML: {str(e)}")
     
     def _extract_product_from_item(self, item) -> Optional[Product]:
         name = self._extract_product_name(item)
@@ -55,13 +73,14 @@ class Mitra10HtmlParser(IHtmlParser):
         return Product(name=name, price=price, url=url)
     
     def _extract_product_name(self, item) -> Optional[str]:
-        selectors = [
-            'a.gtm_mitra10_cta_product p',
-            'p.product-name',
-            'img[alt]'
-        ]
+        element = item.select_one(self._name_selector)
+        if element:
+            name = element.get_text(strip=True)
+            if name:
+                return name
         
-        for selector in selectors:
+        fallback_selectors = ['p.product-name', 'img[alt]']
+        for selector in fallback_selectors:
             if selector == 'img[alt]':
                 img = item.find('img')
                 if img and img.get('alt'):
@@ -76,11 +95,11 @@ class Mitra10HtmlParser(IHtmlParser):
         return None
     
     def _extract_product_url(self, item) -> str:
-        link = item.select_one("a.gtm_mitra10_cta_product")
+        link = item.select_one(self._link_selector)
         if link and link.get('href'):
             return link.get('href', '')
         
-        name_element = item.select_one('a.gtm_mitra10_cta_product p')
+        name_element = item.select_one(self._name_selector)
         if name_element:
             name = name_element.get_text(strip=True)
             if name:
@@ -95,7 +114,7 @@ class Mitra10HtmlParser(IHtmlParser):
         return slug
     
     def _extract_product_price(self, item) -> int:
-        price_element = item.select_one("span.price__final")
+        price_element = item.select_one(self._price_selector)
         if price_element:
             price_text = price_element.get_text(strip=True)
             try:
