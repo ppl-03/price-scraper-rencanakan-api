@@ -19,13 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgobject-2.0-0 \
     libnspr4 \
     libnss3 \
-    libnssutil3 \
     libdbus-1-3 \
-    libgio2.0-0 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
     libexpat1 \
-    libatspi0 \
+    libatspi2.0-0 \
     libx11-6 \
     libxcomposite1 \
     libxdamage1 \
