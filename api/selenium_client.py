@@ -53,7 +53,7 @@ class SeleniumHttpClient(IHttpClient):
             self._setup_driver()
         
         try:
-            logger.info(f"Selenium fetching: {url}")
+            logger.info(f"[Selenium] Fetching URL: {url}")
             
             self.driver.get(url)
             
@@ -70,22 +70,25 @@ class SeleniumHttpClient(IHttpClient):
                     )
                 )
                 
-                logger.info("JavaScript content loaded successfully")
+                logger.info("[Selenium] JavaScript content loaded successfully")
                 
             except TimeoutException:
-                logger.warning("Timeout waiting for content to load, proceeding anyway")
+                logger.warning("[Selenium] Timeout waiting for content to load, proceeding anyway")
             
             time.sleep(2)
             
             # Get the page source after JavaScript execution
             html_content = self.driver.page_source
             
-            logger.info(f"Retrieved {len(html_content)} characters from {url}")
+            logger.info(f"[Selenium] Retrieved {len(html_content)} characters from {url}")
+            logger.debug(f"[Selenium] Full HTML Content: {html_content}")  # Log the full HTML content for debugging
             return html_content
             
         except WebDriverException as e:
+            logger.error(f"[Selenium] WebDriverException for {url}: {str(e)}")
             raise HttpClientError(f"Selenium error for {url}: {str(e)}")
         except Exception as e:
+            logger.error(f"[Selenium] Unexpected error for {url}: {str(e)}")
             raise HttpClientError(f"Unexpected error fetching {url}: {str(e)}")
     
     def close(self):

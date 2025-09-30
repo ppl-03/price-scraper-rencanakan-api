@@ -190,7 +190,7 @@ def _mitra10_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
         url = _build_url_defensively(Mitra10UrlBuilder(), keyword, sort_by_price, page)
 
         html = BaseHttpClient().get(url) or ""
-        logger.error(f"[Mitra10] HTML Content (first 500 chars): {html[:500]}")  # Log the HTML content
+        logger.error(f"[Mitra10] Full HTML Content (HTTP Client): {html}")  # Log the full HTML content fetched by HTTP client
         products = _parse_mitra10_html(html, url)
         if products:
             return products, url, len(html)
@@ -200,7 +200,7 @@ def _mitra10_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             try:
                 with SeleniumSession(headless=True, wait_timeout=12) as browser:
                     html2 = browser.get(url) or ""
-                    logger.error(f"[Mitra10] Fallback HTML Content (first 500 chars): {html2[:500]}")  # Log fallback HTML content
+                    logger.error(f"[Mitra10] Full HTML Content (Selenium): {html2}")  # Log the full HTML content fetched by Selenium
                 prods2 = _parse_mitra10_html(html2, url)
                 return (prods2, url, len(html2)) if prods2 else ([], url, len(html2))
             except Exception as e:
