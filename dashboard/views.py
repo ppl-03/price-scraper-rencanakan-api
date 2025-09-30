@@ -7,6 +7,7 @@ from django.contrib import messages
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 import re
+import logging
 
 # For diagnostics + plain HTML fetch
 from api.core import BaseHttpClient
@@ -31,6 +32,7 @@ try:
 except Exception:
     HAS_SELENIUM = False
 
+logger = logging.getLogger(__name__)
 
 #  small utilities 
 # turns price strings into an integer
@@ -188,6 +190,7 @@ def _mitra10_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
         url = _build_url_defensively(Mitra10UrlBuilder(), keyword, sort_by_price, page)
 
         html = BaseHttpClient().get(url) or ""
+        logger.error(f"[Mitra10] HTML Content (first 500 chars): {html[:500]}")  # Log the HTML content
         products = _parse_mitra10_html(html, url)
         if products:
             return products, url, len(html)
@@ -197,13 +200,16 @@ def _mitra10_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             try:
                 with SeleniumSession(headless=True, wait_timeout=12) as browser:
                     html2 = browser.get(url) or ""
+                    logger.error(f"[Mitra10] Fallback HTML Content (first 500 chars): {html2[:500]}")  # Log fallback HTML content
                 prods2 = _parse_mitra10_html(html2, url)
                 return (prods2, url, len(html2)) if prods2 else ([], url, len(html2))
-            except Exception:
+            except Exception as e:
+                logger.error(f"Selenium fallback failed: {e}")  # Log Selenium errors
                 return [], url, len(html)
 
         return [], url, len(html)
-    except Exception:
+    except Exception as e:
+        logger.error(f"_mitra10_fallback encountered an error: {e}")  # Log unexpected errors
         return [], "", 0
 
 
