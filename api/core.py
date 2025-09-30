@@ -23,11 +23,8 @@ class BaseHttpClient(IHttpClient):
         self.retry_delay = retry_delay or config.retry_delay
         self.last_request_time = 0
         
-        # Add browser-like headers
         self.session.headers.update({
-            'User-Agent': user_agent or config.user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br'
+            'User-Agent': user_agent or config.user_agent
         })
     
     def get(self, url: str, timeout: int = None) -> str:
