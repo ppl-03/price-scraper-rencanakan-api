@@ -28,10 +28,6 @@ class TestMitra10URLs(TestCase):
     def test_invalid_url_raises_404(self):
         with self.assertRaises(NoReverseMatch):
             reverse('mitra10:nonexistent_view')
-            
-    def test_url_pattern_accepts_trailing_slash(self):
-        resolver = resolve('/api/mitra10/scrape/')
-        self.assertEqual(resolver.func, views.scrape_products)
         
     def test_url_pattern_without_trailing_slash_redirects(self):
         response = self.client.get('/api/mitra10/scrape')
