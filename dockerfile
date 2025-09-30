@@ -8,13 +8,34 @@ WORKDIR /app
 
 COPY requirements.txt /app/
 
-# System deps for mysqlclient/psycopg2
+# System deps for mysqlclient/psycopg2 and Playwright browsers
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     pkg-config \
     libpq-dev \
     default-libmysqlclient-dev \
+    libglib2.0-0 \
+    libgobject-2.0-0 \
+    libnspr4 \
+    libnss3 \
+    libnssutil3 \
+    libdbus-1-3 \
+    libgio2.0-0 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libexpat1 \
+    libatspi0 \
+    libx11-6 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libxcb1 \
+    libxkbcommon0 \
+    libasound2 \
     && pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt \
     && playwright install \
