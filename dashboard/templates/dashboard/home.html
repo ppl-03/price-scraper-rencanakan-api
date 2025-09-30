@@ -4,63 +4,118 @@
   <meta charset="utf-8">
   <title>Harga Satuan – Rencanakan</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap CSS -->
+  {% load static %}
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { background:#f7f9fb; font-family: Arial, sans-serif; color:#333; }
-    .navbar{ background:#fff; box-shadow:0 2px 4px rgba(0,0,0,.05); }
-    .navbar-brand{ font-weight:600; color:#003366!important; position:absolute; left:50%; transform:translateX(-50%); }
-    .navbar-right{ margin-left:auto; }
-    .content-wrapper{ margin-top:30px; }
+    /* Top bar with logo + name + tagline */
+    .topbar { background:#fff; }
+    .brand-wrap { display:flex; align-items:center; gap:12px; }
+    .brand-logo { height:36px; width:auto; }
+    .brand-name { font-weight:800; font-size:1.5rem; color:#0f2f44; letter-spacing:.2px; }
+    .tagline { color:#9aa3aa; font-weight:600; }
+    .avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; }
+
+    .content-wrapper{ margin-top:24px; }
     .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; }
     .table td{ vertical-align: middle; border-color:#f1f3f5; }
+
+    /* Search button color = #00365a */
+    .btn-brand { background:#00365a; border-color:#00365a; color:#fff; }
+    .btn-brand:hover, .btn-brand:focus { background:#022b47; border-color:#022b47; color:#fff; }
     .btn-pill{ border-radius:999px; padding:10px 20px; font-weight:600; }
+
+    /* Oval warning */
+    .alert-vendor {
+      background: #c6d1d8;   /* requested */
+      color: #00365a;        /* requested */
+      border-radius: 50px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      border: 1px solid #b7c3cb;
+    }
+    .alert-vendor strong { font-weight:700; }
+
+    /* Inline loading */
+    .loading-inline { display:none; min-height:200px; place-items:center; padding:24px; }
+    .loading-panel{
+      background:#fff; border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,.10);
+      padding:18px 22px; display:flex; align-items:center; gap:12px; border:1px solid #eef2f6;
+    }
+    .ring { width:26px; height:26px; border:3px solid #e9eef5; border-top-color:#0d6efd; border-radius:50%; animation:spin .9s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg) } }
+
+    /* Pagination circles */
+    .pagination { justify-content:center; margin-top:20px; gap:8px; }
+    .page-link {
+      border-radius:50%!important; width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+      color:#00365a; border:none; background:#eef3f6;
+    }
+    .page-item.active .page-link { background:#00365a; color:#fff; }
+    .page-item .page-link:hover { background:#dfe7ec; color:#00365a; }
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
   </style>
 </head>
 <body>
-  <!-- Top navbar -->
-  <nav class="navbar navbar-light bg-white shadow-sm px-4">
-    <a class="navbar-brand" href="#">Rencanakan</a>
-    <div class="d-flex align-items-center navbar-right">
-      <span class="me-2">John Doe</span>
-      <img src="https://via.placeholder.com/32" class="rounded-circle" alt="profile">
+  <!-- Top bar with logo -->
+  <header class="topbar py-3">
+    <div class="container d-flex align-items-center justify-content-between">
+      <div class="brand-wrap">
+        <img class="brand-logo" src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan logo">
+        <span class="brand-name">Rencanakan</span>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="tagline d-none d-sm-block">hitung RAB online hanya di rencanakan.id</div>
+        <img class="avatar" src="https://i.imgur.com/7k12rjS.png" alt="profile">
+      </div>
     </div>
-  </nav>
+  </header>
 
   <div class="container content-wrapper">
 
-    <!-- Flash messages (hide info-level so the blue boxes don't show) -->
+    <!-- Oval warning banner ABOVE the search bar, only if messages exist -->
     {% if messages %}
-      <div class="mb-3">
+      <div id="alerts" class="mb-2">
         {% for m in messages %}
           {% if m.level_tag != 'info' %}
-            <div class="alert alert-{{ m.tags|default:'secondary' }} mb-2" role="alert">{{ m }}</div>
+            <div class="alert-vendor js-vendor-msg" data-raw="{{ m|escape }}">
+              <strong>Warning!</strong> {{ m }}
+            </div>
           {% endif %}
         {% endfor %}
       </div>
     {% endif %}
 
     <!-- Search bar -->
-    <form action="{% url 'home' %}" method="get" class="mb-4">
+    <form id="searchForm" action="{% url 'home' %}" method="get" class="mb-3" novalidate>
       <div class="input-group">
-        <input
-          type="text"
-          name="q"
-          class="form-control"
-          placeholder="Cari produk (contoh: semen, pasir, batu...)"
-          value="{{ request.GET.q|default_if_none:'' }}"
-          aria-label="Kata kunci produk"
-        >
-        <button type="submit" class="btn btn-primary btn-pill">Search</button>
+        <input id="qInput" type="text" name="q" class="form-control"
+               placeholder="Cari produk (contoh: semen, pasir, batu...)"
+               value="{{ request.GET.q|default_if_none:'' }}" autocomplete="off">
+        <button id="searchBtn" type="submit" class="btn btn-brand btn-pill d-inline-flex align-items-center gap-2">
+          <span class="btn-text">Search</span>
+          <span class="btn-spinner spinner-border spinner-border-sm" style="display:none" aria-hidden="true"></span>
+        </button>
       </div>
     </form>
 
-    <!-- Simple products table -->
+    <!-- Results -->
     <div class="card">
-      <div class="card-body p-0">
+      <!-- Inline loading state -->
+      <div id="loadingInline" class="loading-inline">
+        <div class="loading-panel" role="status" aria-live="polite" aria-label="Mengambil harga">
+          <div class="ring" aria-hidden="true"></div>
+          <div>
+            <div class="fw-semibold">Mengambil harga…</div>
+            <div class="text-muted small">Mohon tunggu sebentar</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="resultsWrap" class="card-body p-0">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
@@ -70,7 +125,7 @@
               <th style="width:25%">Vendor</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tableBody">
             {% for r in prices %}
               <tr>
                 <td>{{ forloop.counter }}</td>
@@ -79,29 +134,119 @@
                 <td>{{ r.source|default:"—" }}</td>
               </tr>
             {% empty %}
-              <tr>
-                <td colspan="4" class="text-center text-muted py-4">No data</td>
-              </tr>
+              <tr><td colspan="4" class="text-center text-muted py-4">Tidak ada data</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
 
+    <!-- Pagination -->
+    <nav aria-label="Hasil pencarian">
+      <ul id="pagination" class="pagination"></ul>
+    </nav>
+
     <div class="footer">© 2025 rencanakan.id</div>
   </div>
 
-  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-  <!-- Format prices as IDR on the client -->
   <script>
+    // ---------- Price formatting (IDR) ----------
     const idf = new Intl.NumberFormat("id-ID", { style:"currency", currency:"IDR", minimumFractionDigits: 0 });
     document.querySelectorAll(".c-price").forEach(td => {
       const raw = String(td.textContent || "").replace(/[^\d.-]/g,"");
       const num = Number(raw);
       if (isFinite(num)) td.textContent = idf.format(num);
     });
+
+    // ---------- Friendly vendor error messages ----------
+    function rewriteVendorMessage(raw) {
+      const vendorMatch = raw.match(/\[([^\]]+)\]/);
+      const vendor = vendorMatch ? vendorMatch[1].trim() : null;
+      if (/HTTP error\s+(\d{3})/i.test(raw)) {
+        const code = raw.match(/HTTP error\s+(\d{3})/i)[1];
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak tersedia (HTTP ${code}). Data dari vendor lain tetap ditampilkan. Coba lagi beberapa menit lagi.`;
+      }
+      if (/timeout|timed\s*out|connection.*(timed|time).*out/i.test(raw)) {
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> tidak merespons tepat waktu. Menampilkan hasil dari sumber lain sementara ini.`;
+      }
+      if (/captcha|blocked|forbid|403/i.test(raw)) {
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> membatasi akses otomatis saat ini. Kami akan mencoba lagi nanti.`;
+      }
+      if (/parse|selector|structure|changed/i.test(raw)) {
+        return `Struktur halaman <strong>${vendor ?? 'vendor'}</strong> berubah, sehingga data tidak dapat diambil. Akan kami sesuaikan secepatnya.`;
+      }
+      return raw;
+    }
+    document.querySelectorAll(".js-vendor-msg").forEach(el => {
+      const raw = el.getAttribute("data-raw") || el.textContent || "";
+      el.innerHTML = rewriteVendorMessage(raw);
+    });
+
+    // ---------- Inline search loading (no full-screen overlay) ----------
+    const form = document.getElementById("searchForm");
+    const qInput = document.getElementById("qInput");
+    const results = document.getElementById("resultsWrap");
+    const loadingInline = document.getElementById("loadingInline");
+    const btn = document.getElementById("searchBtn");
+    const btnText = btn?.querySelector(".btn-text");
+    const btnSpin = btn?.querySelector(".btn-spinner");
+
+    function showInlineLoading() {
+      if (results) results.style.display = "none";
+      if (loadingInline) { loadingInline.style.display = "grid"; loadingInline.style.placeItems = "center"; }
+      if (btn && btnText && btnSpin) {
+        btn.setAttribute("disabled", "disabled");
+        qInput?.setAttribute("readonly", "readonly");
+        btnSpin.style.display = "inline-block";
+        btnText.textContent = "Searching…";
+      }
+    }
+    document.addEventListener("DOMContentLoaded", () => {
+      const hasRows = !!document.querySelector("#resultsWrap tbody tr");
+      if (hasRows) {
+        if (loadingInline) loadingInline.style.display = "none";
+        if (results) results.style.display = "block";
+        if (btn && btnText && btnSpin) {
+          btn.removeAttribute("disabled");
+          qInput?.removeAttribute("readonly");
+          btnSpin.style.display = "none";
+          btnText.textContent = "Search";
+        }
+      }
+    });
+    form?.addEventListener("submit", () => { showInlineLoading(); });
+
+    // ---------- Pagination (10 per page) ----------
+    const rows = Array.from(document.querySelectorAll("#tableBody tr"));
+    const perPage = 10;
+    const pageCount = Math.ceil(rows.length / perPage);
+    const pagination = document.getElementById("pagination");
+    function renderPage(page){
+      rows.forEach((row,i)=> row.style.display = (i >= (page-1)*perPage && i < page*perPage) ? "" : "none");
+      document.querySelectorAll("#pagination .page-item").forEach((li,idx)=>{
+        li.classList.toggle("active", (idx+1) === page);
+      });
+      // renumber the visible "No." column
+      let counter = 1 + (page-1)*perPage;
+      rows.forEach((row,i)=>{
+        if (row.style.display !== "none") {
+          const cell = row.querySelector("td:first-child");
+          if (cell) cell.textContent = counter++;
+        }
+      });
+    }
+    if (pageCount > 1) {
+      for (let i=1; i<=pageCount; i++) {
+        const li = document.createElement("li");
+        li.className = "page-item" + (i===1 ? " active" : "");
+        const a = document.createElement("a");
+        a.className = "page-link"; a.href="#"; a.textContent = i;
+        a.addEventListener("click", e => { e.preventDefault(); renderPage(i); });
+        li.appendChild(a); pagination.appendChild(li);
+      }
+    }
+    renderPage(1);
   </script>
 </body>
 </html>
