@@ -130,6 +130,80 @@ class TestDepoIntegration(unittest.TestCase):
         
         self.assertFalse(result.success)
         mock_logger.error.assert_called_once()
+    
+    def test_factory_integration_creates_working_scraper(self):
+        """Test that the factory creates a working scraper with all components integrated"""
+        from api.depobangunan.factory import create_depo_scraper
+        
+        # Create scraper using factory
+        scraper = create_depo_scraper()
+        
+        # Verify scraper is created correctly
+        self.assertIsNotNone(scraper)
+        self.assertIsInstance(scraper, DepoPriceScraper)
+        
+        # Verify all components exist and are properly wired
+        self.assertIsNotNone(scraper.http_client)
+        self.assertIsNotNone(scraper.url_builder)
+        self.assertIsNotNone(scraper.html_parser)
+        
+        # Verify component types are correct
+        from api.core import BaseHttpClient
+        from api.depobangunan.url_builder import DepoUrlBuilder
+        from api.depobangunan.html_parser import DepoHtmlParser
+        
+        self.assertIsInstance(scraper.http_client, BaseHttpClient)
+        self.assertIsInstance(scraper.url_builder, DepoUrlBuilder)
+        self.assertIsInstance(scraper.html_parser, DepoHtmlParser)
+    
+    @patch('api.depobangunan.factory.DepoHtmlParser')
+    @patch('api.depobangunan.factory.DepoUrlBuilder')
+    @patch('api.depobangunan.factory.BaseHttpClient')
+    def test_factory_integration_component_creation_order(self, mock_http_client, mock_url_builder, mock_html_parser):
+        """Test that factory creates components in the correct order"""
+        from api.depobangunan.factory import create_depo_scraper
+        
+        # Setup mock instances
+        mock_http_instance = Mock()
+        mock_url_instance = Mock()
+        mock_html_instance = Mock()
+        
+        mock_http_client.return_value = mock_http_instance
+        mock_url_builder.return_value = mock_url_instance
+        mock_html_parser.return_value = mock_html_instance
+        
+        # Create scraper
+        scraper = create_depo_scraper()
+        
+        # Verify all components were created
+        mock_http_client.assert_called_once()
+        mock_url_builder.assert_called_once()
+        mock_html_parser.assert_called_once()
+        
+        # Verify scraper was created with the mocked components
+        self.assertEqual(scraper.http_client, mock_http_instance)
+        self.assertEqual(scraper.url_builder, mock_url_instance)
+        self.assertEqual(scraper.html_parser, mock_html_instance)
+    
+    def test_factory_creates_unique_instances(self):
+        """Test that factory creates new instances each time it's called"""
+        from api.depobangunan.factory import create_depo_scraper
+        
+        # Create two scrapers
+        scraper1 = create_depo_scraper()
+        scraper2 = create_depo_scraper()
+        
+        # Verify they are different instances
+        self.assertIsNot(scraper1, scraper2)
+        self.assertIsNot(scraper1.http_client, scraper2.http_client)
+        self.assertIsNot(scraper1.url_builder, scraper2.url_builder)
+        self.assertIsNot(scraper1.html_parser, scraper2.html_parser)
+        
+        # But they should be the same types
+        self.assertEqual(type(scraper1), type(scraper2))
+        self.assertEqual(type(scraper1.http_client), type(scraper2.http_client))
+        self.assertEqual(type(scraper1.url_builder), type(scraper2.url_builder))
+        self.assertEqual(type(scraper1.html_parser), type(scraper2.html_parser))
 
 
 if __name__ == '__main__':

@@ -1,6 +1,9 @@
 import re
 from typing import Union
 
+class PriceRegexCache:
+    DIGIT_PATTERN = re.compile(r'\d')
+
 
 class GemilangPriceCleaner:
     
@@ -15,7 +18,7 @@ class GemilangPriceCleaner:
         if not price_string:
             return 0
         
-        digits = re.findall(r'\d', price_string)
+        digits = PriceRegexCache.DIGIT_PATTERN.findall(price_string)
         if not digits:
             return 0
         

@@ -6,6 +6,16 @@ __pycache__
 db.sqlite3
 media
 
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Profiling output
+gemilang_profiling/
+profiling_results/
+*.prof
+
 # Backup files
 *.bak
 
@@ -136,3 +146,6 @@ GitHub.sublime-settings
 !.vscode/launch.json
 !.vscode/extensions.json
 .history
+
+# Mitra10 Profiling
+mitra10_profiling/
