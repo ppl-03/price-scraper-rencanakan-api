@@ -1,7 +1,6 @@
 import asyncio
 from api.mitra10.url_builder import Mitra10UrlBuilder
 from api.mitra10.html_parser import Mitra10HtmlParser
-from api.mitra10.scraper import Mitra10PriceScraper
 from typing import Optional
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from api.interfaces import IHttpClient, HttpClientError
@@ -150,12 +149,13 @@ class RequestsHtmlClient(IHttpClient):
 def create_alternative_mitra10_scraper(client_type: str = "playwright"):
     url_builder = Mitra10UrlBuilder()
     html_parser = Mitra10HtmlParser()
-    
+
     if client_type == "playwright":
         http_client = PlaywrightHttpClient()
     elif client_type == "requests-html":
         http_client = RequestsHtmlClient()
     else:
         http_client = PlaywrightHttpClient()
-    
+
+    from api.mitra10.scraper import Mitra10PriceScraper
     return Mitra10PriceScraper(http_client, url_builder, html_parser)
