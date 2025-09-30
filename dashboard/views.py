@@ -1,8 +1,9 @@
-# dashboard/views.py
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib import messages
+from .forms import ItemPriceProvinceForm
+from . import models
 
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -308,3 +309,42 @@ def trigger_scrape(request):
         )
     )
     return redirect("home")
+
+def curated_price_list(request):
+    qs = models.ItemPriceProvince.objects.select_related("item_price", "province")
+    return render(request, "dashboard/curated_price_list.html", {"rows": qs})
+
+def curated_price_create(request):
+    form = ItemPriceProvinceForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Curated price saved")
+        return redirect("curated_price_list")
+    return render(request, "dashboard/form.html", {"title": "New Curated Price", "form": form})
+
+def curated_price_update(request, pk):
+    obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
+    form = ItemPriceProvinceForm(request.POST or None, instance=obj)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Curated price updated")
+        return redirect("curated_price_list")
+    return render(request, "dashboard/form.html", {"title": "Edit Curated Price", "form": form})
+
+def curated_price_delete(request, pk):
+    obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
+    if request.method == "POST":
+        obj.delete()
+        messages.success(request, "Curated price deleted")
+        return redirect("curated_price_list")
+    return render(request, "dashboard/confirm_delete.html", {"title": "Delete Curated Price", "obj": obj})
+
+@require_POST
+def curated_price_from_scrape(request):
+    initial = {
+        "price": request.POST.get("value") or None,
+        "source": request.POST.get("source") or "",
+        "url": request.POST.get("url") or "",
+    }
+    form = ItemPriceProvinceForm(initial=initial)
+    return render(request, "dashboard/form.html", {"title": "Save Price from Scrape", "form": form})
