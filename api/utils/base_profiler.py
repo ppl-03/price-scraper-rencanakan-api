@@ -199,7 +199,7 @@ class BaseProfiler(ABC):
     
     def run_basic_profiling(self):
         if self.ENV.get('PROFILING_ENABLED', 'true').lower() != 'true':
-            print(f"Profiling is disabled in environment configuration")
+            print("Profiling is disabled in environment configuration")
             return
         
         try:
