@@ -9,7 +9,7 @@ WORKDIR /app
 
 COPY requirements.txt /app/
 
-# System deps for mysqlclient/psycopg2 + Playwright/WebKit (optimized for memory)
+# System deps for mysqlclient/psycopg2 + basic dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
@@ -19,27 +19,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     ca-certificates \
-    # WebKit specific dependencies (lighter than Chromium)
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libglib2.0-0 \
-    libexpat1 \
-    zlib1g \
     && pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt \
     && apt-get purge -y --auto-remove build-essential gcc \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Install only WebKit browser (much lighter than Chromium - saves ~200MB)
+# Let Playwright install all WebKit dependencies automatically
+RUN python -m playwright install-deps webkit
 RUN python -m playwright install webkit
 
 COPY . /app/
