@@ -2,6 +2,11 @@ import re
 from typing import Union
 
 
+class PriceRegexCache:
+    """Cache for compiled regex patterns used in price cleaning."""
+    DIGIT_PATTERN = re.compile(r'\d')
+
+
 class JuraganMaterialPriceCleaner:
     
     @staticmethod
@@ -27,8 +32,8 @@ class JuraganMaterialPriceCleaner:
         if not price_string:
             return 0
         
-        # Extract all digits from the string
-        digits = re.findall(r'\d', price_string)
+        # Extract all digits from the string using cached regex pattern
+        digits = PriceRegexCache.DIGIT_PATTERN.findall(price_string)
         if not digits:
             return 0
         
