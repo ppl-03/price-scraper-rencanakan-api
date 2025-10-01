@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class PlaywrightHttpClient(IHttpClient):
     
-    def __init__(self, headless: bool = True, browser_type: str = "chromium"):
+    def __init__(self, headless: bool = True, browser_type: str = "webkit"):
         self.headless = headless
         self.browser_type = browser_type
         self.playwright = None
@@ -18,23 +18,48 @@ class PlaywrightHttpClient(IHttpClient):
         self.page: Optional[Page] = None
         self._loop = None
     
+    def _get_browser_args(self):
+        """Memory-optimized browser arguments for production deployment"""
+        return [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--memory-pressure-off',
+            '--max_old_space_size=512',  # Limit V8 heap size to 512MB
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-images',  # Disable image loading to save memory
+            # Removed --disable-javascript as it prevents modern sites from working
+        ]
+    
     async def _ensure_browser(self):
         if not self.playwright:
             self.playwright = await async_playwright().start()
             
         if not self.browser:
+            browser_args = self._get_browser_args()
             if self.browser_type == "chromium":
-                self.browser = await self.playwright.chromium.launch(headless=self.headless)
+                self.browser = await self.playwright.chromium.launch(
+                    headless=self.headless, 
+                    args=browser_args
+                )
             elif self.browser_type == "firefox":
+                # Firefox uses different args, keep minimal
                 self.browser = await self.playwright.firefox.launch(headless=self.headless)
             elif self.browser_type == "webkit":
+                # WebKit is already memory efficient, minimal args
                 self.browser = await self.playwright.webkit.launch(headless=self.headless)
             else:
                 raise ValueError(f"Unsupported browser type: {self.browser_type}")
                 
         if not self.context:
             self.context = await self.browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                # Reduce viewport size to save memory
+                viewport={'width': 1024, 'height': 768}
             )
             
         if not self.page:
@@ -61,12 +86,24 @@ class PlaywrightHttpClient(IHttpClient):
         await self._ensure_browser()
         
         try:
-            response = await self.page.goto(url)
+            # Try different loading strategies
+            response = await self.page.goto(url, wait_until='domcontentloaded', timeout=30000)
             
             if not response or not response.ok:
                 raise HttpClientError(f"HTTP {response.status if response else 'Unknown'} for {url}")
             
-            await self.page.wait_for_load_state('networkidle')
+            # Try to wait for content, but don't fail if it times out
+            try:
+                await self.page.wait_for_load_state('networkidle', timeout=10000)
+            except:
+                # If networkidle fails, try waiting for at least DOM content
+                try:
+                    await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+                except:
+                    pass  # Continue even if this fails
+            
+            # Wait a bit for dynamic content
+            await self.page.wait_for_timeout(2000)
             
             content = await self.page.content()
             return content

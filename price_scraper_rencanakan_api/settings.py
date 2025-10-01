@@ -171,3 +171,69 @@ STORAGES = {
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Memory optimization settings for production deployment
+if not DEBUG or os.environ.get('DEPLOYMENT_ENV') == 'production':
+    # Reduce database connection pool
+    if 'default' in DATABASES:
+        DATABASES['default']['CONN_MAX_AGE'] = 60
+        DATABASES['default']['OPTIONS'] = {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+        }
+    
+    # Optimize caching with memory limits
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,  # Limit cache entries to prevent memory bloat
+                'CULL_FREQUENCY': 3,  # Remove 1/3 of entries when MAX_ENTRIES reached
+            },
+            'TIMEOUT': 300,  # 5 minutes default timeout
+        }
+    }
+    
+    # Limit file upload sizes to prevent memory issues
+    FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
+    DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
+    
+    # Session optimization
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'default'
+    SESSION_COOKIE_AGE = 1800  # 30 minutes
+    
+    # Logging configuration for production
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'verbose': {
+                'format': '{levelname} {asctime} {module} {message}',
+                'style': '{',
+            },
+        },
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+                'formatter': 'verbose',
+            },
+        },
+        'root': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # Reduce log verbosity
+        },
+        'loggers': {
+            'django': {
+                'handlers': ['console'],
+                'level': 'WARNING',
+                'propagate': False,
+            },
+            'api': {
+                'handlers': ['console'],
+                'level': 'INFO',
+                'propagate': False,
+            },
+        },
+    }

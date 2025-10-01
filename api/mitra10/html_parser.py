@@ -13,12 +13,13 @@ class Mitra10HtmlParser(IHtmlParser):
     
     def __init__(self, price_cleaner: Mitra10PriceCleaner = None):
         self.price_cleaner = price_cleaner or Mitra10PriceCleaner()
-        self._product_selector = "div.MuiGrid-item"
-        self._name_selector = 'a.gtm_mitra10_cta_product p'  
-        self._link_selector = "a.gtm_mitra10_cta_product"
-        self._price_selector = "span.price__final"
+        # Updated selectors based on modern Mitra10 structure
+        self._product_selector = "div[class*='MuiGrid-item'], div[class*='product'], article[class*='product']"
+        self._name_selector = 'a[class*="product"] p, h3, h4, [class*="title"], [class*="name"]'  
+        self._link_selector = "a[href*='/product/'], a[href*='.html'], a[class*='product']"
+        self._price_selector = "span[class*='price'], div[class*='price'], [class*='currency']"
         self._image_selector = "img"
-        self._description_selector = "p.MuiTypography-root"
+        self._description_selector = "p.MuiTypography-root, p[class*='description']"
     
     def parse_products(self, html_content: str) -> List[Product]:
         if not html_content:

@@ -45,14 +45,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     && pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt \
-    # Install Playwright browsers
-    && python -m playwright install --with-deps chromium \
     && apt-get purge -y --auto-remove build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright browsers in separate layer to avoid issues
+RUN python -m playwright install --with-deps webkit
 
 COPY . /app/
 
 EXPOSE 8000
 
-# Koyeb provides $PORT. Collect static files at startup, then run Gunicorn
-CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:${PORT:-8000} price_scraper_rencanakan_api.wsgi:application"]
+# Memory-optimized Gunicorn configuration for Koyeb deployment
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn --workers 1 --worker-class sync --worker-connections 100 --max-requests 1000 --max-requests-jitter 100 --timeout 120 --keep-alive 2 --preload --bind 0.0.0.0:${PORT:-8000} price_scraper_rencanakan_api.wsgi:application"]
