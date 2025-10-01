@@ -76,6 +76,14 @@ class JuraganMaterialHtmlParser(IHtmlParser):
     
     def _extract_product_name(self, item) -> Optional[str]:
         """Extract product name from item."""
+        # Try new Juragan Material structure first (sj-text-display4)
+        name_element = item.find('p', class_='sj-text-display4')
+        if name_element:
+            name = name_element.get_text(strip=True)
+            if name:
+                return name
+        
+        # Fallback to old structure for backward compatibility
         # Try to get name from link first
         name_link = item.find('a')
         if name_link:
@@ -96,6 +104,13 @@ class JuraganMaterialHtmlParser(IHtmlParser):
     
     def _extract_product_url(self, item) -> str:
         """Extract product URL from item."""
+        # Check if the product card is wrapped in an <a> tag (new structure)
+        if item.parent and item.parent.name == 'a':
+            href = item.parent.get('href')
+            if href:
+                return href
+        
+        # Fallback to old structure - look for <a> inside the item
         name_link = item.find('a')
         if name_link and name_link.get('href'):
             return name_link.get('href', '')
@@ -119,7 +134,16 @@ class JuraganMaterialHtmlParser(IHtmlParser):
     
     def _extract_product_price(self, item) -> int:
         """Extract product price from item."""
-        # Follow the path: div.product-card-price -> div.price
+        # Try new Juragan Material structure first (sj-text-h6 text-text-main)
+        price_element = item.find('p', class_='sj-text-h6 text-text-main')
+        if price_element:
+            price_text = price_element.get_text(strip=True)
+            try:
+                return self.price_cleaner.clean_price(price_text)
+            except (TypeError, ValueError):
+                pass
+        
+        # Fallback to old structure: div.product-card-price -> div.price
         price_wrapper = item.find('div', class_='product-card-price')
         if price_wrapper:
             price_element = price_wrapper.find('div', class_='price')
