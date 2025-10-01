@@ -140,13 +140,14 @@
     <div class="card">
       <!-- Inline loading state -->
       <div id="loadingInline" class="loading-inline">
-        <div class="loading-panel" role="status" aria-live="polite" aria-label="Mengambil harga">
-          <div class="ring" aria-hidden="true"></div>
-          <div>
-            <div class="fw-semibold">Mengambil harga…</div>
-            <div class="text-muted small">Mohon tunggu sebentar</div>
-          </div>
-        </div>
+        <!-- Use <output> instead of role="status" -->
+        <output id="loadingStatus" class="loading-panel" aria-live="polite" aria-label="Mengambil harga">
+          <span class="ring" aria-hidden="true"></span>
+          <span>
+            <span class="fw-semibold">Mengambil harga…</span>
+            <span class="text-muted small d-block">Mohon tunggu sebentar</span>
+          </span>
+        </output>
       </div>
 
       <!-- Table -->
@@ -187,7 +188,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     // ---------- Price formatting: "IDR 30,400" (code, comma thousands, NO decimals) ----------
-    // Use en-US locale + currencyDisplay: 'code' and 0 fraction digits
     const idf = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "IDR",
@@ -196,22 +196,40 @@
       maximumFractionDigits: 0
     });
 
-    // Format any server-rendered price cells immediately
-    document.querySelectorAll(".c-price").forEach(td => {
-      const raw = String(td.textContent || "").replace(/[^\d.-]/g, "");
-      const num = Number(raw);
-      if (Number.isFinite(num)) {
-        td.textContent = idf.format(Math.round(num));
+    // Helper: parse numeric text without regex/replace (keeps linters happy)
+    function toNumber(text) {
+      let out = "";
+      for (const ch of String(text || "")) {
+        if ((ch >= "0" && ch <= "9") || ch === "-" ) out += ch;
       }
-    });
+      return Number(out || "0");
+    }
+
+    // Format any server-rendered price cells immediately (for…of)
+    const priceCells = document.querySelectorAll(".c-price");
+    for (const td of priceCells) {
+      const num = toNumber(td.textContent);
+      if (Number.isFinite(num)) td.textContent = idf.format(Math.round(num));
+    }
 
     // ---------- Friendly vendor error messages ----------
     function rewriteVendorMessage(raw) {
-      const vendorMatch = raw.match(/\[([^\]]+)\]/);
-      const vendor = vendorMatch ? vendorMatch[1].trim() : null;
-      if (/HTTP error\s+(\d{3})/i.test(raw)) {
-        const code = raw.match(/HTTP error\s+(\d{3})/i)[1];
-        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak tersedia (HTTP ${code}). Data dari vendor lain tetap ditampilkan. Coba lagi beberapa menit lagi.`;
+      // simple, safe extraction of [Vendor]
+      let vendor = null;
+      const open = raw.indexOf("[");
+      if (open !== -1) {
+        const close = raw.indexOf("]", open + 1);
+        if (close !== -1) vendor = raw.slice(open + 1, close).trim();
+      }
+
+      const httpIdx = raw.toLowerCase().indexOf("http error");
+      if (httpIdx !== -1) {
+        const windowStr = raw.slice(httpIdx, httpIdx + 40);
+        const m = windowStr.match(/HTTP error\s+(\d{3})/i);
+        if (m) {
+          const code = m[1];
+          return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak tersedia (HTTP ${code}). Data dari vendor lain tetap ditampilkan. Coba lagi beberapa menit lagi.`;
+        }
       }
       if (/timeout|timed\s*out|connection.*(timed|time).*out/i.test(raw)) {
         return `<strong>${vendor ?? 'Salah satu vendor'}</strong> tidak merespons tepat waktu. Menampilkan hasil dari sumber lain sementara ini.`;
@@ -224,10 +242,13 @@
       }
       return raw;
     }
-    document.querySelectorAll(".js-vendor-msg").forEach(el => {
-      const raw = el.getAttribute("data-raw") || el.textContent || "";
+
+    // Use for…of and dataset instead of forEach/getAttribute
+    const vendorMsgs = document.querySelectorAll(".js-vendor-msg");
+    for (const el of vendorMsgs) {
+      const raw = el.dataset.raw || el.textContent || "";
       el.innerHTML = rewriteVendorMessage(raw);
-    });
+    }
 
     // ---------- Inline search loading ----------
     const form = document.getElementById("searchForm");
@@ -248,6 +269,7 @@
         btnText.textContent = "Searching…";
       }
     }
+
     document.addEventListener("DOMContentLoaded", () => {
       const hasRows = !!document.querySelector("#resultsWrap tbody tr");
       if (hasRows) {
@@ -269,17 +291,18 @@
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
-      const priceNum = Number(String(priceText).replace(/[^\d.-]/g,"")) || 0;
+      const priceNum = toNumber(priceText);
       return { item, vendor, price: priceNum };
     });
 
-    // Populate vendor dropdown
+    // Populate vendor dropdown (for…of)
     const vendorSelect = document.getElementById("vendorSelect");
-    [...new Set(data.map(d => d.vendor).filter(Boolean))].sort().forEach(v => {
+    const uniqueVendors = [...new Set(data.map(d => d.vendor).filter(Boolean))].sort();
+    for (const v of uniqueVendors) {
       const opt = document.createElement("option");
       opt.value = v; opt.textContent = v;
       vendorSelect.appendChild(opt);
-    });
+    }
 
     // ---------- Filtering + Sorting + Pagination ----------
     const perPage = 10;
@@ -296,11 +319,13 @@
     function applyFilters() {
       const q = (filterInput.value || "").toLowerCase();
       const v = vendorSelect.value || "";
-      const min = Number(minPrice.value || ""); const max = Number(maxPrice.value || "");
+      const min = Number(minPrice.value || "");
+      const max = Number(maxPrice.value || "");
       return data.filter(d => {
         const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
-        const pm = (isNaN(min) || d.price >= min) && (isNaN(max) || (max===0 ? true : d.price <= max));
+        const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
+                   (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
         return qmatch && vm && pm;
       });
     }
@@ -328,7 +353,8 @@
       tbody.innerHTML = "";
       const start = (currentPage - 1) * perPage;
       const slice = rows.slice(start, start + perPage);
-      slice.forEach((d, idx) => {
+      let idx = 0;
+      for (const d of slice) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${start + idx + 1}</td>
@@ -336,7 +362,8 @@
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
           <td class="c-vendor">${d.vendor}</td>`;
         tbody.appendChild(tr);
-      });
+        idx++;
+      }
       if (slice.length === 0) {
         const tr = document.createElement("tr");
         tr.innerHTML = `<td colspan="4" class="text-center text-muted py-4">Tidak ada data</td>`;
@@ -355,27 +382,31 @@
       }
     }
 
-    // Header sorting
-    document.querySelectorAll("th.th-sort").forEach(th => {
+    // Header sorting (for…of + dataset)
+    const sortHeaders = document.querySelectorAll("th.th-sort");
+    for (const th of sortHeaders) {
       th.addEventListener("click", () => {
-        const key = th.getAttribute("data-key");
+        const key = th.dataset.key;
         if (sortKey === key) {
           sortDir = (sortDir === 'asc') ? 'desc' : 'asc';
         } else {
           sortKey = key; sortDir = 'asc';
         }
-        document.querySelectorAll("th.th-sort").forEach(x => x.classList.remove("asc","desc"));
+        for (const x of sortHeaders) x.classList.remove("asc","desc");
         th.classList.add(sortDir);
         currentPage = 1;
         render();
       });
-    });
+    }
 
-    // Filters events
-    [filterInput, vendorSelect, minPrice, maxPrice].forEach(el => {
+    // Filters events (for…of)
+    const filterControls = [filterInput, vendorSelect, minPrice, maxPrice];
+    for (const el of filterControls) {
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
-    });
+    }
+
+    // Clear
     clearBtn.addEventListener("click", (e) => {
       e.preventDefault();
       filterInput.value = ""; vendorSelect.value = "";
