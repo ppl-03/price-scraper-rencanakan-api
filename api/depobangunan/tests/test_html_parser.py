@@ -690,7 +690,6 @@ class TestDepoHtmlParser(unittest.TestCase):
         self.assertEqual(result, 25000)
     
     def test_extract_product_price_regular_price_succeeds(self):
-        """Test the exact scenario where line 137 executes - regular price > 0 returns price"""
         from bs4 import BeautifulSoup
         
         # HTML with structured regular price that should succeed
@@ -709,6 +708,58 @@ class TestDepoHtmlParser(unittest.TestCase):
         
         result = self.parser._extract_product_price(item)
         self.assertEqual(result, 75000)
+    
+    def test_extract_product_price_regular_price_method_positive_value(self):
+        from unittest.mock import patch
+        from bs4 import BeautifulSoup
+        
+        html_content = """
+        <li class="item product product-item">
+          <div class="regular-price">
+            <span class="price">Rp 50.000</span>
+          </div>
+        </li>
+        """
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        item = soup.find('li')
+        
+        # Mock the methods to control the flow
+        with patch.object(self.parser, '_extract_price_from_data_attribute', return_value=0):
+            with patch.object(self.parser, '_extract_price_from_special_price', return_value=0):
+                with patch.object(self.parser, '_extract_price_from_regular_price', return_value=50000):
+                    with patch.object(self.parser, '_extract_price_from_text_search', return_value=25000):
+                        result = self.parser._extract_product_price(item)
+                        # Should return regular price since it's > 0
+                        self.assertEqual(result, 50000)
+                        
+                        # Verify that text search was NOT called since regular price succeeded
+                        self.parser._extract_price_from_text_search.assert_not_called()
+    
+    def test_extract_product_price_regular_price_exactly_zero_fallback(self):
+        from unittest.mock import patch
+        from bs4 import BeautifulSoup
+        
+        html_content = """
+        <li class="item product product-item">
+          <span>Some product description with Rp 30.000</span>
+        </li>
+        """
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        item = soup.find('li')
+        
+        # Mock methods to force the exact flow we want to test
+        with patch.object(self.parser, '_extract_price_from_data_attribute', return_value=0):
+            with patch.object(self.parser, '_extract_price_from_special_price', return_value=0):
+                with patch.object(self.parser, '_extract_price_from_regular_price', return_value=0):
+                    with patch.object(self.parser, '_extract_price_from_text_search', return_value=30000):
+                        result = self.parser._extract_product_price(item)
+                        # Should return text search result since regular price was 0
+                        self.assertEqual(result, 30000)
+                        
+                        # Verify that text search WAS called since regular price failed
+                        self.parser._extract_price_from_text_search.assert_called_once()
 
 
 if __name__ == '__main__':
