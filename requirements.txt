@@ -9,3 +9,4 @@ django-coverage-plugin
 beautifulsoup4
 django-environ
 pymysql
+playwright
