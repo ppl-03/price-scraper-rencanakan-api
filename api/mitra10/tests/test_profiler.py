@@ -121,7 +121,7 @@ class TestMitra10Profiler(TestCase):
             'PROFILING_AUTO_SCRAPE': 'false'
         }):
             with patch('builtins.input', return_value='n'):
-                result = self.profiler.run_complete_profiling()
+                self.profiler.run_complete_profiling()
         
         self.assertGreater(len(self.profiler.results), 3)
 
