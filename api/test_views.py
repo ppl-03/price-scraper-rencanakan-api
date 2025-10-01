@@ -185,7 +185,7 @@ class ValidateScraperInputApiViewTests(ViewsTestCase):
     @patch('api.views.logger')
     def test_validate_scraper_input_api_browser_warning(self, mock_logger):
         """Test browser user agent warning"""
-        response = self.client.post(
+        self.client.post(
             reverse('validate_scraper_input_api'),
             data=json.dumps(self.valid_data),
             content_type='application/json',
@@ -276,7 +276,7 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
     @patch('api.views.logger')
     def test_validate_scraper_input_legacy_api_suspicious_agent_logged(self, mock_logger):
         """Test suspicious user agent logging"""
-        response = self.client.post(
+        self.client.post(
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.valid_data),
             content_type='application/json',
@@ -754,7 +754,7 @@ class EdgeCaseTests(ViewsTestCase):
     @patch('api.views.logger')
     def test_logging_functionality(self, mock_logger):
         """Test that logging works correctly"""
-        response = self.client.post(
+        self.client.post(
             reverse('validate_scraper_input_legacy_api'),
             data=json.dumps(self.valid_data),
             content_type='application/json',

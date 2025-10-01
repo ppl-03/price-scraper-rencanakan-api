@@ -5,6 +5,12 @@ from .test_http_client import TestJuraganMaterialHttpClient
 from .test_integration import TestJuraganMaterialIntegration
 from .test_api import TestJuraganMaterialAPI
 from .test_urls import TestJuraganMaterialUrls
+from .test_optimizations import (
+    TestJuraganMaterialHtmlParserOptimizations,
+    TestJuraganMaterialRegexCache,
+    TestJuraganMaterialPriceRegexCache,
+    TestJuraganMaterialPerformanceOptimizations
+)
 
 __all__ = [
     'TestJuraganMaterialPriceCleaner',
@@ -13,5 +19,9 @@ __all__ = [
     'TestJuraganMaterialHttpClient',
     'TestJuraganMaterialIntegration',
     'TestJuraganMaterialAPI',
-    'TestJuraganMaterialUrls'
+    'TestJuraganMaterialUrls',
+    'TestJuraganMaterialHtmlParserOptimizations',
+    'TestJuraganMaterialRegexCache',
+    'TestJuraganMaterialPriceRegexCache',
+    'TestJuraganMaterialPerformanceOptimizations'
 ]

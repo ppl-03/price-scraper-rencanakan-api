@@ -9,6 +9,12 @@ from .price_cleaner import JuraganMaterialPriceCleaner
 logger = logging.getLogger(__name__)
 
 
+class RegexCache:
+    """Cache for compiled regex patterns to avoid recompilation."""
+    SLUG_PATTERN = re.compile(r'[^a-zA-Z0-9\-]')
+    WHITESPACE_PATTERN = re.compile(r'\s+')
+
+
 class JuraganMaterialHtmlParser(IHtmlParser):
     """HTML parser for Juragan Material product pages."""
     
@@ -32,7 +38,8 @@ class JuraganMaterialHtmlParser(IHtmlParser):
             if not html_content:
                 return []
             
-            soup = BeautifulSoup(html_content, 'html.parser')
+            parser = 'lxml' if self._has_lxml() else 'html.parser'
+            soup = BeautifulSoup(html_content, parser)
             products = []
             
             product_items = soup.find_all('div', class_='product-card')
@@ -104,9 +111,10 @@ class JuraganMaterialHtmlParser(IHtmlParser):
         return "/products/product"
     
     def _generate_slug(self, name: str) -> str:
-        """Generate URL slug from product name."""
-        slug = name.lower().replace(' ', '-').replace('(', '').replace(')', '')
-        slug = re.sub(r'[^a-z0-9\-]', '', slug)
+        """Generate URL slug from product name using cached regex patterns."""
+        slug = name.lower()
+        slug = RegexCache.WHITESPACE_PATTERN.sub('-', slug)
+        slug = RegexCache.SLUG_PATTERN.sub('', slug)
         return slug
     
     def _extract_product_price(self, item) -> int:
@@ -133,3 +141,11 @@ class JuraganMaterialHtmlParser(IHtmlParser):
                 continue
         
         return 0
+    
+    def _has_lxml(self) -> bool:
+        """Check if lxml parser is available."""
+        try:
+            import lxml
+            return True
+        except ImportError:
+            return False

@@ -1,7 +1,4 @@
 import asyncio
-from api.mitra10.url_builder import Mitra10UrlBuilder
-from api.mitra10.html_parser import Mitra10HtmlParser
-from api.mitra10.scraper import Mitra10PriceScraper
 from typing import Optional
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from api.interfaces import IHttpClient, HttpClientError
@@ -49,22 +46,27 @@ class PlaywrightHttpClient(IHttpClient):
                 self._loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(self._loop)
             
-            return self._loop.run_until_complete(self._async_get(url, timeout))
+            return self._loop.run_until_complete(
+                asyncio.wait_for(self._async_get(url), timeout=timeout)
+            )
             
+        except asyncio.TimeoutError:
+            logger.error(f"Request timeout after {timeout}s for {url}")
+            raise HttpClientError(f"Request timeout after {timeout}s for {url}")
         except Exception as e:
             logger.error(f"Playwright request failed for {url}: {e}")
             raise HttpClientError(f"Request failed for {url}: {e}")
     
-    async def _async_get(self, url: str, timeout: int) -> str:
+    async def _async_get(self, url: str) -> str:
         await self._ensure_browser()
         
         try:
-            response = await self.page.goto(url, timeout=timeout * 1000)
+            response = await self.page.goto(url)
             
             if not response or not response.ok:
                 raise HttpClientError(f"HTTP {response.status if response else 'Unknown'} for {url}")
             
-            await self.page.wait_for_load_state('networkidle', timeout=timeout * 1000)
+            await self.page.wait_for_load_state('networkidle')
             
             content = await self.page.content()
             return content
@@ -75,6 +77,11 @@ class PlaywrightHttpClient(IHttpClient):
     def close(self):
         if self._loop and not self._loop.is_closed():
             self._loop.run_until_complete(self._async_close())
+        
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.playwright = None
     
     async def _async_close(self):
         if self.page:
@@ -100,14 +107,6 @@ class BatchPlaywrightClient:
         self.browser_type = browser_type
         self.client = None
     
-    async def __aenter__(self):
-        self.client = PlaywrightHttpClient(self.headless, self.browser_type)
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client._async_close()
-    
     def __enter__(self):
         self.client = PlaywrightHttpClient(self.headless, self.browser_type)
         return self
@@ -117,7 +116,9 @@ class BatchPlaywrightClient:
             self.client.close()
     
     def get(self, url: str, timeout: int = 30) -> str:
-        return self.client.get(url, timeout)
+        if self.client is None:
+            raise RuntimeError("BatchPlaywrightClient must be used as a context manager")
+        return self.client.get(url, timeout=timeout)
 
 
 class RequestsHtmlClient(IHttpClient):
@@ -145,17 +146,3 @@ class RequestsHtmlClient(IHttpClient):
     def close(self):
         if hasattr(self.session, 'close'):
             self.session.close()
-
-
-def create_alternative_mitra10_scraper(client_type: str = "playwright"):
-    url_builder = Mitra10UrlBuilder()
-    html_parser = Mitra10HtmlParser()
-    
-    if client_type == "playwright":
-        http_client = PlaywrightHttpClient()
-    elif client_type == "requests-html":
-        http_client = RequestsHtmlClient()
-    else:
-        http_client = PlaywrightHttpClient()
-    
-    return Mitra10PriceScraper(http_client, url_builder, html_parser)
