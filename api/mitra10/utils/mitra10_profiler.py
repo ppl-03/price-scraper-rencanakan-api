@@ -88,12 +88,12 @@ class Mitra10Profiler:
         real_html = self._fetch_real_html(self.test_keywords[0])
         
         profiler.enable()
-        for i in range(iterations):
+        for _ in range(iterations):
             try:
-                products = parser.parse_products(real_html)
+                parser.parse_products(real_html)
             except Exception as e:
                 print(f"Parse error: {e}")
-                pass
+
         profiler.disable()
         
         stats = pstats.Stats(profiler)
@@ -128,12 +128,12 @@ class Mitra10Profiler:
         profiler = cProfile.Profile()
         
         profiler.enable()
-        for i in range(iterations):
+        for _ in range(iterations):
             for price in test_prices:
                 try:
                     cleaned = cleaner.clean_price(price)
-                    valid = cleaner.is_valid_price(cleaned)
-                except:
+                    cleaner.is_valid_price(cleaned)
+                except (ValueError, TypeError, AttributeError) as e:
                     pass
         profiler.disable()
         
@@ -173,7 +173,7 @@ class Mitra10Profiler:
         for i in range(iterations):
             keyword = test_keywords[i % len(test_keywords)]
             try:
-                url = builder.build_search_url(keyword, True, i % 5)
+                builder.build_search_url(keyword, True, i % 5)
             except Exception:
                 pass
         profiler.disable()
@@ -207,7 +207,7 @@ class Mitra10Profiler:
         print(f"Profiling Playwright client initialization ({iterations} iterations)...")
         
         profiler.enable()
-        for i in range(iterations):
+        for _ in range(iterations):
             try:
                 client = PlaywrightHttpClient(headless=True)
                 client.close()
@@ -257,7 +257,7 @@ class Mitra10Profiler:
                     products = scraper.html_parser.parse_products(html_content)
                     
                     for product in products[:5]:  
-                        cleaned_price = scraper.html_parser.price_cleaner.clean_price(str(product.price))
+                        scraper.html_parser.price_cleaner.clean_price(str(product.price))
                     
                     products_found = len(products)
                     html_size = len(html_content)
@@ -282,7 +282,7 @@ class Mitra10Profiler:
             try:
                 if 'scraper' in locals():
                     scraper.http_client.close()
-            except:
+            except (AttributeError, RuntimeError, ConnectionError) as e:
                 pass
         
         profiler.disable()
@@ -313,7 +313,7 @@ class Mitra10Profiler:
         profiler = cProfile.Profile()
         
         profiler.enable()
-        for i in range(iterations):
+        for _ in range(iterations):
             try:
                 scraper = create_mitra10_scraper()
                 if hasattr(scraper.http_client, 'close'):
@@ -347,8 +347,7 @@ class Mitra10Profiler:
         report = {
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
             'profiling_results': self.results,
-            'environment_config': {k: v for k, v in ENV.items() if k.startswith('PROFILING_')},
-            'optimization_recommendations': self._generate_recommendations()
+            'environment_config': {k: v for k, v in ENV.items() if k.startswith('PROFILING_')}
         }
         
         report_file = self.output_dir / f"mitra10_performance_report_{int(time.time())}.json"
@@ -356,64 +355,6 @@ class Mitra10Profiler:
             json.dump(report, f, indent=2)
         
         return str(report_file)
-    
-    def _generate_recommendations(self) -> Dict[str, Any]:
-        recommendations = {
-            'critical_issues': [],
-            'moderate_issues': [],
-            'general_optimizations': []
-        }
-        
-        if 'selenium_client' in self.results:
-            selenium_time = self.results['selenium_client']['total_time']
-            selenium_iterations = self.results['selenium_client']['iterations']
-            avg_init_time = selenium_time / selenium_iterations if selenium_iterations > 0 else 0
-            
-            if avg_init_time > 3:
-                recommendations['critical_issues'].append({
-                    'issue': 'Selenium initialization bottleneck',
-                    'avg_time': avg_init_time,
-                    'impact': 'High - blocks scraping operations',
-                    'solutions': [
-                        'Implement connection pooling',
-                        'Keep WebDriver instances alive between requests',
-                        'Consider Playwright as alternative',
-                        'Use requests library for static content'
-                    ]
-                })
-            elif avg_init_time > 1:
-                recommendations['moderate_issues'].append({
-                    'issue': 'Selenium initialization could be improved',
-                    'avg_time': avg_init_time,
-                    'solutions': ['WebDriver reuse', 'Optimize startup options']
-                })
-        
-        if 'html_parser' in self.results:
-            parser_time = self.results['html_parser']['total_time']
-            iterations = self.results['html_parser']['iterations']
-            avg_parse_time = parser_time / iterations if iterations > 0 else 0
-            
-            if avg_parse_time > 0.1:
-                recommendations['moderate_issues'].append({
-                    'issue': 'HTML parsing performance',
-                    'avg_time': avg_parse_time,
-                    'solutions': [
-                        'Switch to lxml parser',
-                        'Optimize CSS selectors',
-                        'Cache parsed structures',
-                        'Use compiled selectors'
-                    ]
-                })
-        
-        recommendations['general_optimizations'] = [
-            'Implement async/concurrent scraping',
-            'Add Redis caching for responses',
-            'Use request batching',
-            'Implement database connection pooling',
-            'Add monitoring and alerting'
-        ]
-        
-        return recommendations
     
     def run_complete_profiling(self):
         if ENV.get('PROFILING_ENABLED', 'true').lower() != 'true':
@@ -440,7 +381,7 @@ class Mitra10Profiler:
             
             proceed = ENV.get('PROFILING_AUTO_SCRAPE', 'false').lower() == 'true'
             if not proceed:
-                print("\n Real Web Scraping Mode")
+                print("\nReal Web Scraping Mode")
                 print("This will make actual HTTP requests to Mitra10.com and may take longer.")
                 response = input("Proceed with real web scraping? (y/N): ").strip().lower()
                 proceed = response == 'y'
@@ -460,8 +401,6 @@ class Mitra10Profiler:
                 calls_per_sec = data['total_calls'] / data['total_time'] if data['total_time'] > 0 else 0
                 print(f"  {component}: {data['total_time']:.4f}s ({data['total_calls']:,} calls, {calls_per_sec:.0f} calls/sec)")
             
-            self._print_recommendations()
-            
             return {
                 'report_file': report_file,
                 'output_dir': self.output_dir,
@@ -480,32 +419,6 @@ class Mitra10Profiler:
             print(f"Profiling failed: {e}")
             raise
     
-    def _print_recommendations(self):
-        if not self.results:
-            return
-        
-        print("\nOptimization Recommendations:")
-        print("=" * 40)
-        
-        recommendations = self._generate_recommendations()
-        
-        if recommendations['critical_issues']:
-            print("CRITICAL ISSUES:")
-            for issue in recommendations['critical_issues']:
-                print(f"  - {issue['issue']} ({issue['avg_time']:.2f}s avg)")
-                for solution in issue['solutions'][:2]:  
-                    print(f"    * {solution}")
-        
-        if recommendations['moderate_issues']:
-            print("MODERATE ISSUES:")
-            for issue in recommendations['moderate_issues']:
-                print(f"  - {issue['issue']} ({issue.get('avg_time', 0):.4f}s avg)")
-        
-        print("GENERAL OPTIMIZATIONS:")
-        for opt in recommendations['general_optimizations'][:3]:  
-            print(f"  - {opt}")
-
-
 def main():
     profiler = Mitra10Profiler()
     profiler.run_complete_profiling()

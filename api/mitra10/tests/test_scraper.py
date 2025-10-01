@@ -198,7 +198,7 @@ class TestMitra10PriceScraper(TestCase):
         
         def mock_get_html(url):
             if url == test_urls[1]:  
-                raise Exception("Network error")
+                raise ConnectionError("Network error")
             return test_html
         
         def mock_parse_products(html):
