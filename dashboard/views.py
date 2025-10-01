@@ -266,10 +266,32 @@ def home(request):
     keyword = request.GET.get("q", "semen")
 
     prices = []
-    prices += _run_vendor_to_prices(request, keyword, create_gemilang_scraper_and_url := (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store")
-    prices += _run_vendor_to_prices(request, keyword, create_depo_scraper_and_url := (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan")
-    prices += _run_vendor_to_prices(request, keyword, create_juragan_scraper_and_url := (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), "Juragan Material", _juragan_fallback)
-    prices += _run_vendor_to_prices(request, keyword, create_mitra_scraper_and_url := (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback)
+    prices += _run_vendor_to_prices(
+        request,
+        keyword,
+        (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())),
+        "Gemilang Store"
+    )
+    prices += _run_vendor_to_prices(
+        request,
+        keyword,
+        (lambda: (create_depo_scraper(), DepoUrlBuilder())),
+        "Depo Bangunan"
+    )
+    prices += _run_vendor_to_prices(
+        request,
+        keyword,
+        (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())),
+        "Juragan Material",
+        _juragan_fallback
+    )
+    prices += _run_vendor_to_prices(
+        request,
+        keyword,
+        (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())),
+        "Mitra10",
+        _mitra10_fallback
+    )
 
     # sanity: drop unreal prices and dedupe the final list
     prices = [p for p in prices if p.get("value") and p["value"] >= 100]
@@ -293,10 +315,32 @@ def trigger_scrape(request):
     # POST endpoint behind 'Search' – just returns counts via toasts and redirect
     keyword = request.POST.get("q", "semen")
     counts = {
-        "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store"),
-        "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan"),
-        "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), "Juragan Material", _juragan_fallback),
-        "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback),
+        "gemilang": _run_vendor_to_count(
+            request,
+            keyword,
+            (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())),
+            "Gemilang Store"
+        ),
+        "depo": _run_vendor_to_count(
+            request,
+            keyword,
+            (lambda: (create_depo_scraper(), DepoUrlBuilder())),
+            "Depo Bangunan"
+        ),
+        "juragan": _run_vendor_to_count(
+            request,
+            keyword,
+            (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())),
+            "Juragan Material",
+            _juragan_fallback
+        ),
+        "mitra10": _run_vendor_to_count(
+            request,
+            keyword,
+            (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())),
+            "Mitra10",
+            _mitra10_fallback
+        ),
     }
 
     messages.success(
@@ -309,6 +353,9 @@ def trigger_scrape(request):
         )
     )
     return redirect("home")
+
+
+### CRUD FUNCTIONS ###
 
 def curated_price_list(request):
     qs = models.ItemPriceProvince.objects.select_related("item_price", "province")
