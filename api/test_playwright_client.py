@@ -47,6 +47,8 @@ class TestPlaywrightHttpClient(unittest.TestCase):
         client = PlaywrightHttpClient()
         self.client = client
         
+        client.page = mock_page
+        
         with patch.object(client, '_ensure_browser', new_callable=AsyncMock):
             with patch.object(client.page, 'goto', new_callable=AsyncMock):
                 with patch.object(client.page, 'content', new_callable=AsyncMock) as mock_content:
@@ -63,6 +65,9 @@ class TestPlaywrightHttpClient(unittest.TestCase):
         client = PlaywrightHttpClient()
         self.client = client
         
+        mock_page = AsyncMock()
+        client.page = mock_page
+        
         with patch.object(client, '_ensure_browser', new_callable=AsyncMock):
             with patch.object(client.page, 'goto', new_callable=AsyncMock):
                 with patch.object(client.page, 'content', new_callable=AsyncMock) as mock_content:
@@ -78,6 +83,9 @@ class TestPlaywrightHttpClient(unittest.TestCase):
         
         client = PlaywrightHttpClient()
         self.client = client
+        
+        mock_page = AsyncMock()
+        client.page = mock_page
         
         with patch.object(client, '_ensure_browser', new_callable=AsyncMock):
             with patch.object(client.page, 'goto', new_callable=AsyncMock, side_effect=Exception("Navigation error")):
@@ -124,8 +132,9 @@ class TestBatchPlaywrightClient(unittest.TestCase):
         mock_client = Mock()
         mock_client_class.return_value = mock_client
         
-        with BatchPlaywrightClient() as client:
-            self.assertEqual(client, mock_client)
+        with BatchPlaywrightClient() as batch_client:
+            self.assertIsInstance(batch_client, BatchPlaywrightClient)
+            self.assertEqual(batch_client.client, mock_client)
         
         mock_client.close.assert_called_once()
 
