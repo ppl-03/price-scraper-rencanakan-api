@@ -8,15 +8,45 @@ WORKDIR /app
 
 COPY requirements.txt /app/
 
-# System deps for mysqlclient/psycopg2
+# System deps for mysqlclient/psycopg2 + Playwright/Chromium
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     pkg-config \
     libpq-dev \
     default-libmysqlclient-dev \
+    curl \
+    wget \
+    ca-certificates \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpangocairo-1.0-0 \
+    libpango-1.0-0 \
+    libx11-xcb1 \
+    libxcb-dri3-0 \
+    libxcb1 \
+    libxcb-dri2-0 \
+    libxshmfence1 \
+    libxfixes3 \
+    libxrender1 \
+    libxext6 \
+    libxss1 \
+    libglib2.0-0 \
+    libexpat1 \
+    zlib1g \
     && pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt \
+    # Install Playwright browsers
+    && python -m playwright install --with-deps chromium \
     && apt-get purge -y --auto-remove build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
 
