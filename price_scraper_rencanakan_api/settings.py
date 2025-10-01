@@ -176,17 +176,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if not DEBUG or os.environ.get('DEPLOYMENT_ENV') == 'production':
     # Reduce database connection pool
     if 'default' in DATABASES:
-        DATABASES['default']['CONN_MAX_AGE'] = 60
-        DATABASES['default']['OPTIONS'] = {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'charset': 'utf8mb4',
-        }
+        DATABASES['default']['CONN_MAX_AGE'] = 30
+        DATABASES['default'].setdefault('OPTIONS', {})
+        DATABASES['default']['OPTIONS']['MAX_CONNECTIONS'] = 5
     
-    # Optimize caching with memory limits
+    # Optimize caching for memory-constrained environment 
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'unique-snowflake',
+            'LOCATION': 'koyeb-cache',
             'OPTIONS': {
                 'MAX_ENTRIES': 1000,  # Limit cache entries to prevent memory bloat
                 'CULL_FREQUENCY': 3,  # Remove 1/3 of entries when MAX_ENTRIES reached
@@ -196,13 +194,13 @@ if not DEBUG or os.environ.get('DEPLOYMENT_ENV') == 'production':
     }
     
     # Limit file upload sizes to prevent memory issues
-    FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
-    DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5MB
+    FILE_UPLOAD_MAX_MEMORY_SIZE = 1048576  # 1MB
+    DATA_UPLOAD_MAX_MEMORY_SIZE = 1048576  # 1MB
     
     # Session optimization
     SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
     SESSION_CACHE_ALIAS = 'default'
-    SESSION_COOKIE_AGE = 1800  # 30 minutes
+    SESSION_COOKIE_AGE = 3600  # 1 hour
     
     # Logging configuration for production
     LOGGING = {
