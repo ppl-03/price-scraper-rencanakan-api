@@ -1,17 +1,18 @@
-# dashboard/views.py
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib import messages
+from .forms import ItemPriceProvinceForm
+from . import models
 
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-import re
+import re, json, os, time, random
 
 # For diagnostics + plain HTML fetch
 from api.core import BaseHttpClient
 
-# Vendors (use each package's own factory + url builder) 
+# Vendors (use each package's own factory + url builder)
 from api.gemilang.factory import create_gemilang_scraper
 from api.gemilang.url_builder import GemilangUrlBuilder
 
@@ -24,19 +25,25 @@ from api.juragan_material.url_builder import JuraganMaterialUrlBuilder
 from api.mitra10.factory import create_mitra10_scraper
 from api.mitra10.url_builder import Mitra10UrlBuilder
 
-# Selenium only for Mitra10 fallback (guarded import; server still boots if missing)
+# Playwright fallback (optional at runtime)
+HAS_PLAYWRIGHT = False
 try:
-    from api.selenium_client import SeleniumSession
-    HAS_SELENIUM = True
+    from playwright.sync_api import sync_playwright
+    HAS_PLAYWRIGHT = True
 except Exception:
-    HAS_SELENIUM = False
+    HAS_PLAYWRIGHT = False
+
+USE_BROWSER_FALLBACK = os.getenv("USE_BROWSER_FALLBACK", "auto").lower()  # auto|always|never
 
 
-#  small utilities 
-# turns price strings into an integer
+# ---------------- small utilities ----------------
 def _digits_to_int(txt: str) -> int:
     ds = re.findall(r"\d", txt or "")
     return int("".join(ds)) if ds else 0
+
+
+def _clean_text(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "")).strip()
 
 
 def _build_url_defensively(url_builder, keyword: str, sort_by_price: bool, page: int) -> str:
@@ -47,6 +54,23 @@ def _build_url_defensively(url_builder, keyword: str, sort_by_price: bool, page:
     raise AttributeError("URL builder has no supported build methods.")
 
 
+def _human_get(url: str, tries: int = 2, sleep_sec: float = 0.6) -> str:
+    """
+    Simple retry wrapper around BaseHttpClient().get(url).
+    We keep it minimal (no custom headers) to avoid breaking your client.
+    """
+    html = ""
+    for _ in range(max(1, tries)):
+        try:
+            html = BaseHttpClient().get(url) or ""
+            if html.strip():
+                break
+        except Exception:
+            pass
+        time.sleep(sleep_sec + random.random() * 0.4)
+    return html
+
+
 def _fetch_len(url: str) -> int:
     try:
         return len(BaseHttpClient().get(url) or "")
@@ -54,29 +78,29 @@ def _fetch_len(url: str) -> int:
         return 0
 
 
-# JURAGAN fallback
+# ---------------- Juragan fallback (HTML-only) ----------------
 def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
-    # HTML-only fallback for Juragan Material
     try:
         url = _build_url_defensively(JuraganMaterialUrlBuilder(), keyword, sort_by_price, page)
-        html = BaseHttpClient().get(url) or ""
+        html = _human_get(url)
         soup = BeautifulSoup(html, "html.parser")
 
+        # broadened a bit
         cards = soup.select("div.product-card") or \
                 soup.select("div.product-card__item, div.card-product, div.catalog-item, div.product")
 
         out = []
         for c in cards:
             name = None
-            for sel in ("a p.product-name", "p.product-name", ".product-name"):
+            for sel in ("a p.product-name", "p.product-name", ".product-name", "[class*=name]"):
                 el = c.select_one(sel)
                 if el and el.get_text(strip=True):
-                    name = el.get_text(" ", strip=True)
+                    name = _clean_text(el.get_text(" ", strip=True))
                     break
             if not name:
                 img = c.find("img")
                 if img and img.get("alt"):
-                    name = img["alt"].strip()
+                    name = _clean_text(img["alt"])
             if not name:
                 continue
 
@@ -88,7 +112,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             if el:
                 price = _digits_to_int(el.get_text(" ", strip=True))
             if price <= 0:
-                wrapper = c.select_one("div.product-card-price")
+                wrapper = c.select_one("div.product-card-price") or c
                 if wrapper:
                     for tag in wrapper.find_all(["span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6"], string=True):
                         v = _digits_to_int(tag.get_text(" ", strip=True))
@@ -110,66 +134,197 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
         return [], "", 0
 
 
-# MITRA10 fallback
+# ---------------- Mitra10 helpers + fallback ----------------
 def _looks_like_bot_challenge(html: str) -> bool:
     if not html:
         return False
     L = html.lower()
-    return ("attention required" in L) or ("verify you are human" in L) or ("cf-challenge" in L)
+    return ("attention required" in L) or ("verify you are human" in L) or ("cf-challenge" in L) or ("captcha" in L)
+
+
+def _fetch_with_playwright(url: str, wait_selector: str | None = None, timeout_ms: int = 12000) -> str:
+    if not HAS_PLAYWRIGHT:
+        return ""
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+            ctx = browser.new_context(
+                user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+                java_script_enabled=True,
+                viewport={"width": 1366, "height": 900},
+            )
+            page = ctx.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                page.wait_for_load_state("networkidle", timeout=timeout_ms // 2)
+            except Exception:
+                pass
+            if wait_selector:
+                try:
+                    page.wait_for_selector(wait_selector, timeout=timeout_ms // 2)
+                except Exception:
+                    pass
+            html = page.content()
+            ctx.close(); browser.close()
+            return html or ""
+    except Exception:
+        return ""
+
+
+def _extract_price_from_node(node) -> int:
+    # 1) Magento-ish: data-price-amount
+    pw = node.select_one(".price-wrapper[data-price-amount]")
+    if pw and pw.get("data-price-amount"):
+        try:
+            return int(float(pw["data-price-amount"]))
+        except Exception:
+            pass
+
+    # 2) Generic price classes
+    el = node.select_one(
+        "span.price__final, p.price__final, .price-box .price, "
+        "span.price, .price, [class*=price]"
+    )
+    if el and el.get_text(strip=True):
+        v = _digits_to_int(el.get_text(" ", strip=True))
+        if v > 0:
+            return v
+
+    # 3) Last resort: currency-looking text
+    for t in node.find_all(string=lambda s: s and ("Rp" in s or "IDR" in s)):
+        v = _digits_to_int(t)
+        if v > 0:
+            return v
+
+    return 0
 
 
 def _parse_mitra10_html(html: str, request_url: str) -> list[dict]:
-    # Parse Mitra10 markup (Magento first, then MUI), with de-dup
+    """
+    Robust Mitra10 parser:
+      A) JSON-LD (if present)
+      B) DOM cards with broader selectors (Magento/MUI/React variants)
+    """
+    out: list[dict] = []
     if not html:
-        return []
+        return out
+
     soup = BeautifulSoup(html, "html.parser")
+    seen = set()
 
-    # choose ONE level of container to avoid nested dupes
-    containers = soup.select("li.product-item") or \
-                 soup.select("div.product-item") or \
-                 soup.select("div.product-item-info") or \
-                 soup.select("div.MuiGrid-item") or \
-                 soup.select("div.grid-item") or \
-                 soup.select("div.MuiGrid2-root.MuiGrid2-item")
+    # ---------- A) JSON-LD ----------
+    for sc in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = (sc.string or sc.text or "").strip()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
 
-    seen, out = set(), []
+        def _emit(name: str | None, price_val: int, href: str | None):
+            if not name or price_val <= 0:
+                return
+            full_url = urljoin(request_url, href or "")
+            key = full_url or (name, price_val)
+            if key in seen:
+                return
+            seen.add(key)
+            out.append({"item": _clean_text(name), "value": price_val, "source": "Mitra10", "url": full_url})
+
+        # ItemList / SearchResultsPage
+        try:
+            if isinstance(data, dict) and data.get("@type") in ("ItemList", "SearchResultsPage"):
+                elems = data.get("itemListElement") or []
+                for e in elems:
+                    prod = e.get("item") if isinstance(e, dict) else None
+                    if isinstance(prod, dict) and (prod.get("@type") == "Product" or "name" in prod):
+                        name = prod.get("name")
+                        price_val = 0
+                        offers = prod.get("offers")
+                        if isinstance(offers, dict) and offers.get("price"):
+                            try:
+                                price_val = int(float(str(offers.get("price")).replace(",", "")))
+                            except Exception:
+                                price_val = _digits_to_int(str(offers.get("price")))
+                        url_ = prod.get("url") or prod.get("@id")
+                        _emit(name, price_val, url_)
+        except Exception:
+            pass
+
+        # Standalone Product(s)
+        try:
+            candidates = data if isinstance(data, list) else [data]
+            for d in candidates:
+                if not isinstance(d, dict):
+                    continue
+                if d.get("@type") == "Product" or "name" in d:
+                    name = d.get("name")
+                    price_val = 0
+                    offers = d.get("offers")
+                    if isinstance(offers, dict) and offers.get("price"):
+                        try:
+                            price_val = int(float(str(offers.get("price")).replace(",", "")))
+                        except Exception:
+                            price_val = _digits_to_int(str(offers.get("price")))
+                    url_ = d.get("url") or d.get("@id")
+                    _emit(name, price_val, url_)
+        except Exception:
+            pass
+
+    if out:
+        return out  # JSON-LD was enough
+
+    # ---------- B) DOM-based parsing ----------
+    containers = (
+        soup.select("li.product-item") or
+        soup.select("div.product-item, div.product-item-info") or
+        soup.select("div.MuiGrid2-root.MuiGrid2-item, div.MuiGrid-item") or
+        soup.select("div[class*=ProductCard], section[class*=product]") or
+        soup.select("[data-product-id], [data-product-sku]") or
+        soup.select("article:has(a[href])") or
+        []
+    )
+
     for it in containers:
-        # name
+        # name resolution
         name = None
         a = it.select_one("a.product-item-link")
-        if a and a.get_text(strip=True):
-            name = a.get_text(" ", strip=True)
+        if a and _clean_text(a.get_text()):
+            name = _clean_text(a.get_text())
+
         if not name:
-            for sel in ("a.gtm_mitra10_cta_product p", "p.product-name", "h2.product-name"):
+            for sel in ("h3, h2, h1, .product-name, .MuiTypography-root, [class*=title], [class*=name]"):
                 el = it.select_one(sel)
-                if el and el.get_text(strip=True):
-                    name = el.get_text(" ", strip=True)
+                if el and _clean_text(el.get_text()):
+                    name = _clean_text(el.get_text())
                     break
+
         if not name:
             img = it.find("img")
             if img and img.get("alt"):
-                name = img["alt"].strip()
+                name = _clean_text(img["alt"])
+
+        if not name:
+            link_guess = it.select_one("a[href][title]") or it.select_one("a[href]")
+            if link_guess and link_guess.get("title"):
+                name = _clean_text(link_guess["title"])
+
         if not name:
             continue
 
-        # url
-        link = a or it.select_one("a.gtm_mitra10_cta_product") or it.select_one("a[href]")
-        href = link.get("href") if link and link.get("href") else "/product/unknown"
+        # URL
+        link = (
+            a or
+            it.select_one("a.gtm_mitra10_cta_product") or
+            it.select_one('a[href*="/product/"], a[href*="/catalog/"], a[href]')
+        )
+        href = link.get("href") if link and link.get("href") else ""
         full_url = urljoin(request_url, href)
 
         # price
-        price = 0
-        pw = it.select_one(".price-wrapper[data-price-amount]")
-        if pw and pw.get("data-price-amount"):
-            try: price = int(float(pw["data-price-amount"]))
-            except Exception: price = 0
-        if price <= 0:
-            el = it.select_one("span.price__final, p.price__final, .price-box .price, span.price, .price")
-            if el: price = _digits_to_int(el.get_text(" ", strip=True))
-        if price <= 0:
-            for t in it.find_all(string=lambda s: s and ("Rp" in s or "IDR" in s)):
-                price = _digits_to_int(t)
-                if price > 0: break
+        price = _extract_price_from_node(it)
         if price <= 0:
             continue
 
@@ -179,37 +334,53 @@ def _parse_mitra10_html(html: str, request_url: str) -> list[dict]:
         seen.add(key)
 
         out.append({"item": name, "value": price, "source": "Mitra10", "url": full_url})
+
     return out
 
 
 def _mitra10_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
-    # Plain HTTP, if empty/bot-page, Selenium (if available)
+    """
+    1) GET with retry; parse.
+    2) If empty, try an alternate URL (no sort, page=1).
+    3) If still empty and Playwright is allowed/available, render.
+    """
     try:
-        url = _build_url_defensively(Mitra10UrlBuilder(), keyword, sort_by_price, page)
+        urlb = Mitra10UrlBuilder()
 
-        html = BaseHttpClient().get(url) or ""
-        products = _parse_mitra10_html(html, url)
-        if products:
-            return products, url, len(html)
+        # First attempt
+        url1 = _build_url_defensively(urlb, keyword, sort_by_price, page)
+        html1 = _human_get(url1)
+        prods1 = _parse_mitra10_html(html1, url1)
+        if prods1:
+            return prods1, url1, len(html1)
 
-        # retry with selenium only if installed
-        if HAS_SELENIUM and (_looks_like_bot_challenge(html) or not products):
-            try:
-                with SeleniumSession(headless=True, wait_timeout=12) as browser:
-                    html2 = browser.get(url) or ""
-                prods2 = _parse_mitra10_html(html2, url)
-                return (prods2, url, len(html2)) if prods2 else ([], url, len(html2))
-            except Exception:
-                return [], url, len(html)
+        # Alternate attempt: remove sort, page=1
+        try:
+            url2 = _build_url_defensively(urlb, keyword, False, 1)
+        except Exception:
+            url2 = url1
+        html2 = _human_get(url2)
+        prods2 = _parse_mitra10_html(html2, url2)
+        if prods2:
+            return prods2, url2, len(html2)
 
-        return [], url, len(html)
+        # Playwright render (optional)
+        allow_browser = (USE_BROWSER_FALLBACK != "never") and HAS_PLAYWRIGHT
+        must_browser = (USE_BROWSER_FALLBACK == "always")
+        should_browser = must_browser or _looks_like_bot_challenge(html1) or _looks_like_bot_challenge(html2)
+        if allow_browser and should_browser:
+            html3 = _fetch_with_playwright(url1, wait_selector="li.product-item")
+            prods3 = _parse_mitra10_html(html3, url1)
+            if prods3:
+                return prods3, url1, len(html3)
+
+        return [], url1, len(html1)
     except Exception:
         return [], "", 0
 
 
-#generic runners
+# ---------------- generic runners ----------------
 def _run_vendor_to_prices(request, keyword: str, maker, label: str, fallback=None) -> list[dict]:
-    # Run one vendor, collect rows for the table, log messages
     rows = []
     try:
         scraper, urlb = maker()
@@ -228,7 +399,19 @@ def _run_vendor_to_prices(request, keyword: str, maker, label: str, fallback=Non
                     rows.extend(fb_rows)
                     messages.info(request, f"[{label}] Fallback URL: {fb_url} | HTML: {fb_len} bytes | parsed={len(fb_rows)}")
                 else:
-                    messages.warning(request, f"[{label}] Package returned no products; fallback also found none. URL: {url} | HTML: {html_len} bytes")
+                    # compute hint safely (no undefined 'html' var)
+                    hint = ""
+                    try:
+                        html_preview = _human_get(url, tries=1)
+                        if _looks_like_bot_challenge(html_preview):
+                            hint = " (bot-challenge detected)"
+                    except Exception:
+                        pass
+                    messages.warning(
+                        request,
+                        f"[{label}] Package returned no products; fallback also found none{hint}. "
+                        f"URL: {url} | HTML: {html_len} bytes"
+                    )
             else:
                 messages.warning(request, f"[{label}] {getattr(res, 'error_message', 'No products parsed')}")
     except Exception as e:
@@ -237,7 +420,6 @@ def _run_vendor_to_prices(request, keyword: str, maker, label: str, fallback=Non
 
 
 def _run_vendor_to_count(request, keyword: str, maker, label: str, fallback=None) -> int:
-    # Run one vendor for counts (trigger_scrape)
     try:
         scraper, urlb = maker()
         url = _build_url_defensively(urlb, keyword, sort_by_price=True, page=0)
@@ -259,16 +441,14 @@ def _run_vendor_to_count(request, keyword: str, maker, label: str, fallback=None
     return 0
 
 
-# views
+# ---------------- views ----------------
 def home(request):
-    # Search across all vendors and render the table
     keyword = request.GET.get("q", "semen")
-
     prices = []
-    prices += _run_vendor_to_prices(request, keyword, create_gemilang_scraper_and_url := (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store")
-    prices += _run_vendor_to_prices(request, keyword, create_depo_scraper_and_url := (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan")
-    prices += _run_vendor_to_prices(request, keyword, create_juragan_scraper_and_url := (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), "Juragan Material", _juragan_fallback)
-    prices += _run_vendor_to_prices(request, keyword, create_mitra_scraper_and_url := (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback)
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store")
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan")
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), "Juragan Material", _juragan_fallback)
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback)
 
     # sanity: drop unreal prices and dedupe the final list
     prices = [p for p in prices if p.get("value") and p["value"] >= 100]
@@ -289,7 +469,6 @@ def home(request):
 
 @require_POST
 def trigger_scrape(request):
-    # POST endpoint behind 'Search' – just returns counts via toasts and redirect
     keyword = request.POST.get("q", "semen")
     counts = {
         "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store"),
@@ -297,14 +476,54 @@ def trigger_scrape(request):
         "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), "Juragan Material", _juragan_fallback),
         "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback),
     }
-
     messages.success(
         request,
         "Scrape completed. Gemilang={gemilang}, Depo={depo}, JuraganMaterial={juragan}, Mitra10={mitra}".format(
-            gemilang=counts["gemilang"],
-            depo=counts["depo"],
-            juragan=counts["juragan"],
-            mitra=counts["mitra10"],
+            gemilang=counts["gemilang"], depo=counts["depo"], juragan=counts["juragan"], mitra=counts["mitra10"]
         )
     )
     return redirect("home")
+
+
+def curated_price_list(request):
+    qs = models.ItemPriceProvince.objects.select_related("item_price", "province")
+    return render(request, "dashboard/curated_price_list.html", {"rows": qs})
+
+
+def curated_price_create(request):
+    form = ItemPriceProvinceForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Curated price saved")
+        return redirect("curated_price_list")
+    return render(request, "dashboard/form.html", {"title": "New Curated Price", "form": form})
+
+
+def curated_price_update(request, pk):
+    obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
+    form = ItemPriceProvinceForm(request.POST or None, instance=obj)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Curated price updated")
+        return redirect("curated_price_list")
+    return render(request, "dashboard/form.html", {"title": "Edit Curated Price", "form": form})
+
+
+def curated_price_delete(request, pk):
+    obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
+    if request.method == "POST":
+        obj.delete()
+        messages.success(request, "Curated price deleted")
+        return redirect("curated_price_list")
+    return render(request, "dashboard/confirm_delete.html", {"title": "Delete Curated Price", "obj": obj})
+
+
+@require_POST
+def curated_price_from_scrape(request):
+    initial = {
+        "price": request.POST.get("value") or None,
+        "source": request.POST.get("source") or "",
+        "url": request.POST.get("url") or "",
+    }
+    form = ItemPriceProvinceForm(initial=initial)
+    return render(request, "dashboard/form.html", {"title": "Save Price from Scrape", "form": form})

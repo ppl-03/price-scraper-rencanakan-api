@@ -1,0 +1,22 @@
+<div class="container mt-4">
+  <h4>Curated Prices</h4>
+  <a class="btn btn-primary" href="{% url 'curated_price_create' %}">New</a>
+  <table class="table mt-3">
+    <thead><tr><th>Item</th><th>Province</th><th>Price</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.item_price.name }}</td>
+        <td>{{ r.province.name }}</td>
+        <td>Rp {{ r.price }}</td>
+        <td>
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'curated_price_update' r.pk %}">Edit</a>
+          <a class="btn btn-sm btn-outline-danger" href="{% url 'curated_price_delete' r.pk %}">Delete</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4"><em>No curated prices</em></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
