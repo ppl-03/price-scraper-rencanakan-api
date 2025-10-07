@@ -121,7 +121,7 @@ class TestGemilangLocationScraper(TestCase):
         result = self.scraper.scrape_locations(timeout=-1)
 
         expected_url = "https://gemilang-store.com/pusat/store-locations"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=-1)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=0)
 
     def test_scrape_locations_parser_returns_none(self):
         mock_html = "<html>mock html</html>"
