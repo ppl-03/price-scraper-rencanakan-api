@@ -1,5 +1,6 @@
 from pathlib import Path
 from unittest import TestCase
+from bs4 import BeautifulSoup
 from api.interfaces import Location, HtmlParserError
 from api.gemilang.location_parser import GemilangLocationParser
 
@@ -378,3 +379,438 @@ class TestGemilangLocationParser(TestCase):
         malformed_large = "<div class='info-store'>" * 1000 + "<a href='#'>" * 500
         locations = self.parser.parse_locations(malformed_large)
         self.assertIsInstance(locations, list)
+
+    def test_text_cleaner_clean_store_name_with_none(self):
+        from api.gemilang.location_parser import TextCleaner
+        result = TextCleaner.clean_store_name(None)
+        self.assertEqual(result, "")
+
+    def test_text_cleaner_clean_store_name_with_empty(self):
+        from api.gemilang.location_parser import TextCleaner
+        result = TextCleaner.clean_store_name("")
+        self.assertEqual(result, "")
+
+    def test_text_cleaner_clean_address_with_none(self):
+        from api.gemilang.location_parser import TextCleaner
+        result = TextCleaner.clean_address(None)
+        self.assertEqual(result, "")
+
+    def test_text_cleaner_clean_address_with_empty(self):
+        from api.gemilang.location_parser import TextCleaner
+        result = TextCleaner.clean_address("")
+        self.assertEqual(result, "")
+
+    def test_html_element_extractor_extract_store_name_exception(self):
+        from api.gemilang.location_parser import HtmlElementExtractor, TextCleaner
+        extractor = HtmlElementExtractor(TextCleaner())
+        
+        class MockItem:
+            def find(self, *args, **kwargs):
+                raise Exception("Mock exception")
+        
+        result = extractor.extract_store_name(MockItem())
+        self.assertIsNone(result)
+
+    def test_html_element_extractor_extract_address_exception(self):
+        from api.gemilang.location_parser import HtmlElementExtractor, TextCleaner
+        extractor = HtmlElementExtractor(TextCleaner())
+        
+        class MockItem:
+            def find(self, *args, **kwargs):
+                raise Exception("Mock exception")
+        
+        result = extractor.extract_address(MockItem())
+        self.assertIsNone(result)
+
+    def test_parser_configuration_has_lxml_without_lxml(self):
+        from api.gemilang.location_parser import ParserConfiguration
+        import sys
+        
+        original_modules = sys.modules.copy()
+        if 'lxml' in sys.modules:
+            del sys.modules['lxml']
+        
+        config = ParserConfiguration()
+        result = config._has_lxml()
+        
+        sys.modules.update(original_modules)
+        self.assertIsInstance(result, bool)
+
+    def test_parser_configuration_get_parser_fallback(self):
+        from api.gemilang.location_parser import ParserConfiguration
+        
+        config = ParserConfiguration()
+        original_has_lxml = config._has_lxml
+        config._has_lxml = lambda: False
+        
+        parser = config.get_parser()
+        self.assertEqual(parser, 'html.parser')
+        
+        config._has_lxml = original_has_lxml
+
+    def test_gemilang_location_parser_extract_location_from_item_missing_name(self):
+        html_missing_name = """
+        <div class="info-store">
+            <div class="store-location">
+                Jl. Test Street<br>
+                Test City<br>
+                Indonesia
+            </div>
+        </div>
+        """
+        soup = BeautifulSoup(html_missing_name, 'html.parser')
+        item = soup.find('div', class_='info-store')
+        
+        result = self.parser._extract_location_from_item(item)
+        self.assertIsNone(result)
+
+    def test_gemilang_location_parser_extract_location_from_item_missing_address(self):
+        html_missing_address = """
+        <div class="info-store">
+            <a href="#" class="location_click" data-id="1">
+                GEMILANG - TEST STORE
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html_missing_address, 'html.parser')
+        item = soup.find('div', class_='info-store')
+        
+        result = self.parser._extract_location_from_item(item)
+        self.assertIsNone(result)
+
+    def test_gemilang_location_parser_create_location(self):
+        location = self.parser._create_location("Test Store", "Test Address")
+        self.assertEqual(location.store_name, "Test Store")
+        self.assertEqual(location.address, "Test Address")
+
+    def test_html_element_extractor_remove_img_tags(self):
+        from api.gemilang.location_parser import HtmlElementExtractor, TextCleaner
+        extractor = HtmlElementExtractor(TextCleaner())
+        
+        html_with_img = '<div><img src="test.png" alt="test"><span>Test</span></div>'
+        soup = BeautifulSoup(html_with_img, 'html.parser')
+        element = soup.find('div')
+        
+        extractor._remove_img_tags(element)
+        self.assertIsNone(element.find('img'))
+
+    def test_html_element_extractor_convert_br_to_newlines(self):
+        from api.gemilang.location_parser import HtmlElementExtractor, TextCleaner
+        extractor = HtmlElementExtractor(TextCleaner())
+        
+        html_with_br = '<div>Line 1<br>Line 2<br/>Line 3</div>'
+        soup = BeautifulSoup(html_with_br, 'html.parser')
+        element = soup.find('div')
+        
+        extractor._convert_br_to_newlines(element)
+        text = element.get_text()
+        self.assertIn('\n', text)
+
+    def test_html_element_extractor_extract_store_name_invalid_text(self):
+        from api.gemilang.location_parser import HtmlElementExtractor, TextCleaner
+        extractor = HtmlElementExtractor(TextCleaner())
+        
+        html_empty_text = """
+        <div class="info-store">
+            <a href="#" class="location_click" data-id="1">
+                   
+            </a>
+        </div>
+        """
+        soup = BeautifulSoup(html_empty_text, 'html.parser')
+        item = soup.find('div', class_='info-store')
+        
+        result = extractor.extract_store_name(item)
+        self.assertIsNone(result)
+
+    def test_html_element_extractor_extract_address_invalid_text(self):
+        from api.gemilang.location_parser import HtmlElementExtractor, TextCleaner
+        extractor = HtmlElementExtractor(TextCleaner())
+        
+        html_empty_address = """
+        <div class="info-store">
+            <div class="store-location">
+                   <br>   <br>   
+            </div>
+        </div>
+        """
+        soup = BeautifulSoup(html_empty_address, 'html.parser')
+        item = soup.find('div', class_='info-store')
+        
+        result = extractor.extract_address(item)
+        self.assertIsNone(result)
+
+    def test_parser_configuration_has_lxml_with_lxml_available(self):
+        from api.gemilang.location_parser import ParserConfiguration
+        
+        config = ParserConfiguration()
+        try:
+            import lxml
+            result = config._has_lxml()
+            self.assertTrue(result)
+        except ImportError:
+            result = config._has_lxml()
+            self.assertFalse(result)
+
+    def test_gemilang_location_parser_with_all_none_dependencies(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        parser = GemilangLocationParser(None, None, None)
+        
+        self.assertIsNotNone(parser._text_cleaner)
+        self.assertIsNotNone(parser._element_extractor)
+        self.assertIsNotNone(parser._config)
+
+    def test_gemilang_location_parser_create_soup_fallback(self):
+        from api.gemilang.location_parser import GemilangLocationParser, ParserConfiguration
+        
+        config = ParserConfiguration()
+        original_get_parser = config.get_parser
+        config.get_parser = lambda: 'html.parser'
+        
+        parser = GemilangLocationParser(config=config)
+        soup = parser._create_soup('<html><body></body></html>')
+        
+        self.assertIsNotNone(soup)
+        config.get_parser = original_get_parser
+
+    def test_parser_configuration_has_lxml_import_error(self):
+        from api.gemilang.location_parser import ParserConfiguration
+        import sys
+        
+        config = ParserConfiguration()
+        original_modules = sys.modules.copy()
+        
+        if 'lxml' in sys.modules:
+            del sys.modules['lxml']
+        
+        sys.modules['lxml'] = None
+        
+        original_import = __builtins__['__import__']
+        def mock_import(name, *args, **kwargs):
+            if name == 'lxml':
+                raise ImportError("No module named lxml")
+            return original_import(name, *args, **kwargs)
+        
+        __builtins__['__import__'] = mock_import
+        
+        try:
+            result = config._has_lxml()
+            self.assertFalse(result)
+        finally:
+            __builtins__['__import__'] = original_import
+            sys.modules.clear()
+            sys.modules.update(original_modules)
+
+    def test_gemilang_location_parser_parse_html_exception(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        parser = GemilangLocationParser()
+        original_create_soup = parser._create_soup
+        
+        def mock_create_soup(html_content):
+            raise Exception("Mock parsing error")
+        
+        parser._create_soup = mock_create_soup
+        
+        locations = parser.parse_locations("<html></html>")
+        self.assertEqual(len(locations), 0)
+        
+        parser._create_soup = original_create_soup
+
+    def test_extract_locations_from_items_exception(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        parser = GemilangLocationParser()
+        
+        class MockItem:
+            def __init__(self, should_raise=False):
+                self.should_raise = should_raise
+            
+            def find(self, *args, **kwargs):
+                if self.should_raise:
+                    raise Exception("Mock item error")
+                return None
+        
+        items = [MockItem(should_raise=True), MockItem(should_raise=False)]
+        locations = parser._extract_locations_from_items(items)
+        
+        self.assertEqual(len(locations), 0)
+
+    def test_extract_location_from_item_complete_flow(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        html_complete = """
+        <div class="info-store">
+            <a href="#" class="location_click" data-id="1">
+                GEMILANG - COMPLETE STORE
+            </a>
+            <div class="store-location">
+                Jl. Complete Street<br>
+                Complete City<br>
+                Indonesia
+            </div>
+        </div>
+        """
+        soup = BeautifulSoup(html_complete, 'html.parser')
+        item = soup.find('div', class_='info-store')
+        
+        parser = GemilangLocationParser()
+        location = parser._extract_location_from_item(item)
+        
+        self.assertIsNotNone(location)
+
+    def test_unused_extract_location_from_item_method(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        parser = GemilangLocationParser()
+        
+        class MockItem:
+            def find(self, tag, class_=None):
+                if class_ == 'location_click':
+                    mock_link = type('MockLink', (), {})()
+                    mock_link.get_text = lambda strip=False: "Test Store"
+                    return mock_link
+                elif class_ == 'store-location':
+                    mock_div = type('MockDiv', (), {})()
+                    mock_div.get_text = lambda: "Test Address"
+                    mock_div.find_all = lambda tag: []
+                    return mock_div
+                return None
+        
+        item = MockItem()
+        location = parser._extract_location_from_item(item)
+        
+        self.assertIsNotNone(location)
+        self.assertEqual(location.store_name, "Test Store")
+        self.assertEqual(location.address, "Test Address")
+
+    def test_parser_configuration_has_lxml_success_path(self):
+        from api.gemilang.location_parser import ParserConfiguration
+        import sys
+        
+        config = ParserConfiguration()
+        
+        class MockLxml:
+            pass
+        
+        original_modules = sys.modules.copy()
+        sys.modules['lxml'] = MockLxml()
+        
+        original_import = __builtins__['__import__']
+        def mock_import(name, *args, **kwargs):
+            if name == 'lxml':
+                return MockLxml()
+            return original_import(name, *args, **kwargs)
+        
+        __builtins__['__import__'] = mock_import
+        
+        try:
+            result = config._has_lxml()
+            self.assertTrue(result)
+        finally:
+            __builtins__['__import__'] = original_import
+            sys.modules.clear()
+            sys.modules.update(original_modules)
+
+    def test_extract_locations_from_items_address_only(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        parser = GemilangLocationParser()
+        
+        class MockItemAddressOnly:
+            def find(self, tag, class_=None):
+                if class_ == 'location_click':
+                    return None
+                elif class_ == 'store-location':
+                    mock_div = type('MockDiv', (), {})()
+                    mock_div.get_text = lambda: "Test Address"
+                    mock_div.find_all = lambda tag: []
+                    return mock_div
+                return None
+        
+        items = [MockItemAddressOnly()]
+        locations = parser._extract_locations_from_items(items)
+        
+        self.assertEqual(len(locations), 0)
+
+    def test_extract_locations_from_items_name_only(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        parser = GemilangLocationParser()
+        
+        class MockItemNameOnly:
+            def find(self, tag, class_=None):
+                if class_ == 'location_click':
+                    mock_link = type('MockLink', (), {})()
+                    mock_link.get_text = lambda strip=False: "Test Store"
+                    return mock_link
+                elif class_ == 'store-location':
+                    return None
+                return None
+        
+        items = [MockItemNameOnly()]
+        locations = parser._extract_locations_from_items(items)
+        
+        self.assertEqual(len(locations), 0)
+
+    def test_extract_locations_from_items_extraction_exception(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        parser = GemilangLocationParser()
+        
+        class MockItemException:
+            def find(self, tag, class_=None):
+                raise Exception("Extraction error to trigger exception handling")
+        
+        items = [MockItemException(), MockItemException()]
+        locations = parser._extract_locations_from_items(items)
+        
+        self.assertEqual(len(locations), 0)
+
+    def test_extract_locations_exception_continue_processing(self):
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        parser = GemilangLocationParser()
+        
+        class MockGoodItem:
+            def find(self, tag, class_=None):
+                if class_ == 'location_click':
+                    mock_link = type('MockLink', (), {})()
+                    mock_link.get_text = lambda strip=False: "Good Store"
+                    return mock_link
+                elif class_ == 'store-location':
+                    mock_div = type('MockDiv', (), {})()
+                    mock_div.get_text = lambda: "Good Address"
+                    mock_div.find_all = lambda tag: []
+                    return mock_div
+                return None
+        
+        class MockBadItem:
+            def find(self, tag, class_=None):
+                raise Exception("Bad item error")
+        
+        items = [MockBadItem(), MockGoodItem()]
+        locations = parser._extract_locations_from_items(items)
+        
+        self.assertEqual(len(locations), 1)
+        self.assertEqual(locations[0].store_name, "Good Store")
+
+    def test_extract_locations_loop_exception_handling(self):
+        from api.gemilang.location_parser import GemilangLocationParser, HtmlElementExtractor
+        from unittest.mock import Mock
+        
+        mock_text_cleaner = Mock()
+        mock_extractor = Mock()
+        
+        mock_extractor.extract_store_name.side_effect = Exception("Store name error")
+        mock_extractor.extract_address.return_value = "Address"
+        
+        parser = GemilangLocationParser(mock_text_cleaner, mock_extractor)
+        
+        class MockItem:
+            pass
+        
+        items = [MockItem()]
+        locations = parser._extract_locations_from_items(items)
+        
+        self.assertEqual(len(locations), 0)

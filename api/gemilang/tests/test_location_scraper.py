@@ -186,3 +186,149 @@ class TestGemilangLocationScraper(TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(len(result.locations), 3)
+
+    def test_location_scraper_configuration_get_base_url(self):
+        from api.gemilang.location_scraper import LocationScraperConfiguration
+        config = LocationScraperConfiguration("https://test.com")
+        self.assertEqual(config.get_base_url(), "https://test.com")
+
+    def test_location_scraper_configuration_get_default_timeout(self):
+        from api.gemilang.location_scraper import LocationScraperConfiguration
+        config = LocationScraperConfiguration("https://test.com", 45)
+        self.assertEqual(config.get_default_timeout(), 45)
+
+    def test_scraping_result_builder_with_error_then_success(self):
+        from api.gemilang.location_scraper import ScrapingResultBuilder
+        from api.interfaces import Location
+        
+        builder = ScrapingResultBuilder("https://test.com")
+        builder.with_error("Initial error")
+        builder.with_success([Location("Store", "Address")])
+        
+        result = builder.build()
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.locations), 1)
+        self.assertIsNone(result.error_message)
+
+    def test_error_handler_handle_http_error(self):
+        from api.gemilang.location_scraper import ErrorHandler
+        from api.interfaces import HttpClientError
+        
+        error = HttpClientError("HTTP Error")
+        result = ErrorHandler.handle_http_error(error, "https://test.com")
+        
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_message, "HTTP Error")
+        self.assertEqual(len(result.locations), 0)
+
+    def test_error_handler_handle_parser_error(self):
+        from api.gemilang.location_scraper import ErrorHandler
+        from api.interfaces import HtmlParserError
+        
+        error = HtmlParserError("Parser Error")
+        result = ErrorHandler.handle_parser_error(error, "https://test.com")
+        
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_message, "Parser Error")
+        self.assertEqual(len(result.locations), 0)
+
+    def test_error_handler_handle_generic_error(self):
+        from api.gemilang.location_scraper import ErrorHandler
+        
+        error = ValueError("Generic Error")
+        result = ErrorHandler.handle_generic_error(error, "https://test.com")
+        
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_message, "Generic Error")
+        self.assertEqual(len(result.locations), 0)
+
+    def test_location_data_validator_validate_html_content_none(self):
+        from api.gemilang.location_scraper import LocationDataValidator
+        
+        result = LocationDataValidator.validate_html_content(None)
+        self.assertFalse(result)
+
+    def test_location_data_validator_validate_html_content_valid(self):
+        from api.gemilang.location_scraper import LocationDataValidator
+        
+        result = LocationDataValidator.validate_html_content("<html></html>")
+        self.assertTrue(result)
+
+    def test_location_data_validator_validate_locations_none(self):
+        from api.gemilang.location_scraper import LocationDataValidator
+        
+        result = LocationDataValidator.validate_locations(None)
+        self.assertFalse(result)
+
+    def test_location_data_validator_validate_locations_valid(self):
+        from api.gemilang.location_scraper import LocationDataValidator
+        from api.interfaces import Location
+        
+        locations = [Location("Store", "Address")]
+        result = LocationDataValidator.validate_locations(locations)
+        self.assertTrue(result)
+
+    def test_location_data_validator_validate_timeout_none(self):
+        from api.gemilang.location_scraper import LocationDataValidator
+        
+        result = LocationDataValidator.validate_timeout(None)
+        self.assertEqual(result, 30)
+
+    def test_location_data_validator_validate_timeout_negative(self):
+        from api.gemilang.location_scraper import LocationDataValidator
+        
+        result = LocationDataValidator.validate_timeout(-5)
+        self.assertEqual(result, 0)
+
+    def test_gemilang_location_scraper_with_all_none_dependencies(self):
+        from api.gemilang.location_scraper import GemilangLocationScraper
+        from unittest.mock import Mock
+        
+        mock_http_client = Mock()
+        mock_parser = Mock()
+        
+        scraper = GemilangLocationScraper(mock_http_client, mock_parser, None, None, None)
+        
+        self.assertIsNotNone(scraper._config)
+        self.assertIsNotNone(scraper._error_handler)
+        self.assertIsNotNone(scraper._validator)
+
+    def test_create_success_result_method(self):
+        from api.gemilang.location_scraper import GemilangLocationScraper
+        from api.interfaces import Location
+        from unittest.mock import Mock
+        
+        mock_http_client = Mock()
+        mock_parser = Mock()
+        scraper = GemilangLocationScraper(mock_http_client, mock_parser)
+        
+        locations = [Location("Store", "Address")]
+        result = scraper._create_success_result(locations, "https://test.com")
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.locations), 1)
+        self.assertIsNone(result.error_message)
+
+    def test_scraper_result_builder_chaining(self):
+        from api.gemilang.location_scraper import ScrapingResultBuilder
+        from api.interfaces import Location
+        
+        builder = ScrapingResultBuilder("https://test.com")
+        result = builder.with_success([Location("Store", "Address")]).build()
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.locations), 1)
+
+    def test_fetch_html_content_none_response(self):
+        from api.gemilang.location_scraper import GemilangLocationScraper
+        from api.interfaces import HttpClientError
+        from unittest.mock import Mock
+        
+        mock_http_client = Mock()
+        mock_http_client.get.return_value = None
+        mock_parser = Mock()
+        
+        scraper = GemilangLocationScraper(mock_http_client, mock_parser)
+        
+        with self.assertRaises(HttpClientError):
+            scraper._fetch_html_content("https://test.com", 30)
