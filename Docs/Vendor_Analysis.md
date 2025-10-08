@@ -200,3 +200,58 @@ the search term is controlled by the `keyword` parameter.
 - **Parameter**: `sort=lowest_price`
 - The value `lowest_price` will prioritize cheapest first
 - To sort by **Highest Price** will find most expensive first.
+
+## **Blibli**
+
+[https://www.blibli.com/](https://www.blibli.com/)
+
+#### **Directory Path**
+
+`div.product-list__card` → `div.elf-product-card_container` → `div.els-product_fixed-price`
+
+---
+
+#### **Path Breakdown**
+
+1. **`div.product-list__card`**
+
+   * Serves as the main container for a single product card on the search results page.
+   * Each instance of this element represents one product entry.
+
+2. **`div.elf-product-card_container`**
+
+   * A child container holding product details such as the name, image, and pricing section.
+
+3. **`div.els-product_fixed-price`**
+
+   * Element that contains the actual product price.
+   * The `title` attribute holds the price value and should be scraped.
+
+
+
+
+#### **URL Breakdown**
+
+`https://www.blibli.com/cari/ITEM?category=BA-1000038&sort=0&intent=false&firstLoad=false`
+
+The search term is controlled by the part after `/cari/`, and the results are filtered by category.
+
+
+* **Parameter**: `/cari/ITEM`
+  Replace `ITEM` with search keyword.
+
+* **Parameter**: `category=BA-1000038`
+  Filters results to only show products under **Bahan Bangunan (Construction Materials)**.
+  This ensures irrelevant products from other categories don’t appear.
+
+**Example**:
+To search for “cat”, use:
+`https://www.blibli.com/cari/cat?category=BA-1000038&sort=0&intent=false&firstLoad=false`
+
+#### 2. Sort Search
+
+* **Parameter**: `sort=0`
+  Controls sorting order.
+
+  * `0` = **Default sorting** (relevance).
+  * `3` = **Cheapest first** (ascending price).
