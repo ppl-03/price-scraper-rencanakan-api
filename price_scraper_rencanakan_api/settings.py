@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 import environ
 import pymysql
 
@@ -19,6 +20,9 @@ pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Add db_pricing to Python path so Django can find the scraping_vendor_data app
+sys.path.append(str(BASE_DIR / 'db_pricing'))
 
 env = environ.Env(
     DEBUG=(bool, True),
@@ -48,6 +52,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     "db_pricing",
+    "scraping_vendor_data",
 ]
 
 MIDDLEWARE = [
