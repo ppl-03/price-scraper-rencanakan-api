@@ -4,5 +4,8 @@ whitenoise
 psycopg2-binary
 requests
 urllib3
+coverage
+django-coverage-plugin
+beautifulsoup4
 django-environ
 pymysql

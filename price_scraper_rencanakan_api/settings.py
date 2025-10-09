@@ -38,7 +38,7 @@ SECRET_KEY = env("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=True)
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "generous-perl-ezary7-ecb768cc.koyeb.app"]
 
 
 # Application definition
@@ -50,13 +50,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
+    'dashboard',
     "db_pricing",
     "scraping_vendor_data",
+    "api",
+    'security',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -89,21 +92,38 @@ WSGI_APPLICATION = 'price_scraper_rencanakan_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': env("MYSQL_NAME"),
-        "USER": env("MYSQL_USER"),
-        "PASSWORD": env("MYSQL_PASSWORD"),
-        "HOST": env("MYSQL_HOST"),
-        "PORT": env("MYSQL_PORT"),
-        # good defaults for emoji / wide characters & stable time behavior
-        "OPTIONS": {
-            "charset": "utf8mb4",
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
-        },
+# Use SQLite for testing when MySQL env vars aren't available
+if all([
+    env("MYSQL_NAME", default=None),
+    env("MYSQL_USER", default=None), 
+    env("MYSQL_PASSWORD", default=None),
+    env("MYSQL_HOST", default=None),
+    env("MYSQL_PORT", default=None)
+]):
+    # Production/Development MySQL configuration
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': env("MYSQL_NAME"),
+            "USER": env("MYSQL_USER"),
+            "PASSWORD": env("MYSQL_PASSWORD"),
+            "HOST": env("MYSQL_HOST"),
+            "PORT": env("MYSQL_PORT"),
+            # good defaults for emoji / wide characters & stable time behavior
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
+            },
+        }
     }
-}
+else:
+    # Test/CI SQLite configuration
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -141,6 +161,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
