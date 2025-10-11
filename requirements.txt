@@ -10,5 +10,3 @@ beautifulsoup4
 django-environ
 pymysql
 playwright
-pandas
-openpyxl
