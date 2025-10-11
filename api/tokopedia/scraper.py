@@ -1,3 +1,5 @@
+import logging
+import warnings
 from typing import List, Optional
 from api.core import BasePriceScraper, BaseHttpClient
 from api.interfaces import IHttpClient, IUrlBuilder, IHtmlParser, Product, ScrapingResult
@@ -5,6 +7,19 @@ from api.playwright_client import BatchPlaywrightClient
 from .url_builder import TokopediaUrlBuilder
 from .html_parser import TokopediaHtmlParser
 from .price_cleaner import TokopediaPriceCleaner
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
+
+
+class TokopediaLocationError(ValueError):
+    """Raised when an invalid location is specified for Tokopedia scraping."""
+    pass
+
+
+class TokopediaScrapingError(Exception):
+    """Base exception for Tokopedia scraping errors."""
+    pass
 
 
 class TokopediaPriceScraper(BasePriceScraper):
@@ -20,6 +35,28 @@ class TokopediaPriceScraper(BasePriceScraper):
             http_client = BaseHttpClient()
             
         super().__init__(http_client, self.url_builder, self.html_parser)
+    
+    def _validate_and_get_location_ids(self, location: str) -> Optional[List[int]]:
+        """
+        Helper method to validate location and get location IDs with proper warning handling.
+        
+        Args:
+            location: Location name to validate
+            
+        Returns:
+            List of location IDs if location is valid, None if invalid or not found
+        """
+        if not location:
+            return None
+            
+        location_ids = get_location_ids(location)
+        if not location_ids:
+            available_locations = list(TOKOPEDIA_LOCATION_IDS.keys())
+            warning_msg = f"Unknown location '{location}'. Available locations: {available_locations}"
+            logger.warning(warning_msg)
+            warnings.warn(warning_msg, UserWarning, stacklevel=3)
+            
+        return location_ids
     
     def scrape_products_with_filters(self, keyword: str, sort_by_price: bool = True, 
                                    page: int = 0, min_price: int = None, max_price: int = None,
@@ -40,11 +77,7 @@ class TokopediaPriceScraper(BasePriceScraper):
         """
         try:
             # Get location IDs if location is specified
-            location_ids = None
-            if location:
-                location_ids = get_location_ids(location)
-                if not location_ids:
-                    print(f"Warning: Unknown location '{location}'. Available locations: {list(TOKOPEDIA_LOCATION_IDS.keys())}")
+            location_ids = self._validate_and_get_location_ids(location)
             
             # Build URL with filters using the enhanced URL builder
             url = self.url_builder.build_search_url_with_filters(
@@ -93,11 +126,7 @@ class TokopediaPriceScraper(BasePriceScraper):
         all_products = []
         
         # Get location IDs if location is specified
-        location_ids = None
-        if location:
-            location_ids = get_location_ids(location)
-            if not location_ids:
-                print(f"Warning: Unknown location '{location}'. Available locations: {list(TOKOPEDIA_LOCATION_IDS.keys())}")
+        location_ids = self._validate_and_get_location_ids(location)
         
         with BatchPlaywrightClient() as batch_client:
             for keyword in keywords:
@@ -116,7 +145,8 @@ class TokopediaPriceScraper(BasePriceScraper):
                     all_products.extend(products)
                     
                 except Exception as e:
-                    print(f"Error scraping {keyword}: {e}")
+                    error_msg = f"Error scraping keyword '{keyword}': {e}"
+                    logger.error(error_msg)
                     continue
         
         return all_products
@@ -164,3 +194,42 @@ def get_location_ids(location_name: str) -> List[int]:
     """
     location_key = location_name.lower().replace(' ', '_')
     return TOKOPEDIA_LOCATION_IDS.get(location_key, [])
+
+
+def get_location_ids_strict(location_name: str) -> List[int]:
+    """
+    Get location IDs for a given location name with strict error handling.
+    
+    Args:
+        location_name: Name of the location (case-insensitive)
+        
+    Returns:
+        List of location IDs
+        
+    Raises:
+        TokopediaLocationError: If the location is not found
+        
+    Examples:
+        get_location_ids_strict('jakarta') -> [174, 175, 176, 177, 178, 179]
+        get_location_ids_strict('invalid') -> raises TokopediaLocationError
+    """
+    location_key = location_name.lower().replace(' ', '_')
+    location_ids = TOKOPEDIA_LOCATION_IDS.get(location_key)
+    
+    if not location_ids:
+        available_locations = list(TOKOPEDIA_LOCATION_IDS.keys())
+        raise TokopediaLocationError(
+            f"Unknown location '{location_name}'. Available locations: {available_locations}"
+        )
+    
+    return location_ids
+
+
+def get_available_locations() -> List[str]:
+    """
+    Get list of all available location names.
+    
+    Returns:
+        List of available location names
+    """
+    return list(TOKOPEDIA_LOCATION_IDS.keys())
