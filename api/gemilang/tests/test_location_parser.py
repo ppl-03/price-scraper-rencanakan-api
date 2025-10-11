@@ -144,7 +144,9 @@ class TestGemilangLocationParser(TestCase):
         self.assertEqual(locations[0].address, expected_address)
 
     def test_parse_html_raises_error_on_critical_failure(self):
-        pass
+        invalid_html = "<div class='invalid'><malformed>html"
+        locations = self.parser.parse_locations(invalid_html)
+        self.assertEqual(len(locations), 0)
 
     def test_location_parser_handles_different_html_structure(self):
         html_variation = """
@@ -406,7 +408,7 @@ class TestGemilangLocationParser(TestCase):
         
         class MockItem:
             def find(self, *args, **kwargs):
-                raise Exception("Mock exception")
+                raise AttributeError("Mock exception")
         
         result = extractor.extract_store_name(MockItem())
         self.assertIsNone(result)
@@ -417,7 +419,7 @@ class TestGemilangLocationParser(TestCase):
         
         class MockItem:
             def find(self, *args, **kwargs):
-                raise Exception("Mock exception")
+                raise AttributeError("Mock exception")
         
         result = extractor.extract_address(MockItem())
         self.assertIsNone(result)
@@ -608,7 +610,7 @@ class TestGemilangLocationParser(TestCase):
         original_create_soup = parser._create_soup
         
         def mock_create_soup(html_content):
-            raise Exception("Mock parsing error")
+            raise ValueError("Mock parsing error")
         
         parser._create_soup = mock_create_soup
         
@@ -628,7 +630,7 @@ class TestGemilangLocationParser(TestCase):
             
             def find(self, *args, **kwargs):
                 if self.should_raise:
-                    raise Exception("Mock item error")
+                    raise AttributeError("Mock item error")
                 return None
         
         items = [MockItem(should_raise=True), MockItem(should_raise=False)]
@@ -760,7 +762,7 @@ class TestGemilangLocationParser(TestCase):
         
         class MockItemException:
             def find(self, tag, class_=None):
-                raise Exception("Extraction error to trigger exception handling")
+                raise AttributeError("Extraction error to trigger exception handling")
         
         items = [MockItemException(), MockItemException()]
         locations = parser._extract_locations_from_items(items)
@@ -787,7 +789,7 @@ class TestGemilangLocationParser(TestCase):
         
         class MockBadItem:
             def find(self, tag, class_=None):
-                raise Exception("Bad item error")
+                raise AttributeError("Bad item error")
         
         items = [MockBadItem(), MockGoodItem()]
         locations = parser._extract_locations_from_items(items)

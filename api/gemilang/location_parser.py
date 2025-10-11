@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 class TextCleaner:
     
     @staticmethod
-    def clean_store_name(text: str) -> str:
+    def clean_store_name(text: Optional[str]) -> str:
         if not text:
             return ""
         return text.strip()
     
     @staticmethod
-    def clean_address(text: str) -> str:
+    def clean_address(text: Optional[str]) -> str:
         if not text:
             return ""
         
@@ -26,7 +26,7 @@ class TextCleaner:
         return '\n'.join(filtered_lines)
     
     @staticmethod
-    def is_valid_text(text: str) -> bool:
+    def is_valid_text(text: Optional[str]) -> bool:
         return text is not None and text.strip() != ""
 
 
