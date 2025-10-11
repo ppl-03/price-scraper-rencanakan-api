@@ -73,7 +73,7 @@ class ErrorHandler:
 class LocationDataValidator:
     
     @staticmethod
-    def validate_html_content(html_content: str) -> bool:
+    def validate_html_content(html_content: Optional[str]) -> bool:
         return html_content is not None
     
     @staticmethod
@@ -81,7 +81,7 @@ class LocationDataValidator:
         return locations is not None
     
     @staticmethod
-    def validate_timeout(timeout: int) -> int:
+    def validate_timeout(timeout: Optional[int]) -> int:
         return max(0, timeout) if timeout is not None else 30
 
 
