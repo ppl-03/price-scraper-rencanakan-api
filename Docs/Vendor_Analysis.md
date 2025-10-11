@@ -200,3 +200,90 @@ the search term is controlled by the `keyword` parameter.
 - **Parameter**: `sort=lowest_price`
 - The value `lowest_price` will prioritize cheapest first
 - To sort by **Highest Price** will find most expensive first.
+
+
+## Tokopedia
+https://www.tokopedia.com/
+
+#### **Directory Path**
+
+div[data-testid="lstCL2ProductList"] → a[data-testid="lnkProductContainer"] → div[data-testid="divProductWrapper"] → span.css-20kt3o → div → span.css-o5uqv
+
+---
+
+#### Path Breakdown
+
+1. a[data-testid="lnkProductContainer"]
+The clickable link container for each product. It wraps the entire product card including image, title, and price, and contains the href link to the product detail page.
+
+2. div[data-testid="divProductWrapper"]
+The inner product wrapper that holds all product content such as title, price, and shop information. This defines the layout and structure of each product card.
+
+3. span.css-20kt3o
+The product title element. It contains the product name text, for example: GRC BOARD 4MM PELAPON GRC ROYAL BOARD 6MM 8MM GRC 6MM GRC 8MM - GRC 4MM.
+
+4. div
+A nested container below the title span. It holds smaller UI components like the price label or any discount information.
+
+5. span.css-o5uqv
+The price element that displays the formatted price string, such as Rp55.670. This is the element you target when scraping product prices.
+
+#### Complete Price Path:
+a[data-testid="lnkProductContainer"] → div[data-testid="divProductWrapper"] → span.css-20kt3o → div → span.css-o5uqv
+
+---
+
+#### URL Breakdown
+
+`https://www.tokopedia.com/p/pertukangan/material-bangunan?page=1&q=semen&ob=3`
+
+The search term is controlled by the `q` parameter.
+
+- **Parameter**: `q=ITEM`
+- Search other items by replacing `ITEM` with search keyword. Use `+` for spaces.
+
+**Example**: To search for "semen" in material bangunan category:
+`https://www.tokopedia.com/p/pertukangan/material-bangunan?page=1&q=semen`
+
+#### 2. Sort Search
+
+- **Parameter**: `ob=3` - Sort by lowest price first
+- **Parameter**: `ob=4` - Sort by highest price first  
+- **Parameter**: `ob=5` - Sort by review/rating
+- **Parameter**: `ob=9` - Sort by newest products
+- **Parameter**: `ob=23` - Sort by most relevant (default)
+
+**Example (search "semen" in category, cheapest first):**
+`https://www.tokopedia.com/p/pertukangan/material-bangunan?q=semen&ob=3`
+
+#### 3. Additional Parameters
+
+- **Parameter**: `page=1` - Page number for pagination
+- **Parameter**: `pmin=10000` - Minimum price filter
+- **Parameter**: `pmax=100000` - Maximum price filter
+- **Parameter**: `rt=4,5` - Rating filter (4+ stars)
+- **Parameter**: `fcity=176` - Location filter (city ID)
+
+**Example with price filter (general search):**
+`https://www.tokopedia.com/search?q=material+bangunan&ob=3&pmin=10000&pmax=50000`
+
+**Example with price filter (category search):**
+`https://www.tokopedia.com/p/pertukangan/material-bangunan?q=semen&ob=3&pmin=10000&pmax=50000`
+
+---
+
+#### Category Path Structure
+
+For material bangunan (construction materials), use the category path:
+- **Category URL**: `/p/pertukangan/material-bangunan`
+- **Benefits**: 
+  - More relevant results within the category
+  - Better filtering options specific to construction materials
+  
+---
+
+#### Note on Dynamic Loading
+Tokopedia uses dynamic JavaScript loading for search results. The product containers may load asynchronously, requiring:
+- Wait for DOM elements to be fully loaded
+- Handle infinite scroll pagination
+- Consider using browser automation tools (Selenium/Playwright) for reliable scraping
