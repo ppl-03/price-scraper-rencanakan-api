@@ -85,7 +85,7 @@ class LocationDataValidator:
         return locations is not None
     
     @staticmethod
-    def validate_timeout(timeout: int) -> int:
+    def validate_timeout(timeout: Optional[int]) -> int:
         return max(0, timeout) if timeout is not None else 30
 
 
