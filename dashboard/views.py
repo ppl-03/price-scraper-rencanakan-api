@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.http import require_POST, require_http_methods, require_GET
 from django.views.decorators.csrf import csrf_protect
 from django.contrib import messages
@@ -857,8 +857,10 @@ def curated_price_list(request):
 
 
 @csrf_protect
-@require_http_methods(["GET", "POST"])
 def curated_price_create(request):
+    if request.method not in ["GET", "POST"]:
+        return HttpResponseNotAllowed(["GET", "POST"])
+    
     form = ItemPriceProvinceForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         form.save()
@@ -868,8 +870,10 @@ def curated_price_create(request):
 
 
 @csrf_protect
-@require_http_methods(["GET", "POST"])
 def curated_price_update(request, pk):
+    if request.method not in ["GET", "POST"]:
+        return HttpResponseNotAllowed(["GET", "POST"])
+    
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
     form = ItemPriceProvinceForm(request.POST or None, instance=obj)
     if request.method == "POST" and form.is_valid():
@@ -880,8 +884,10 @@ def curated_price_update(request, pk):
 
 
 @csrf_protect
-@require_http_methods(["GET", "POST"])
 def curated_price_delete(request, pk):
+    if request.method not in ["GET", "POST"]:
+        return HttpResponseNotAllowed(["GET", "POST"])
+    
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
     if request.method == "POST":
         obj.delete()
