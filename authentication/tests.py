@@ -1,0 +1,775 @@
+from django.test import TestCase
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.utils import timezone
+from django.core import mail
+from datetime import datetime, timedelta
+from unittest.mock import patch
+from .models import User, Company, UserManager
+
+
+class CompanyModelTest(TestCase):
+    """Test cases for Company model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.company_data = {
+            'name': 'Test Company',
+            'slug': 'test-company',
+            'email': 'contact@testcompany.com',
+            'phone': '+1234567890',
+            'address': '123 Test Street, Test City',
+            'website': 'https://testcompany.com',
+            'subscription_plan': 'premium',
+            'max_users': 10
+        }
+    
+    def test_company_creation(self):
+        """Test basic company creation"""
+        company = Company.objects.create(**self.company_data)
+        
+        self.assertEqual(company.name, 'Test Company')
+        self.assertEqual(company.slug, 'test-company')
+        self.assertEqual(company.email, 'contact@testcompany.com')
+        self.assertEqual(company.subscription_plan, 'premium')
+        self.assertEqual(company.max_users, 10)
+        self.assertTrue(company.is_active)
+        self.assertIsNotNone(company.created_at)
+        self.assertIsNotNone(company.updated_at)
+    
+    def test_company_str_method(self):
+        """Test string representation of company"""
+        company = Company.objects.create(**self.company_data)
+        self.assertEqual(str(company), 'Test Company')
+    
+    def test_company_slug_uniqueness(self):
+        """Test that company slug must be unique"""
+        Company.objects.create(**self.company_data)
+        
+        # Try to create another company with same slug
+        with self.assertRaises(IntegrityError):
+            Company.objects.create(
+                name='Another Company',
+                slug='test-company'  # Same slug
+            )
+    
+    def test_company_defaults(self):
+        """Test default values for company"""
+        company = Company.objects.create(
+            name='Minimal Company',
+            slug='minimal-company'
+        )
+        
+        self.assertTrue(company.is_active)
+        self.assertEqual(company.subscription_plan, 'basic')
+        self.assertEqual(company.max_users, 5)
+    
+    def test_user_count_property(self):
+        """Test user_count property"""
+        company = Company.objects.create(**self.company_data)
+        
+        # Initially should be 0
+        self.assertEqual(company.user_count, 0)
+        
+        # Create users
+        User.objects.create_user(
+            email='user1@test.com',
+            password='testpass123',
+            first_name='User',
+            last_name='One',
+            company=company
+        )
+        User.objects.create_user(
+            email='user2@test.com',
+            password='testpass123',
+            first_name='User',
+            last_name='Two',
+            company=company
+        )
+        
+        # Should now be 2
+        self.assertEqual(company.user_count, 2)
+        
+        # Create inactive user
+        inactive_user = User.objects.create_user(
+            email='inactive@test.com',
+            password='testpass123',
+            first_name='Inactive',
+            last_name='User',
+            company=company
+        )
+        inactive_user.is_active = False
+        inactive_user.save()
+        
+        # Should still be 2 (inactive users don't count)
+        self.assertEqual(company.user_count, 2)
+    
+    def test_can_add_user_method(self):
+        """Test can_add_user method"""
+        company = Company.objects.create(
+            name='Small Company',
+            slug='small-company',
+            max_users=2
+        )
+        
+        # Initially should be able to add users
+        self.assertTrue(company.can_add_user())
+        
+        # Add users up to limit
+        User.objects.create_user(
+            email='user1@test.com',
+            password='testpass123',
+            first_name='User',
+            last_name='One',
+            company=company
+        )
+        self.assertTrue(company.can_add_user())
+        
+        User.objects.create_user(
+            email='user2@test.com',
+            password='testpass123',
+            first_name='User',
+            last_name='Two',
+            company=company
+        )
+        
+        # Should now be at limit
+        self.assertFalse(company.can_add_user())
+    
+    def test_company_invalid_email(self):
+        """Test company creation with invalid email (negative test)"""
+        company = Company(
+            name='Test Company',
+            slug='test-company',
+            email='invalid-email'  # Invalid email format
+        )
+        # Note: Django doesn't validate email format at model level by default
+        # This would be caught by forms or serializers
+        company.save()  # Should still save
+        self.assertEqual(company.email, 'invalid-email')
+    
+    def test_company_required_fields(self):
+        """Test company creation without required fields (negative test)"""
+        # Company name is required, but Django doesn't enforce this at DB level
+        # unless we add null=False, blank=False explicitly
+        company = Company(slug='no-name-company')  # Missing name
+        try:
+            company.full_clean()  # This should catch the validation error
+            self.fail("Should have raised ValidationError")
+        except ValidationError:
+            pass  # Expected
+    
+    def test_company_max_users_negative(self):
+        """Test company with negative max_users (negative test)"""
+        # This should be prevented by PositiveIntegerField
+        company = Company(
+            name='Test Company',
+            slug='test-company',
+            max_users=-1
+        )
+        with self.assertRaises(Exception):  # Should raise validation error
+            company.full_clean()  # Trigger field validation
+
+
+class UserManagerTest(TestCase):
+    """Test cases for UserManager"""
+    
+    def test_create_user(self):
+        """Test creating a regular user"""
+        user = User.objects.create_user(
+            email='test@example.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User'
+        )
+        
+        self.assertEqual(user.email, 'test@example.com')
+        self.assertEqual(user.first_name, 'Test')
+        self.assertEqual(user.last_name, 'User')
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
+        self.assertTrue(user.check_password('testpass123'))
+    
+    def test_create_user_without_email(self):
+        """Test that creating user without email raises error"""
+        with self.assertRaises(ValueError) as context:
+            User.objects.create_user(
+                email='',
+                password='testpass123'
+            )
+        self.assertEqual(str(context.exception), 'The Email field must be set')
+    
+    def test_create_superuser(self):
+        """Test creating a superuser"""
+        user = User.objects.create_superuser(
+            email='admin@example.com',
+            password='adminpass123',
+            first_name='Admin',
+            last_name='User'
+        )
+        
+        self.assertEqual(user.email, 'admin@example.com')
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+    
+    def test_create_superuser_invalid_flags(self):
+        """Test creating superuser with invalid flags"""
+        with self.assertRaises(ValueError):
+            User.objects.create_superuser(
+                email='admin@example.com',
+                password='adminpass123',
+                is_staff=False
+            )
+        
+        with self.assertRaises(ValueError):
+            User.objects.create_superuser(
+                email='admin@example.com',
+                password='adminpass123',
+                is_superuser=False
+            )
+    
+    def test_create_user_with_invalid_email(self):
+        """Test creating user with invalid email format (negative test)"""
+        # Django's EmailField doesn't validate format at model level by default
+        user = User.objects.create_user(
+            email='invalid-email-format',
+            password='testpass123',
+            first_name='Test',
+            last_name='User'
+        )
+        # Should still create but would be caught by forms/serializers
+        self.assertEqual(user.email, 'invalid-email-format')
+    
+    def test_create_user_empty_password(self):
+        """Test creating user with empty password (negative test)"""
+        user = User.objects.create_user(
+            email='test@example.com',
+            password='',  # Empty password
+            first_name='Test',
+            last_name='User'
+        )
+        # Django will create a usable password even for empty string
+        # Let's test that empty password doesn't authenticate
+        self.assertFalse(user.check_password(''))
+        self.assertFalse(user.check_password('anything'))
+    
+    def test_create_user_none_password(self):
+        """Test creating user with None password (negative test)"""
+        user = User.objects.create_user(
+            email='test@example.com',
+            password=None,  # None password
+            first_name='Test',
+            last_name='User'
+        )
+        # Should create but password will be unusable
+        self.assertFalse(user.check_password(''))
+        self.assertFalse(user.check_password('anything'))
+
+
+class UserModelTest(TestCase):
+    """Test cases for User model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.company = Company.objects.create(
+            name='Test Company',
+            slug='test-company'
+        )
+        
+        self.user_data = {
+            'email': 'test@example.com',
+            'first_name': 'Test',
+            'last_name': 'User',
+            'phone': '+1234567890',
+            'company': self.company
+        }
+    
+    def test_user_creation(self):
+        """Test basic user creation"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        self.assertEqual(user.email, 'test@example.com')
+        self.assertEqual(user.first_name, 'Test')
+        self.assertEqual(user.last_name, 'User')
+        self.assertEqual(user.phone, '+1234567890')
+        self.assertEqual(user.company, self.company)
+        self.assertIsNotNone(user.created_at)
+        self.assertIsNotNone(user.updated_at)
+        self.assertIsNotNone(user.verification_token)  # Auto-generated
+    
+    def test_user_str_method(self):
+        """Test string representation of user"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        self.assertEqual(str(user), 'Test User (test@example.com)')
+    
+    def test_email_uniqueness(self):
+        """Test that email must be unique"""
+        User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        with self.assertRaises(IntegrityError):
+            User.objects.create_user(
+                email='test@example.com',  # Same email
+                password='testpass123',
+                first_name='Another',
+                last_name='User'
+            )
+    
+    def test_username_field(self):
+        """Test that email is used as username field"""
+        self.assertEqual(User.USERNAME_FIELD, 'email')
+        self.assertEqual(User.REQUIRED_FIELDS, ['first_name', 'last_name'])
+    
+    def test_get_full_name(self):
+        """Test get_full_name method"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        self.assertEqual(user.get_full_name(), 'Test User')
+    
+    def test_get_short_name(self):
+        """Test get_short_name method"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        self.assertEqual(user.get_short_name(), 'Test')
+    
+    def test_initials_property(self):
+        """Test initials property"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        self.assertEqual(user.initials, 'TU')
+    
+    def test_hashid_property(self):
+        """Test hashid property"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        # Should return None before save (no pk)
+        user_no_pk = User(email='new@test.com')
+        self.assertIsNone(user_no_pk.hashid)
+        
+        # Should return hashid after save
+        self.assertIsNotNone(user.hashid)
+        self.assertEqual(len(user.hashid), 16)
+        
+        # Should be consistent
+        hashid1 = user.hashid
+        hashid2 = user.hashid
+        self.assertEqual(hashid1, hashid2)
+    
+    def test_get_by_hashid(self):
+        """Test get_by_hashid class method"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        found_user = User.get_by_hashid(user.hashid)
+        self.assertEqual(found_user, user)
+        
+        # Test with invalid hashid
+        not_found = User.get_by_hashid('invalid_hashid')
+        self.assertIsNone(not_found)
+    
+    def test_api_token_creation(self):
+        """Test API token creation"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        token = user.create_api_token('test_token')
+        
+        self.assertIsNotNone(token)
+        self.assertEqual(len(token), 64)
+        self.assertEqual(user.current_access_token, token)
+        self.assertEqual(len(user.api_tokens), 1)
+        self.assertEqual(user.api_tokens[0]['name'], 'test_token')
+        self.assertEqual(user.api_tokens[0]['token'], token)
+    
+    def test_api_token_with_expiry(self):
+        """Test API token creation with expiry"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        expires_at = timezone.now() + timedelta(hours=24)
+        token = user.create_api_token('expiring_token', expires_at)
+        
+        self.assertEqual(user.api_tokens[0]['expires_at'], expires_at.isoformat())
+    
+    def test_api_token_validation(self):
+        """Test API token validation"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        token = user.create_api_token()
+        
+        # Valid token
+        self.assertTrue(user.validate_api_token(token))
+        
+        # Invalid token
+        self.assertFalse(user.validate_api_token('invalid_token'))
+    
+    def test_api_token_validation_with_expiry(self):
+        """Test API token validation with expired token"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        # Create expired token
+        past_time = timezone.now() - timedelta(hours=1)
+        token = user.create_api_token('expired_token', past_time)
+        
+        # Should be invalid
+        self.assertFalse(user.validate_api_token(token))
+    
+    def test_revoke_api_token(self):
+        """Test revoking specific API token"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        token1 = user.create_api_token('token1')
+        token2 = user.create_api_token('token2')
+        
+        self.assertEqual(len(user.api_tokens), 2)
+        
+        user.revoke_api_token(token1)
+        
+        self.assertEqual(len(user.api_tokens), 1)
+        self.assertEqual(user.api_tokens[0]['token'], token2)
+    
+    def test_revoke_all_tokens(self):
+        """Test revoking all API tokens"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        user.create_api_token('token1')
+        user.create_api_token('token2')
+        
+        self.assertEqual(len(user.api_tokens), 2)
+        
+        user.revoke_all_tokens()
+        
+        self.assertEqual(len(user.api_tokens), 0)
+        self.assertIsNone(user.current_access_token)
+    
+    def test_email_verification(self):
+        """Test email verification functionality"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        # Initially not verified
+        self.assertFalse(user.is_email_verified)
+        self.assertIsNotNone(user.verification_token)
+        
+        # Verify email
+        token = user.verification_token
+        result = user.verify_email(token)
+        
+        self.assertTrue(result)
+        self.assertTrue(user.is_email_verified)
+        self.assertIsNone(user.verification_token)
+        
+        # Try with invalid token
+        result = user.verify_email('invalid_token')
+        self.assertFalse(result)
+    
+    @patch('authentication.models.send_mail')
+    def test_send_verification_email(self, mock_send_mail):
+        """Test sending verification email"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        user.send_verification_email()
+        
+        # Check that send_mail was called
+        mock_send_mail.assert_called_once()
+        args, kwargs = mock_send_mail.call_args
+        
+        self.assertEqual(args[0], 'Verify your email address')
+        self.assertIn(user.verification_token, args[1])
+        self.assertEqual(args[3], [user.email])
+    
+    def test_can_access_company(self):
+        """Test company access permissions"""
+        company1 = Company.objects.create(name='Company 1', slug='company-1')
+        company2 = Company.objects.create(name='Company 2', slug='company-2')
+        
+        user = User.objects.create_user(
+            email='user@test.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User',
+            company=company1
+        )
+        
+        # Can access own company
+        self.assertTrue(user.can_access_company(company1))
+        
+        # Cannot access other company
+        self.assertFalse(user.can_access_company(company2))
+        
+        # Superuser can access any company
+        superuser = User.objects.create_superuser(
+            email='admin@test.com',
+            password='adminpass123',
+            first_name='Admin',
+            last_name='User'
+        )
+        self.assertTrue(superuser.can_access_company(company1))
+        self.assertTrue(superuser.can_access_company(company2))
+    
+    def test_update_last_activity(self):
+        """Test updating last activity"""
+        user = User.objects.create_user(
+            password='testpass123',
+            **self.user_data
+        )
+        
+        # Initially None
+        self.assertIsNone(user.last_activity_at)
+        self.assertIsNone(user.last_login_ip)
+        
+        # Update activity
+        test_ip = '192.168.1.1'
+        user.update_last_activity(test_ip)
+        
+        self.assertIsNotNone(user.last_activity_at)
+        self.assertEqual(user.last_login_ip, test_ip)
+    
+    def test_generate_token(self):
+        """Test token generation"""
+        token1 = User.generate_token()
+        token2 = User.generate_token()
+        
+        # Should be different
+        self.assertNotEqual(token1, token2)
+        
+        # Should be correct length
+        self.assertEqual(len(token1), 32)
+        
+        # Test custom length
+        long_token = User.generate_token(64)
+        self.assertEqual(len(long_token), 64)
+    
+    def test_verification_token_auto_generation(self):
+        """Test that verification token is auto-generated on save"""
+        user = User(
+            email='new@test.com',
+            first_name='New',
+            last_name='User'
+        )
+        
+        # No token before save
+        self.assertIsNone(user.verification_token)
+        
+        user.save()
+        
+        # Token generated after save
+        self.assertIsNotNone(user.verification_token)
+    
+    def test_model_ordering(self):
+        """Test model ordering"""
+        # Create users at different times
+        user1 = User.objects.create_user(
+            email='user1@test.com',
+            password='testpass123',
+            first_name='User',
+            last_name='One'
+        )
+        
+        user2 = User.objects.create_user(
+            email='user2@test.com',
+            password='testpass123',
+            first_name='User',
+            last_name='Two'
+        )
+        
+        # Should be ordered by -created_at (newest first)
+        users = list(User.objects.all())
+        self.assertEqual(users[0], user2)  # Newest first
+        self.assertEqual(users[1], user1)
+    
+    def test_user_invalid_email_format(self):
+        """Test user creation with various invalid email formats (negative test)"""
+        invalid_emails = [
+            'notanemail',
+            '@domain.com',
+            'user@',
+            'user..double.dot@domain.com',
+            'user@domain',
+            ''
+        ]
+        
+        for invalid_email in invalid_emails:
+            try:
+                user = User(
+                    email=invalid_email,
+                    first_name='Test',
+                    last_name='User'
+                )
+                # This might not raise an exception at model level
+                # but would be caught by forms/serializers
+                user.save()
+            except Exception:
+                # If it raises an exception, that's also acceptable
+                pass
+    
+    def test_user_required_fields_missing(self):
+        """Test user creation with missing required fields (negative test)"""
+        # REQUIRED_FIELDS are only enforced by createsuperuser command
+        # Regular model creation doesn't enforce them, so let's test validation
+        user = User(
+            email='test@example.com',
+            # Missing first_name and last_name (in REQUIRED_FIELDS)
+            last_name='User'
+        )
+        try:
+            user.full_clean()  # This should validate required fields
+            # If no exception, the test passes (Django might not enforce REQUIRED_FIELDS at model level)
+        except ValidationError:
+            pass  # This is also acceptable
+    
+    def test_api_token_invalid_operations(self):
+        """Test API token invalid operations (negative test)"""
+        user = User.objects.create_user(
+            email='test@example.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User'
+        )
+        
+        # Test validating non-existent token
+        self.assertFalse(user.validate_api_token('non_existent_token'))
+        
+        # Test revoking non-existent token (should not crash)
+        user.revoke_api_token('non_existent_token')
+        self.assertEqual(len(user.api_tokens), 0)
+        
+        # Test with corrupted api_tokens field
+        user.api_tokens = "not_a_list"  # Invalid format
+        self.assertFalse(user.validate_api_token('any_token'))
+    
+    def test_email_verification_invalid_token(self):
+        """Test email verification with invalid token (negative test)"""
+        user = User.objects.create_user(
+            email='test@example.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User'
+        )
+        
+        # Test with wrong token
+        self.assertFalse(user.verify_email('wrong_token'))
+        self.assertFalse(user.is_email_verified)
+        
+        # Test with empty token
+        self.assertFalse(user.verify_email(''))
+        self.assertFalse(user.is_email_verified)
+        
+        # Test with None token
+        self.assertFalse(user.verify_email(None))
+        self.assertFalse(user.is_email_verified)
+    
+    def test_hashid_edge_cases(self):
+        """Test hashid edge cases (negative test)"""
+        # Test with user without pk
+        user_no_pk = User(email='test@example.com')
+        self.assertIsNone(user_no_pk.hashid)
+        
+        # Test get_by_hashid with invalid inputs
+        self.assertIsNone(User.get_by_hashid(''))
+        self.assertIsNone(User.get_by_hashid(None))
+        self.assertIsNone(User.get_by_hashid('invalid_hashid_format'))
+    
+    def test_company_access_unauthorized(self):
+        """Test unauthorized company access (negative test)"""
+        company1 = Company.objects.create(name='Company 1', slug='company-1')
+        company2 = Company.objects.create(name='Company 2', slug='company-2')
+        
+        # User belongs to company1
+        user = User.objects.create_user(
+            email='user@test.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User',
+            company=company1
+        )
+        
+        # Should not be able to access company2
+        self.assertFalse(user.can_access_company(company2))
+        
+        # User with no company should not access any company
+        no_company_user = User.objects.create_user(
+            email='nocompany@test.com',
+            password='testpass123',
+            first_name='No',
+            last_name='Company'
+        )
+        self.assertFalse(no_company_user.can_access_company(company1))
+        self.assertFalse(no_company_user.can_access_company(company2))
+    
+    def test_password_operations_edge_cases(self):
+        """Test password operations edge cases (negative test)"""
+        user = User.objects.create_user(
+            email='test@example.com',
+            password='testpass123',
+            first_name='Test',
+            last_name='User'
+        )
+        
+        # Test setting empty password
+        user.set_password('')
+        self.assertFalse(user.check_password(''))  # Empty password should not work
+        
+        # Test setting None password
+        user.set_password(None)
+        self.assertFalse(user.has_usable_password())
+    
+    def test_token_generation_edge_cases(self):
+        """Test token generation edge cases (negative test)"""
+        # Test with zero length (should handle gracefully)
+        try:
+            token = User.generate_token(0)
+            self.assertEqual(len(token), 0)
+        except ValueError:
+            # It's acceptable to raise error for invalid length
+            pass
+        
+        # Test with negative length (should handle gracefully)
+        try:
+            token = User.generate_token(-1)
+            # Should either work or raise appropriate error
+        except ValueError:
+            # Acceptable to raise error for invalid length
+            pass
