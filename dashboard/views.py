@@ -109,26 +109,46 @@ def _extract_juragan_product_link(card) -> str:
 def _extract_juragan_product_price(card) -> int:
     """Extract product price from Juragan Material card."""
     # Try primary price selector
+    price = _try_primary_juragan_price(card)
+    if price > 0:
+        return price
+    
+    # Try secondary price selectors
+    price = _try_secondary_juragan_price(card)
+    if price > 0:
+        return price
+    
+    # Try currency text fallback
+    return _try_currency_text_juragan_price(card)
+
+
+def _try_primary_juragan_price(card) -> int:
+    """Try to extract price from primary Juragan Material price selector."""
     el = card.select_one("div.product-card-price div.price")
     if el:
         price = _digits_to_int(el.get_text(" ", strip=True))
         if price > 0:
             return price
-    
-    # Try secondary price selectors
+    return 0
+
+
+def _try_secondary_juragan_price(card) -> int:
+    """Try to extract price from secondary Juragan Material price selectors."""
     wrapper = card.select_one("div.product-card-price") or card
     if wrapper:
         for tag in wrapper.find_all(["span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6"], string=True):
             v = _digits_to_int(tag.get_text(" ", strip=True))
             if v > 0:
                 return v
-    
-    # Try currency text fallback
+    return 0
+
+
+def _try_currency_text_juragan_price(card) -> int:
+    """Try to extract price from currency text in Juragan Material card."""
     for t in card.find_all(string=lambda s: s and ("Rp" in s or "IDR" in s)):
         v = _digits_to_int((t or "").strip())
         if v > 0:
             return v
-    
     return 0
 
 
@@ -200,7 +220,33 @@ def _fetch_with_playwright(url: str, wait_selector: str | None = None, timeout_m
 
 
 def _extract_price_from_node(node) -> int:
-    # 1) Data attributes
+    """Extract price from DOM node using multiple strategies."""
+    # Try data attributes first
+    price = _try_data_attributes_price(node)
+    if price > 0:
+        return price
+    
+    # Try specific price classes
+    price = _try_specific_price_classes(node)
+    if price > 0:
+        return price
+    
+    # Try generic class-based search
+    price = _try_generic_price_classes(node)
+    if price > 0:
+        return price
+    
+    # Try currency text search
+    price = _try_currency_text_price(node)
+    if price > 0:
+        return price
+    
+    # Last resort: all text containing numbers
+    return _try_numeric_text_price(node)
+
+
+def _try_data_attributes_price(node) -> int:
+    """Try extracting price from data attributes."""
     for attr in ["data-price-amount", "data-price", "data-cost"]:
         elem = node.find(attrs={attr: True})
         if elem and elem.get(attr):
@@ -208,8 +254,11 @@ def _extract_price_from_node(node) -> int:
                 return int(float(str(elem[attr]).replace(",", "")))
             except Exception:
                 pass
+    return 0
 
-    # 2) Specific price classes
+
+def _try_specific_price_classes(node) -> int:
+    """Try extracting price from specific CSS selectors."""
     price_selectors = [
         ".price-wrapper[data-price-amount]",
         "span.price__final", "p.price__final", 
@@ -225,8 +274,11 @@ def _extract_price_from_node(node) -> int:
                     return v
         except Exception:
             continue
+    return 0
 
-    # 3) Generic class-based search
+
+def _try_generic_price_classes(node) -> int:
+    """Try extracting price from generic price-related classes."""
     try:
         price_elements = node.select("[class*=price]")
         for el in price_elements:
@@ -235,16 +287,22 @@ def _extract_price_from_node(node) -> int:
                 return v
     except Exception:
         pass
+    return 0
 
-    # 4) Currency text search
+
+def _try_currency_text_price(node) -> int:
+    """Try extracting price from currency text patterns."""
     currency_patterns = ["Rp", "IDR", "rupiah"]
     for pattern in currency_patterns:
         for t in node.find_all(string=lambda s: s and pattern in str(s)):
             v = _digits_to_int(str(t))
             if v > 0:
                 return v
+    return 0
 
-    # 5) All text containing numbers (last resort)
+
+def _try_numeric_text_price(node) -> int:
+    """Last resort: extract price from numeric text patterns."""
     all_text = node.get_text()
     numbers = re.findall(r'\d{4,}', all_text)  # Look for 4+ digit numbers
     for num_str in numbers:
@@ -254,7 +312,6 @@ def _extract_price_from_node(node) -> int:
                 return num
         except Exception:
             continue
-
     return 0
 
 
@@ -314,31 +371,60 @@ def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
         seen.add(key)
         out.append({"item": _clean_text(name), "value": price_val, "source": MITRA10_SOURCE, "url": full_url})
 
-    for sc in soup.find_all("script", attrs={"type": "application/ld+json"}):
-        raw = (sc.string or sc.text or "").strip()
-        if not raw:
-            continue
-        try:
-            data = json.loads(raw)
-        except Exception:
-            continue
-
-        try:
-            _parse_jsonld_itemlist(data, _emit)
-        except Exception:
-            pass
-
-        try:
-            _parse_jsonld_products(data, _emit)
-        except Exception:
-            pass
+    jsonld_scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
+    for script in jsonld_scripts:
+        _process_jsonld_script(script, _emit)
 
     return out
+
+
+def _process_jsonld_script(script, emit_func):
+    """Process a single JSON-LD script tag."""
+    raw = (script.string or script.text or "").strip()
+    if not raw:
+        return
+    
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return
+
+    # Try parsing as ItemList/SearchResultsPage
+    try:
+        _parse_jsonld_itemlist(data, emit_func)
+    except Exception:
+        pass
+
+    # Try parsing as standalone products
+    try:
+        _parse_jsonld_products(data, emit_func)
+    except Exception:
+        pass
 
 
 def _extract_mitra10_product_name(container) -> str | None:
     """Extract product name from Mitra10 DOM container with generic fallbacks."""
     # Try specific product selectors first
+    name = _try_specific_mitra10_selectors(container)
+    if name:
+        return name
+
+    # Try image alt text
+    name = _try_mitra10_image_alt(container)
+    if name:
+        return name
+
+    # Try link titles and text
+    name = _try_mitra10_link_text(container)
+    if name:
+        return name
+
+    # Generic fallback: longest meaningful text in container
+    return _try_mitra10_generic_text(container)
+
+
+def _try_specific_mitra10_selectors(container) -> str | None:
+    """Try specific product selectors for Mitra10."""
     specific_selectors = [
         "a.product-item-link",
         ".product-name",
@@ -352,15 +438,21 @@ def _extract_mitra10_product_name(container) -> str | None:
                 return _clean_text(el.get_text())
         except Exception:
             continue
+    return None
 
-    # Try image alt text
+
+def _try_mitra10_image_alt(container) -> str | None:
+    """Try extracting product name from image alt text."""
     img = container.find("img")
     if img and img.get("alt"):
         alt_text = _clean_text(img["alt"])
         if len(alt_text) > 3:  # Avoid tiny alt texts
             return alt_text
+    return None
 
-    # Try link titles and text
+
+def _try_mitra10_link_text(container) -> str | None:
+    """Try extracting product name from link titles and text."""
     links = container.find_all("a", href=True)
     for link in links:
         # Try title attribute
@@ -373,19 +465,24 @@ def _extract_mitra10_product_name(container) -> str | None:
         link_text = _clean_text(link.get_text())
         if 10 <= len(link_text) <= 200:  # Reasonable product name length
             return link_text
+    return None
 
-    # Generic fallback: longest meaningful text in container
+
+def _try_mitra10_generic_text(container) -> str | None:
+    """Generic fallback: longest meaningful text in container."""
     text_elements = container.find_all(["span", "div", "p"], string=True)
     candidates = []
+    skip_terms = ["rp", "price", "buy", "cart"]
+    
     for elem in text_elements:
         text = _clean_text(elem.get_text())
-        if 10 <= len(text) <= 200 and not any(skip in text.lower() for skip in ["rp", "price", "buy", "cart"]):
+        if 10 <= len(text) <= 200 and not any(skip in text.lower() for skip in skip_terms):
             candidates.append(text)
     
     if candidates:
         # Return the longest candidate as it's likely the product name
         return max(candidates, key=len)
-
+    
     return None
 
 
@@ -415,10 +512,23 @@ def _extract_mitra10_product_url(container, request_url: str) -> str:
 
 def _parse_mitra10_dom(soup, request_url: str, seen: set) -> list[dict]:
     """Parse Mitra10 DOM-based product containers with generic fallback."""
-    out = []
-    containers = []
-    
+    containers = _find_mitra10_containers(soup)
+    return _process_mitra10_containers(containers, request_url, seen)
+
+
+def _find_mitra10_containers(soup):
+    """Find product containers in Mitra10 DOM."""
     # Try specific selectors first
+    containers = _try_specific_mitra10_containers(soup)
+    if containers:
+        return containers
+    
+    # If no specific containers found, try generic approach
+    return _try_generic_mitra10_containers(soup)
+
+
+def _try_specific_mitra10_containers(soup):
+    """Try to find containers using specific Mitra10 selectors."""
     specific_selectors = [
         "li.product-item",
         "div.product-item", 
@@ -431,56 +541,76 @@ def _parse_mitra10_dom(soup, request_url: str, seen: set) -> list[dict]:
         try:
             test_containers = soup.select(selector)
             if test_containers:
-                containers = test_containers
-                break
+                return test_containers
         except Exception:
             continue
+    return []
+
+
+def _try_generic_mitra10_containers(soup):
+    """Try to find containers using generic approach."""
+    containers = []
+    all_elements = soup.find_all(["div", "li", "article", "section"])
     
-    # If no specific containers found, try generic approach
-    if not containers:
-        # Look for any elements that contain both links and price-like text
-        all_elements = soup.find_all(["div", "li", "article", "section"])
-        for elem in all_elements:
-            # Skip if too small or too large
-            elem_text = elem.get_text(strip=True)
-            if len(elem_text) < 10 or len(elem_text) > 1000:
-                continue
-                
-            # Must have a link
-            links = elem.find_all("a", href=True)
-            if not links:
-                continue
-                
-            # Must have price-like content
-            if not any(indicator in elem_text.lower() for indicator in ["rp", "idr", "price", "harga"]):
-                continue
-                
-            # This element might be a product container
+    for elem in all_elements:
+        if _is_valid_mitra10_container(elem):
             containers.append(elem)
-            
             # Limit to avoid too many false positives
             if len(containers) >= 50:
                 break
+    
+    return containers
 
-    for container in containers:
-        name = _extract_mitra10_product_name(container)
-        if not name:
-            continue
 
-        full_url = _extract_mitra10_product_url(container, request_url)
-        price = _extract_price_from_node(container)
+def _is_valid_mitra10_container(elem) -> bool:
+    """Check if element is a valid product container."""
+    elem_text = elem.get_text(strip=True)
+    
+    # Skip if too small or too large
+    if len(elem_text) < 10 or len(elem_text) > 1000:
+        return False
         
-        if price <= 0:
-            continue
+    # Must have a link
+    if not elem.find_all("a", href=True):
+        return False
+        
+    # Must have price-like content
+    price_indicators = ["rp", "idr", "price", "harga"]
+    return any(indicator in elem_text.lower() for indicator in price_indicators)
 
-        key = full_url or (name, price)
+
+def _process_mitra10_containers(containers, request_url: str, seen: set) -> list[dict]:
+    """Process found containers and extract product data."""
+    out = []
+    
+    for container in containers:
+        product_data = _extract_mitra10_product_data(container, request_url)
+        if not product_data:
+            continue
+            
+        key = product_data["url"] or (product_data["item"], product_data["value"])
         if key in seen:
             continue
         seen.add(key)
-
-        out.append({"item": name, "value": price, "source": MITRA10_SOURCE, "url": full_url})
-
+        
+        out.append(product_data)
+    
     return out
+
+
+def _extract_mitra10_product_data(container, request_url: str) -> dict | None:
+    """Extract product data from a single container."""
+    name = _extract_mitra10_product_name(container)
+    if not name:
+        return None
+
+    full_url = _extract_mitra10_product_url(container, request_url)
+    price = _extract_price_from_node(container)
+    
+    if price <= 0:
+        return None
+
+    return {"item": name, "value": price, "source": MITRA10_SOURCE, "url": full_url}
 
 
 def _parse_mitra10_html(html: str, request_url: str) -> list[dict]:
@@ -512,50 +642,88 @@ def _mitra10_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
     3) Try alternative URL patterns
     """
     try:
-        urlb = Mitra10UrlBuilder()
+        # First attempt: Simple URL
+        prods, url, html_len = _try_simple_mitra10_url(keyword)
+        if prods:
+            return prods, url, html_len
 
-        # First attempt: Simple URL without complex sort parameters
-        simple_url = f"https://www.mitra10.com/catalogsearch/result?q={keyword}"
-        html1 = _human_get(simple_url)
-        prods1 = _parse_mitra10_html(html1, simple_url)
-        if prods1:
-            return prods1, simple_url, len(html1)
+        # Second attempt: Try with Playwright if available
+        prods, url, html_len = _try_playwright_mitra10(keyword, url)
+        if prods:
+            return prods, url, html_len
 
-        # Second attempt: Try with Playwright if available (Mitra10 likely needs JS)
-        if HAS_PLAYWRIGHT:
-            html_js = _fetch_with_playwright(simple_url, wait_selector="div", timeout_ms=15000)
-            if html_js and len(html_js) > len(html1):  # Got more content with JS
-                prods_js = _parse_mitra10_html(html_js, simple_url)
-                if prods_js:
-                    return prods_js, simple_url, len(html_js)
+        # Third attempt: Try complex URL
+        prods, url, html_len = _try_complex_mitra10_url(keyword, sort_by_price, page, url)
+        if prods:
+            return prods, url, html_len
 
-        # Third attempt: Try the original complex URL
-        url1 = _build_url_defensively(urlb, keyword, sort_by_price, page)
-        if url1 != simple_url:  # Only if different from simple URL
-            html2 = _human_get(url1)
-            prods2 = _parse_mitra10_html(html2, url1)
-            if prods2:
-                return prods2, url1, len(html2)
-
-        # Fourth attempt: Try alternative search patterns
-        alt_urls = [
-            f"https://www.mitra10.com/search?q={keyword}",
-            f"https://www.mitra10.com/catalog/search/?q={keyword}",
-        ]
-        
-        for alt_url in alt_urls:
-            try:
-                html_alt = _human_get(alt_url)
-                prods_alt = _parse_mitra10_html(html_alt, alt_url)
-                if prods_alt:
-                    return prods_alt, alt_url, len(html_alt)
-            except Exception:
-                continue
+        # Fourth attempt: Try alternative URLs
+        prods, url, html_len = _try_alternative_mitra10_urls(keyword)
+        if prods:
+            return prods, url, html_len
 
         # Return the best attempt we made
-        return [], simple_url, len(html1)
+        return [], url, html_len
     except Exception:
         return [], "", 0
+
+
+def _try_simple_mitra10_url(keyword: str):
+    """Try simple Mitra10 URL without complex parameters."""
+    simple_url = f"https://www.mitra10.com/catalogsearch/result?q={keyword}"
+    html1 = _human_get(simple_url)
+    prods1 = _parse_mitra10_html(html1, simple_url)
+    return prods1, simple_url, len(html1)
+
+
+def _try_playwright_mitra10(keyword: str, fallback_url: str):
+    """Try Mitra10 with Playwright for JavaScript rendering."""
+    if not HAS_PLAYWRIGHT:
+        return [], fallback_url, 0
+    
+    simple_url = f"https://www.mitra10.com/catalogsearch/result?q={keyword}"
+    html_js = _fetch_with_playwright(simple_url, wait_selector="div", timeout_ms=15000)
+    
+    if html_js and len(html_js) > len(_human_get(simple_url)):  # Got more content with JS
+        prods_js = _parse_mitra10_html(html_js, simple_url)
+        if prods_js:
+            return prods_js, simple_url, len(html_js)
+    
+    return [], fallback_url, 0
+
+
+def _try_complex_mitra10_url(keyword: str, sort_by_price: bool, page: int, fallback_url: str):
+    """Try Mitra10 with complex URL builder."""
+    urlb = Mitra10UrlBuilder()
+    url1 = _build_url_defensively(urlb, keyword, sort_by_price, page)
+    simple_url = f"https://www.mitra10.com/catalogsearch/result?q={keyword}"
+    
+    if url1 != simple_url:  # Only if different from simple URL
+        html2 = _human_get(url1)
+        prods2 = _parse_mitra10_html(html2, url1)
+        if prods2:
+            return prods2, url1, len(html2)
+    
+    return [], fallback_url, 0
+
+
+def _try_alternative_mitra10_urls(keyword: str):
+    """Try alternative Mitra10 search URL patterns."""
+    alt_urls = [
+        f"https://www.mitra10.com/search?q={keyword}",
+        f"https://www.mitra10.com/catalog/search/?q={keyword}",
+    ]
+    
+    for alt_url in alt_urls:
+        try:
+            html_alt = _human_get(alt_url)
+            prods_alt = _parse_mitra10_html(html_alt, alt_url)
+            if prods_alt:
+                return prods_alt, alt_url, len(html_alt)
+        except Exception:
+            continue
+    
+    return [], "", 0
 
 
 # ---------------- generic runners ----------------
@@ -644,7 +812,7 @@ def home(request):
     prices = []
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store")
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan")
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), "Juragan Material", _juragan_fallback)
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback)
 
     # sanity: drop unreal prices and dedupe the final list
@@ -670,7 +838,7 @@ def trigger_scrape(request):
     counts = {
         "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store"),
         "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan"),
-        "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), "Juragan Material", _juragan_fallback),
+        "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback),
         "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback),
     }
     messages.success(
