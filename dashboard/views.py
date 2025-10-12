@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods, require_GET
+from django.views.decorators.csrf import csrf_protect
 from django.contrib import messages
 from .forms import ItemPriceProvinceForm
 from . import models
@@ -687,6 +688,7 @@ def curated_price_list(request):
     return render(request, "dashboard/curated_price_list.html", {"rows": qs})
 
 
+@csrf_protect
 @require_http_methods(["GET", "POST"])
 def curated_price_create(request):
     form = ItemPriceProvinceForm(request.POST or None)
@@ -697,6 +699,7 @@ def curated_price_create(request):
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
 
 
+@csrf_protect
 @require_http_methods(["GET", "POST"])
 def curated_price_update(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
@@ -708,6 +711,7 @@ def curated_price_update(request, pk):
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
 
 
+@csrf_protect
 @require_http_methods(["GET", "POST"])
 def curated_price_delete(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
