@@ -390,9 +390,8 @@ class TestLocationIdFunctions(TestCase):
     def test_get_available_locations(self):
         """Test get_available_locations returns all location keys"""
         available_locations = get_available_locations()
-        expected_locations = list(TOKOPEDIA_LOCATION_IDS.keys())
         
-        self.assertEqual(set(available_locations), set(expected_locations))
+        self.assertEqual(set(available_locations), set(TOKOPEDIA_LOCATION_IDS.keys()))
         self.assertIsInstance(available_locations, list)
         
         # Check that all expected locations are present
