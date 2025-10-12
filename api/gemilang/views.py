@@ -117,7 +117,7 @@ def gemilang_locations_view(request):
         
     except Exception as e:
         error_message = f"Unexpected error: {str(e)}"
-        logger.error(f"Unexpected error in Gemilang location scraper: {str(e)}")
+        handler.logger.error(f"Unexpected error in Gemilang location scraper: {str(e)}")
         
         response_data = handler.create_error_response(error_message)
         return JsonResponse(response_data, status=500)
