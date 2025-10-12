@@ -2,7 +2,14 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 from django.test import TestCase
 
-from api.tokopedia.scraper import TokopediaPriceScraper, get_location_ids, TOKOPEDIA_LOCATION_IDS
+from api.tokopedia.scraper import (
+    TokopediaPriceScraper, 
+    get_location_ids, 
+    get_location_ids_strict,
+    get_available_locations,
+    TokopediaLocationError,
+    TOKOPEDIA_LOCATION_IDS
+)
 from api.interfaces import Product, ScrapingResult, IHttpClient, IUrlBuilder, IHtmlParser
 from api.playwright_client import BatchPlaywrightClient
 from api.tokopedia.url_builder import TokopediaUrlBuilder
@@ -118,7 +125,9 @@ class TestTokopediaPriceScraper(TestCase):
             html_parser=mock_html_parser
         )
         
-        with patch('builtins.print') as mock_print:
+        # Test with warnings capture instead of print
+        with patch('api.tokopedia.scraper.logger') as mock_logger, \
+             patch('api.tokopedia.scraper.warnings') as mock_warnings:
             result = scraper.scrape_products_with_filters(
                 keyword="semen",
                 location="unknown_city"
@@ -126,10 +135,16 @@ class TestTokopediaPriceScraper(TestCase):
             
             # Should still succeed but show warning
             self.assertTrue(result.success)
-            mock_print.assert_called_once()
-            self.assertIn("Warning: Unknown location 'unknown_city'", mock_print.call_args[0][0])
             
-            # Should call with location_ids=[]
+            # Check that warning was logged
+            mock_logger.warning.assert_called_once()
+            warning_call = mock_logger.warning.call_args[0][0]
+            self.assertIn("Unknown location 'unknown_city'", warning_call)
+            
+            # Check that warning was issued
+            mock_warnings.warn.assert_called_once()
+            
+            # Should call with location_ids=[] (since location validation returns [] for invalid locations)
             mock_url_builder.build_search_url_with_filters.assert_called_once_with(
                 keyword="semen",
                 sort_by_price=True,
@@ -224,16 +239,17 @@ class TestTokopediaPriceScraper(TestCase):
             html_parser=mock_html_parser
         )
         
-        with patch('builtins.print') as mock_print:
+        with patch('api.tokopedia.scraper.logger') as mock_logger:
             keywords = ["semen", "bata merah"]
             result = scraper.scrape_batch_with_filters(keywords=keywords)
             
             # Should return products from successful keyword only
             self.assertEqual(len(result), 2)  # Only from first keyword
             
-            # Should print error message for failed keyword
-            mock_print.assert_called_once()
-            self.assertIn("Error scraping bata merah", mock_print.call_args[0][0])
+            # Should log error message for failed keyword
+            mock_logger.error.assert_called_once()
+            error_call = mock_logger.error.call_args[0][0]
+            self.assertIn("Error scraping keyword 'bata merah'", error_call)
 
     @patch('api.tokopedia.scraper.BatchPlaywrightClient')
     def test_scrape_batch_override(self, mock_batch_client_class):
@@ -341,6 +357,47 @@ class TestLocationIdFunctions(TestCase):
             for location_id in ids:
                 self.assertIsInstance(location_id, int)
                 self.assertGreater(location_id, 0)
+
+    def test_get_location_ids_strict_success(self):
+        """Test get_location_ids_strict with valid location"""
+        jakarta_ids = get_location_ids_strict('jakarta')
+        expected_ids = [174, 175, 176, 177, 178, 179]
+        self.assertEqual(jakarta_ids, expected_ids)
+        
+        bandung_ids = get_location_ids_strict('bandung')
+        self.assertEqual(bandung_ids, [165])
+    
+    def test_get_location_ids_strict_case_insensitive(self):
+        """Test get_location_ids_strict is case insensitive"""
+        jakarta_lower = get_location_ids_strict('jakarta')
+        jakarta_upper = get_location_ids_strict('JAKARTA')
+        jakarta_mixed = get_location_ids_strict('Jakarta')
+        
+        expected_ids = [174, 175, 176, 177, 178, 179]
+        self.assertEqual(jakarta_lower, expected_ids)
+        self.assertEqual(jakarta_upper, expected_ids)
+        self.assertEqual(jakarta_mixed, expected_ids)
+    
+    def test_get_location_ids_strict_unknown_location_raises_error(self):
+        """Test get_location_ids_strict raises TokopediaLocationError for unknown location"""
+        with self.assertRaises(TokopediaLocationError) as context:
+            get_location_ids_strict('unknown_city')
+        
+        error_msg = str(context.exception)
+        self.assertIn("Unknown location 'unknown_city'", error_msg)
+        self.assertIn("Available locations:", error_msg)
+    
+    def test_get_available_locations(self):
+        """Test get_available_locations returns all location keys"""
+        available_locations = get_available_locations()
+        expected_locations = list(TOKOPEDIA_LOCATION_IDS.keys())
+        
+        self.assertEqual(set(available_locations), set(expected_locations))
+        self.assertIsInstance(available_locations, list)
+        
+        # Check that all expected locations are present
+        expected_set = {'dki_jakarta', 'jakarta', 'jabodetabek', 'bandung', 'medan', 'surabaya'}
+        self.assertEqual(set(available_locations), expected_set)
 
 
 class TestScraperIntegration(TestCase):
