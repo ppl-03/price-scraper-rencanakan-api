@@ -142,7 +142,8 @@ class TestMitra10Profiler(TestCase):
             report_data = json.load(f)
         
         self.assertIn('profiling_results', report_data)
-        self.assertIn('optimization_recommendations', report_data)
+        self.assertIn('environment_config', report_data)
+        self.assertIn('timestamp', report_data)
         self.assertIn('url_builder', report_data['profiling_results'])
 
     def test_performance_metrics_calculation(self):
