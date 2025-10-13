@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, HttpResponseNotAllowed
-from django.views.decorators.http import require_POST, require_http_methods, require_GET
+from django.http import HttpResponseNotAllowed
+from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.csrf import csrf_protect
 from django.contrib import messages
 from .forms import ItemPriceProvinceForm
@@ -8,7 +8,8 @@ from . import models
 
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-import re, json, os, time, random
+import re, json, os, time
+import secrets
 
 # For diagnostics + plain HTML fetch
 from api.core import BaseHttpClient
@@ -74,7 +75,7 @@ def _human_get(url: str, tries: int = 2, sleep_sec: float = 0.6) -> str:
                 break
         except Exception:
             pass
-        time.sleep(sleep_sec + random.random() * 0.4)
+        time.sleep(sleep_sec + secrets.SystemRandom().uniform(0, 0.4))
     return html
 
 
@@ -856,7 +857,6 @@ def curated_price_list(request):
     return render(request, "dashboard/curated_price_list.html", {"rows": qs})
 
 
-@require_http_methods(['GET', 'POST'])
 @csrf_protect
 def curated_price_create(request):
     if request.method == "GET":
@@ -873,7 +873,6 @@ def curated_price_create(request):
         return HttpResponseNotAllowed(["GET", "POST"])
 
 
-@require_http_methods(['GET', 'POST'])
 @csrf_protect
 def curated_price_update(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
