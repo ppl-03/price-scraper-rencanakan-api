@@ -19,11 +19,11 @@ class TestGemilangHtmlParser(TestCase):
         product1 = products[0]
         self.assertEqual(product1.name, "GML KUAS CAT 1inch")
         self.assertEqual(product1.price, 3600)
-        self.assertEqual(product1.url, "/pusat/gml-kuas-cat-1inch")
+        self.assertEqual(product1.url, "https://gemilang-store.com/pusat/gml-kuas-cat-1inch")
         product2 = products[1]
         self.assertEqual(product2.name, "Cat Tembok Spectrum 5Kg")
         self.assertEqual(product2.price, 55000)
-        self.assertEqual(product2.url, "/pusat/cat-tembok-spectrum-5kg")
+        self.assertEqual(product2.url, "https://gemilang-store.com/pusat/cat-tembok-spectrum-5kg")
     def test_parse_empty_html(self):
         products = self.parser.parse_products("")
         self.assertEqual(len(products), 0)
@@ -105,7 +105,7 @@ class TestGemilangHtmlParser(TestCase):
         """
         products = self.parser.parse_products(html_with_href)
         self.assertEqual(len(products), 1)
-        self.assertEqual(products[0].url, "/actual/product/url")
+        self.assertEqual(products[0].url, "https://gemilang-store.com/actual/product/url")
         html_without_href = """
         <div class="item-product">
             <p class="product-name">Test Product Name</p>
@@ -114,7 +114,7 @@ class TestGemilangHtmlParser(TestCase):
         """
         products = self.parser.parse_products(html_without_href)
         self.assertEqual(len(products), 1)
-        self.assertEqual(products[0].url, "/pusat/test-product-name")
+        self.assertEqual(products[0].url, "https://gemilang-store.com/pusat/test-product-name")
     def test_price_extraction_fallback(self):
         html_fallback_price = """
         <div class="item-product">
