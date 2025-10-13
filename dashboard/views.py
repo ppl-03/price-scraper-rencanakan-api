@@ -3,6 +3,7 @@ from django.http import HttpResponseNotAllowed
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_protect
 from django.contrib import messages
+from django.urls import reverse
 from .forms import ItemPriceProvinceForm
 from . import models
 
@@ -857,55 +858,67 @@ def curated_price_list(request):
     return render(request, "dashboard/curated_price_list.html", {"rows": qs})
 
 
-@csrf_protect
-@require_http_methods(["GET", "POST"])
+@require_GET
 def curated_price_create(request):
-    if request.method == "GET":
-        form = ItemPriceProvinceForm()
-        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
-    elif request.method == "POST":
-        form = ItemPriceProvinceForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Curated price saved")
-            return redirect("curated_price_list")
-        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
-    else:
-        return HttpResponseNotAllowed(["GET", "POST"])
+    form = ItemPriceProvinceForm()
+    return render(request, DASHBOARD_FORM_TEMPLATE, {
+        "title": "New Curated Price", 
+        "form": form,
+        "form_action": reverse("curated_price_create_post")
+    })
 
 
 @csrf_protect
-@require_http_methods(["GET", "POST"])
+@require_POST
+def curated_price_create_post(request):
+    form = ItemPriceProvinceForm(request.POST)
+    if form.is_valid():
+        form.save()
+        messages.success(request, "Curated price saved")
+        return redirect("curated_price_list")
+    return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
+
+
+@require_GET
 def curated_price_update(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
-    
-    if request.method == "GET":
-        form = ItemPriceProvinceForm(instance=obj)
-        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
-    elif request.method == "POST":
-        form = ItemPriceProvinceForm(request.POST, instance=obj)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Curated price updated")
-            return redirect("curated_price_list")
-        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
-    else:
-        return HttpResponseNotAllowed(["GET", "POST"])
+    form = ItemPriceProvinceForm(instance=obj)
+    return render(request, DASHBOARD_FORM_TEMPLATE, {
+        "title": "Edit Curated Price", 
+        "form": form,
+        "form_action": reverse("curated_price_update_post", args=[pk])
+    })
 
 
 @csrf_protect
-@require_http_methods(["GET", "POST"])
+@require_POST
+def curated_price_update_post(request, pk):
+    obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
+    form = ItemPriceProvinceForm(request.POST, instance=obj)
+    if form.is_valid():
+        form.save()
+        messages.success(request, "Curated price updated")
+        return redirect("curated_price_list")
+    return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
+
+
+@require_GET
 def curated_price_delete(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
-    
-    if request.method == "GET":
-        return render(request, "dashboard/confirm_delete.html", {"title": "Delete Curated Price", "obj": obj})
-    elif request.method == "POST":
-        obj.delete()
-        messages.success(request, "Curated price deleted")
-        return redirect("curated_price_list")
-    else:
-        return HttpResponseNotAllowed(["GET", "POST"])
+    return render(request, "dashboard/confirm_delete.html", {
+        "title": "Delete Curated Price", 
+        "obj": obj,
+        "form_action": reverse("curated_price_delete_post", args=[pk])
+    })
+
+
+@csrf_protect
+@require_POST
+def curated_price_delete_post(request, pk):
+    obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
+    obj.delete()
+    messages.success(request, "Curated price deleted")
+    return redirect("curated_price_list")
 
 
 @require_POST
