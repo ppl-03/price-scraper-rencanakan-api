@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponseNotAllowed
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_protect
 from django.contrib import messages
 from .forms import ItemPriceProvinceForm
@@ -858,6 +858,7 @@ def curated_price_list(request):
 
 
 @csrf_protect
+@require_http_methods(["GET", "POST"])
 def curated_price_create(request):
     if request.method == "GET":
         form = ItemPriceProvinceForm()
@@ -874,6 +875,7 @@ def curated_price_create(request):
 
 
 @csrf_protect
+@require_http_methods(["GET", "POST"])
 def curated_price_update(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
     
@@ -892,6 +894,7 @@ def curated_price_update(request, pk):
 
 
 @csrf_protect
+@require_http_methods(["GET", "POST"])
 def curated_price_delete(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
     
