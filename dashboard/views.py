@@ -856,6 +856,7 @@ def curated_price_list(request):
     return render(request, "dashboard/curated_price_list.html", {"rows": qs})
 
 
+@require_http_methods(['GET', 'POST'])
 @csrf_protect
 def curated_price_create(request):
     if request.method == "GET":
@@ -872,6 +873,7 @@ def curated_price_create(request):
         return HttpResponseNotAllowed(["GET", "POST"])
 
 
+@require_http_methods(['GET', 'POST'])
 @csrf_protect
 def curated_price_update(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
