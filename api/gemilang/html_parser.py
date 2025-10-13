@@ -182,6 +182,14 @@ class GemilangHtmlParser(IHtmlParser):
         return None
     
     def _extract_product_price_from_page(self, soup: BeautifulSoup) -> int:
+        price = self._extract_price_from_selectors(soup)
+        if price > 0:
+            return price
+        
+        price = self._extract_price_from_text_patterns(soup)
+        return price
+    
+    def _extract_price_from_selectors(self, soup: BeautifulSoup) -> int:
         price_selectors = [
             '.price',
             '.product-price', 
@@ -193,16 +201,25 @@ class GemilangHtmlParser(IHtmlParser):
         ]
         
         for selector in price_selectors:
-            elements = soup.select(selector)
-            for element in elements:
-                text = element.get_text(strip=True)
-                try:
-                    price = self.price_cleaner.clean_price(text)
-                    if self.price_cleaner.is_valid_price(price):
-                        return price
-                except (TypeError, ValueError):
-                    continue
+            price = self._try_extract_price_from_selector(soup, selector)
+            if price > 0:
+                return price
         
+        return 0
+    
+    def _try_extract_price_from_selector(self, soup: BeautifulSoup, selector: str) -> int:
+        elements = soup.select(selector)
+        for element in elements:
+            text = element.get_text(strip=True)
+            try:
+                price = self.price_cleaner.clean_price(text)
+                if self.price_cleaner.is_valid_price(price):
+                    return price
+            except (TypeError, ValueError):
+                continue
+        return 0
+    
+    def _extract_price_from_text_patterns(self, soup: BeautifulSoup) -> int:
         price_patterns = [
             r'Rp[\s]*([0-9.,]+)',
             r'IDR[\s]*([0-9.,]+)',
@@ -211,17 +228,32 @@ class GemilangHtmlParser(IHtmlParser):
         
         page_text = soup.get_text()
         for pattern in price_patterns:
-            matches = re.findall(pattern, page_text, re.IGNORECASE)
-            if matches:
-                for match in matches:
-                    price_str = match.replace(',', '').replace('.', '')
-                    try:
-                        price = int(price_str)
-                        if 100 <= price <= 50000000:  # Reasonable price range
-                            cleaned_price = self.price_cleaner.clean_price(f"Rp {price}")
-                            if self.price_cleaner.is_valid_price(cleaned_price):
-                                return cleaned_price
-                    except (ValueError, TypeError):
-                        continue
+            price = self._try_extract_price_from_pattern(pattern, page_text)
+            if price > 0:
+                return price
         
+        return 0
+    
+    def _try_extract_price_from_pattern(self, pattern: str, page_text: str) -> int:
+        matches = re.findall(pattern, page_text, re.IGNORECASE)
+        if not matches:
+            return 0
+        
+        for match in matches:
+            price = self._parse_and_validate_price_match(match)
+            if price > 0:
+                return price
+        
+        return 0
+    
+    def _parse_and_validate_price_match(self, match: str) -> int:
+        price_str = match.replace(',', '').replace('.', '')
+        try:
+            price = int(price_str)
+            if 100 <= price <= 50000000:
+                cleaned_price = self.price_cleaner.clean_price(f"Rp {price}")
+                if self.price_cleaner.is_valid_price(cleaned_price):
+                    return cleaned_price
+        except (ValueError, TypeError):
+            pass
         return 0
