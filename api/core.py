@@ -154,6 +154,23 @@ class BasePriceScraper(IPriceScraper):
                 success=False,
                 error_message=f"Unexpected error: {str(e)}"
             )
+    
+    def scrape_product_details(self, product_url: str) -> Optional[Product]:
+        try:
+            html_content = self.http_client.get(product_url)
+            
+            if hasattr(self.html_parser, 'parse_product_details'):
+                return self.html_parser.parse_product_details(html_content, product_url)
+            else:
+                logger.warning("HTML parser does not support detailed product parsing")
+                return None
+                
+        except (HttpClientError, HtmlParserError) as e:
+            logger.error(f"Failed to scrape product details from {product_url}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error scraping product details from {product_url}: {str(e)}")
+            return None
 
 
 def clean_price_digits(price_string: Union[str, Any]) -> int:
