@@ -46,34 +46,71 @@ jobs:
           python manage.py makemigrations security --noinput
           python manage.py migrate --noinput
 
-      - name: Run tests with coverage
+      - name: Run Django tests with coverage
         run: |
           coverage run --source='.' manage.py test --verbosity 2
-          coverage xml
+          coverage xml -o coverage-django.xml
           coverage report --show-missing
           
-      - name: Run Gemilang coverage tests
+      - name: Run all pytest tests with coverage
         run: |
-          python -m pytest --cov=api.gemilang.unit_parser --cov=api.gemilang.html_parser --cov-report=term-missing --cov-report=xml:coverage-gemilang.xml api/gemilang/tests/ -v
+          python -m pytest \
+            --cov=api.gemilang \
+            --cov=api.mitra10 \
+            --cov=api.depobangunan \
+            --cov=api.juragan_material \
+            --cov=api \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-pytest.xml \
+            -v \
+            api/gemilang/tests/ \
+            api/mitra10/tests/ \
+            api/depobangunan/tests/ \
+            api/juragan_material/tests/ \
+            api/test_*.py
+          
+      - name: Run module-specific coverage checks
+        run: |
+          echo "Running Gemilang module tests..."
+          python -m pytest --cov=api.gemilang.unit_parser --cov=api.gemilang.html_parser --cov-report=term-missing api/gemilang/tests/ -v
+          
+          echo "Running Mitra10 module tests..."
+          python -m pytest --cov=api.mitra10 --cov-report=term-missing api/mitra10/tests/ -v
+          
+          echo "Running Depobangunan module tests..."
+          python -m pytest --cov=api.depobangunan --cov-report=term-missing api/depobangunan/tests/ -v
+          
+          echo "Running Juragan Material module tests..."
+          python -m pytest --cov=api.juragan_material --cov-report=term-missing api/juragan_material/tests/ -v
           
       - name: Upload coverage results
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: |
-            coverage.xml
-            coverage-gemilang.xml
+            coverage-django.xml
+            coverage-pytest.xml
             .coverage
             
       - name: Coverage Summary
         run: |
           echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo "### Overall Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "### Django Tests Coverage" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           coverage report --show-missing >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Gemilang Module Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "### Pytest Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          python -m pytest --cov=api.gemilang.unit_parser --cov=api.gemilang.html_parser --cov-report=term api/gemilang/tests/ --tb=no -q >> $GITHUB_STEP_SUMMARY || true
+          python -m pytest \
+            --cov=api.gemilang \
+            --cov=api.mitra10 \
+            --cov=api.depobangunan \
+            --cov=api.juragan_material \
+            --cov-report=term \
+            api/gemilang/tests/ \
+            api/mitra10/tests/ \
+            api/depobangunan/tests/ \
+            api/juragan_material/tests/ \
+            --tb=no -q >> $GITHUB_STEP_SUMMARY || true
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
