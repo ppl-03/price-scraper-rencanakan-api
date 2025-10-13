@@ -6,6 +6,18 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+# Unit type constants
+UNIT_M2 = 'M²'
+UNIT_CM2 = 'CM²'
+UNIT_INCH2 = 'INCH²'
+UNIT_MM2 = 'MM²'
+UNIT_M3 = 'M³'
+UNIT_CM3 = 'CM³'
+UNIT_KG = 'KG'
+UNIT_GRAM = 'GRAM'
+UNIT_TON = 'TON'
+UNIT_POUND = 'POUND'
+
 
 class UnitExtractionStrategy(Protocol):
     
@@ -26,10 +38,10 @@ class UnitPatternRepository:
             'M': ['meter', 'metre', r'm(?!m|l|g|²|³)'],
             'INCH': ['inch', 'inchi', '"', '″'],
             'FEET': ['feet', 'ft', '\'', '′'],
-            'CM²': ['cm²', 'cm2', 'centimeter persegi', 'sentimeter persegi'],
-            'M²': ['m²', 'm2', 'meter persegi', 'square meter'],
-            'INCH²': ['inch²', 'inch2', 'square inch', 'inchi persegi'],
-            'KG': ['kg', 'kilogram', 'kilo'],
+            UNIT_CM2: ['cm²', 'cm2', 'centimeter persegi', 'sentimeter persegi'],
+            UNIT_M2: ['m²', 'm2', 'meter persegi', 'square meter'],
+            UNIT_INCH2: ['inch²', 'inch2', 'square inch', 'inchi persegi'],
+            UNIT_KG: ['kg', 'kilogram', 'kilo'],
             'GRAM': ['gram', 'gr', 'g(?!a)'],
             'TON': ['ton', 'tonnes'],
             'POUND': ['pound', 'lb', 'lbs', 'pon'],
@@ -69,9 +81,9 @@ class UnitPatternRepository:
     
     def _initialize_priority_order(self) -> List[str]:
         return [
-            'M²', 'CM²', 'INCH²', 'MM²',
-            'M³', 'CM³',
-            'KG', 'GRAM', 'TON', 'POUND',
+            UNIT_M2, UNIT_CM2, UNIT_INCH2, UNIT_MM2,
+            UNIT_M3, UNIT_CM3,
+            UNIT_KG, UNIT_GRAM, UNIT_TON, UNIT_POUND,
             'M', 'CM', 'MM', 'INCH', 'FEET',
             'LITER', 'ML', 'GALLON',
             'WATT', 'KWH', 'VOLT', 'AMPERE', 'KVA', 'HP',
@@ -94,11 +106,11 @@ class AreaPatternStrategy:
     
     def extract_unit(self, text_lower: str) -> Optional[str]:
         try:
-            area_pattern = r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?[x×]\s?([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?(cm|mm|m|inch)(?:\s|$)'
+            area_pattern = r'(\d{1,10}(?:[.,]\d{1,10})?)\s?[x×]\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(cm|mm|m|inch)(?:\s|$)'
             match = re.search(area_pattern, text_lower, re.IGNORECASE)
             if match:
                 unit_key = match.group(3).lower()
-                area_map = {'cm': 'CM²', 'mm': 'MM²', 'm': 'M²', 'inch': 'INCH²'}
+                area_map = {'cm': UNIT_CM2, 'mm': UNIT_MM2, 'm': UNIT_M2, 'inch': UNIT_INCH2}
                 return area_map.get(unit_key)
             
             return None
@@ -116,15 +128,15 @@ class AdjacentPatternStrategy:
     def extract_unit(self, text_lower: str) -> Optional[str]:
         try:
             adjacent_patterns = [
-                (r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)(mm|cm|kg|gr|ml|lt|pcs|set|inch|feet|watt|volt|amp|hp|bar|psi)(?:\s|$)', 
-                 {'mm': 'MM', 'cm': 'CM', 'kg': 'KG', 'gr': 'GRAM', 'ml': 'ML', 'lt': 'LITER', 
+                (r'(\d{1,10}(?:[.,]\d{1,10})?)(mm|cm|kg|gr|ml|lt|pcs|set|inch|feet|watt|volt|amp|hp|bar|psi)(?:\s|$)', 
+                 {'mm': 'MM', 'cm': 'CM', 'kg': UNIT_KG, 'gr': UNIT_GRAM, 'ml': 'ML', 'lt': 'LITER', 
                   'pcs': 'PCS', 'set': 'SET', 'inch': 'INCH', 'feet': 'FEET', 'watt': 'WATT', 
                   'volt': 'VOLT', 'amp': 'AMPERE', 'hp': 'HP', 'bar': 'BAR', 'psi': 'PSI'}),
-                (r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?diameter\s?(mm|cm|m|inch)', 
+                (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?diameter\s?(mm|cm|m|inch)', 
                  {'mm': 'MM', 'cm': 'CM', 'm': 'M', 'inch': 'INCH'}),
-                (r'Ø\s?([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?(mm|cm|m|inch)', 
+                (r'Ø\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(mm|cm|m|inch)', 
                  {'mm': 'MM', 'cm': 'CM', 'm': 'M', 'inch': 'INCH'}),
-                (r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?/?(\bhari\b|\bminggu\b|\bulan\b|\btahun\b|\bjam\b|\bhour\b|\bday\b|\bweek\b|\bmonth\b|\byear\b)', 
+                (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?/?(\bhari\b|\bminggu\b|\bulan\b|\btahun\b|\bjam\b|\bhour\b|\bday\b|\bweek\b|\bmonth\b|\byear\b)', 
                  {'hari': 'HARI', 'minggu': 'MINGGU', 'bulan': 'BULAN', 'tahun': 'TAHUN', 'jam': 'JAM',
                   'hour': 'JAM', 'day': 'HARI', 'week': 'MINGGU', 'month': 'BULAN', 'year': 'TAHUN'})
             ]
@@ -197,7 +209,7 @@ class UnitExtractor:
                 patterns = self._pattern_repository.get_patterns(unit)
                 for pattern in patterns:
                     try:
-                        pattern_with_boundaries = f'(?:^|\\s|[\\(\\[{{]|[0-9])({pattern})(?:\\s|[\\)\\]}}]|$)'
+                        pattern_with_boundaries = f'(?:^|\\s|[\\(\\[{{]|\\d)({pattern})(?:\\s|[\\)\\]}}]|$)'
                         if re.search(pattern_with_boundaries, text_lower, re.IGNORECASE):
                             return unit
                     except re.error as e:
@@ -260,29 +272,38 @@ class SpecificationFinder:
         specs = []
         try:
             tables = soup.find_all('table')
-            
             for table in tables:
-                try:
-                    rows = table.find_all('tr')
-                    for row in rows:
-                        try:
-                            cells = row.find_all(['td', 'th'])
-                            if len(cells) >= 2:
-                                key = cells[0].get_text(strip=True).lower()
-                                value = cells[1].get_text(strip=True)
-                                
-                                if any(keyword in key for keyword in self.spec_keywords):
-                                    specs.append(value)
-                        except (AttributeError, IndexError) as e:
-                            logger.debug(f"Error processing table row: {e}")
-                            continue
-                except Exception as e:
-                    logger.debug(f"Error processing table: {e}")
-                    continue
+                table_specs = self._extract_specs_from_table(table)
+                specs.extend(table_specs)
         except Exception as e:
             logger.warning(f"Error finding tables: {e}")
         
         return specs
+    
+    def _extract_specs_from_table(self, table) -> List[str]:
+        specs = []
+        try:
+            rows = table.find_all('tr')
+            for row in rows:
+                spec_value = self._extract_spec_from_row(row)
+                if spec_value:
+                    specs.append(spec_value)
+        except Exception as e:
+            logger.debug(f"Error processing table: {e}")
+        return specs
+    
+    def _extract_spec_from_row(self, row) -> Optional[str]:
+        try:
+            cells = row.find_all(['td', 'th'])
+            if len(cells) >= 2:
+                key = cells[0].get_text(strip=True).lower()
+                value = cells[1].get_text(strip=True)
+                
+                if any(keyword in key for keyword in self.spec_keywords):
+                    return value
+        except (AttributeError, IndexError) as e:
+            logger.debug(f"Error processing table row: {e}")
+        return None
     
     def _extract_from_spans(self, soup: BeautifulSoup) -> List[str]:
         specs = []
@@ -426,17 +447,17 @@ class GemilangUnitParser:
             return None
         
         try:
-            area_units = ['M²', 'CM²', 'INCH²', 'MM²']
+            area_units = [UNIT_M2, UNIT_CM2, UNIT_INCH2, UNIT_MM2]
             for unit in found_units:
                 if unit in area_units:
                     return unit
             
-            volume_units = ['M³', 'CM³']
+            volume_units = [UNIT_M3, UNIT_CM3]
             for unit in found_units:
                 if unit in volume_units:
                     return unit
             
-            weight_units = ['KG', 'GRAM', 'TON', 'POUND']
+            weight_units = [UNIT_KG, UNIT_GRAM, UNIT_TON, UNIT_POUND]
             for unit in found_units:
                 if unit in weight_units:
                     return unit

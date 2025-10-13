@@ -63,7 +63,8 @@ class IPriceScraper(ABC):
         pass
     
     def scrape_product_details(self, product_url: str) -> Optional[Product]:
-        pass
+
+        return None
 
 
 class ILocationScraper(ABC):

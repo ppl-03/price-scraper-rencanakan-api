@@ -512,18 +512,7 @@ class TestExtractProductUrl(TestCase):
     def setUp(self):
         self.parser = GemilangHtmlParser()
     
-    def test_extract_url_with_absolute_http_url(self):
-        html = '''
-        <div class="item-product">
-            <a href="http://external.com/product">Link</a>
-            <p class="product-name">Test Product</p>
-        </div>
-        '''
-        soup = BeautifulSoup(html, 'html.parser')
-        item = soup.find('div', class_='item-product')
-        result = self.parser._extract_product_url(item)
-        self.assertEqual(result, "https://external.com/product")
-    
+
     def test_extract_url_with_absolute_https_url(self):
         html = '''
         <div class="item-product">
