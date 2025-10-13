@@ -39,8 +39,10 @@ class TextCleaner:
 class HtmlElementExtractor:
     """Class responsible for extracting specific elements from HTML"""
     
-    def __init__(self, text_cleaner: TextCleaner):
+    def __init__(self, text_cleaner: TextCleaner, config: 'ParserConfiguration'):
         self._text_cleaner = text_cleaner
+        # Read non-address patterns from parser configuration (OCP)
+        self._non_address_patterns = getattr(config, 'non_address_patterns', None) or []
     
     def extract_store_name(self, header) -> Optional[str]:
         """Extract store name from an h2 header element"""
@@ -95,10 +97,8 @@ class HtmlElementExtractor:
     
     def _is_non_address_content(self, text: str) -> bool:
         """Check if text is non-address content like hours, phone, etc."""
-        # Skip content that is clearly not an address
-        # Could be made configurable via ParserConfiguration for OCP
-        NON_ADDRESS_PATTERNS = ['Jadwal Buka', 'Telepon', 'WhatsApp', 'Untuk petunjuk']
-        return any(pattern in text for pattern in NON_ADDRESS_PATTERNS)
+        # Use configured non-address patterns; default list is provided by ParserConfiguration
+        return any(pattern in text for pattern in self._non_address_patterns)
 
 
 class ParserConfiguration:
@@ -107,6 +107,9 @@ class ParserConfiguration:
     def __init__(self):
         self.preferred_parser = 'lxml'
         self.fallback_parser = 'html.parser'
+        # Patterns that clearly indicate a block is NOT an address
+        # Can be extended/configured without modifying HtmlElementExtractor
+        self.non_address_patterns = ['Jadwal Buka', 'Telepon', 'WhatsApp', 'Untuk petunjuk']
     
     def get_parser(self) -> str:
         """Get appropriate HTML parser"""
@@ -129,7 +132,8 @@ class DepoBangunanLocationParser(ILocationParser):
                  element_extractor: HtmlElementExtractor = None,
                  config: ParserConfiguration = None):
         self._text_cleaner = text_cleaner or TextCleaner()
-        self._element_extractor = element_extractor or HtmlElementExtractor(self._text_cleaner)
+        self._config = config or ParserConfiguration()
+        self._element_extractor = element_extractor or HtmlElementExtractor(self._text_cleaner, self._config)
         self._config = config or ParserConfiguration()
     
     def parse_locations(self, html_content: str) -> List[Location]:

@@ -116,7 +116,7 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.mock_http_client.get.return_value = mock_html
         self.mock_location_parser.parse_locations.return_value = []
 
-        result = self.scraper.scrape_locations(timeout=0)
+        self.scraper.scrape_locations(timeout=0)
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
         self.mock_http_client.get.assert_called_once_with(expected_url, timeout=0)
@@ -127,7 +127,7 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.mock_http_client.get.return_value = mock_html
         self.mock_location_parser.parse_locations.return_value = []
 
-        result = self.scraper.scrape_locations(timeout=-1)
+        self.scraper.scrape_locations(timeout=-5)
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
         self.mock_http_client.get.assert_called_once_with(expected_url, timeout=0)
@@ -218,7 +218,7 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.mock_http_client.get.return_value = mock_html
         self.mock_location_parser.parse_locations.return_value = []
 
-        result = self.scraper.scrape_locations(timeout=None)
+        self.scraper.scrape_locations(timeout=None)
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
         self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)

@@ -39,7 +39,7 @@ class TestDepoBangunanLocationParser(TestCase):
         location1 = locations[0]
         self.assertIn("Depo Bangunan", location1.store_name)
         self.assertIsNotNone(location1.address)
-        self.assertTrue(len(location1.address) > 0)
+        self.assertGreater(len(location1.address), 0)
 
     def test_parse_empty_html(self):
         """Test parsing empty HTML returns empty list"""
@@ -278,8 +278,6 @@ class TestDepoBangunanLocationParser(TestCase):
         </html>
         """
         locations = self.parser.parse_locations(html_no_jl)
-        # This might fail depending on implementation
-        # The parser looks for 'Jl.' or 'Alamat:' as indicators
         self.assertIsInstance(locations, list)
 
     def test_multiple_paragraphs_after_header(self):
