@@ -275,9 +275,13 @@ class TestUnitExtractorAdvanced(unittest.TestCase):
         self.assertIsNone(result)
     
     def test_extract_unit_with_empty_string(self):
+        """Test that explicitly passing an empty string returns None."""
         extractor = UnitExtractor()
-        result = extractor.extract_unit("")
+        empty_text = ""  # Explicitly create empty string variable
+        result = extractor.extract_unit(empty_text)
         self.assertIsNone(result)
+        # Verify the input was indeed empty
+        self.assertEqual(len(empty_text), 0)
     
     def test_extract_unit_with_whitespace_only(self):
         extractor = UnitExtractor()
