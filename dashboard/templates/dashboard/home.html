@@ -222,6 +222,11 @@
         if (close !== -1) vendor = raw.slice(open + 1, close).trim();
       }
 
+      // Handle specific Mitra10 "no products" message
+      if (vendor === "Mitra10" && /package returned no products.*fallback also found none/i.test(raw)) {
+        return `<strong>Mitra10</strong> sedang tidak tersedia saat ini. Data dari vendor lain tetap ditampilkan. Silakan coba lagi nanti.`;
+      }
+
       const httpIdx = raw.toLowerCase().indexOf("http error");
       if (httpIdx !== -1) {
         const windowStr = raw.slice(httpIdx, httpIdx + 40);
@@ -240,6 +245,12 @@
       if (/parse|selector|structure|changed/i.test(raw)) {
         return `Struktur halaman <strong>${vendor ?? 'vendor'}</strong> berubah, sehingga data tidak dapat diambil. Akan kami sesuaikan secepatnya.`;
       }
+
+      // Generic "no products" fallback
+      if (/no products|tidak ada produk|found none/i.test(raw)) {
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak dapat memberikan data produk. Data dari vendor lain tetap tersedia.`;
+      }
+
       return raw;
     }
 
