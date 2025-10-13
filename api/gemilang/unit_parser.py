@@ -94,15 +94,8 @@ class AreaPatternStrategy:
     
     def extract_unit(self, text_lower: str) -> Optional[str]:
         try:
-            area_pattern_1 = r'([0-9.,]+)\s*[x×]\s*([0-9.,]+)\s*(cm|mm|m|inch)(?=\s|$|[^a-zA-Z])'
-            match = re.search(area_pattern_1, text_lower, re.IGNORECASE)
-            if match:
-                unit1 = match.group(3).lower()
-                area_map = {'cm': 'CM²', 'mm': 'MM²', 'm': 'M²', 'inch': 'INCH²'}
-                return area_map.get(unit1)
-            
-            area_pattern_2 = r'([0-9.,]+)\s*[x×]\s*([0-9.,]+)\s*(cm|mm|m|inch)'
-            match = re.search(area_pattern_2, text_lower, re.IGNORECASE)
+            area_pattern = r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?[x×]\s?([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?(cm|mm|m|inch)(?:\s|$)'
+            match = re.search(area_pattern, text_lower, re.IGNORECASE)
             if match:
                 unit_key = match.group(3).lower()
                 area_map = {'cm': 'CM²', 'mm': 'MM²', 'm': 'M²', 'inch': 'INCH²'}
@@ -123,15 +116,15 @@ class AdjacentPatternStrategy:
     def extract_unit(self, text_lower: str) -> Optional[str]:
         try:
             adjacent_patterns = [
-                (r'([0-9.,]+)(mm|cm|kg|gr|ml|lt|pcs|set|inch|feet|watt|volt|amp|hp|bar|psi)(?=\s|$|[^a-zA-Z])', 
+                (r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)(mm|cm|kg|gr|ml|lt|pcs|set|inch|feet|watt|volt|amp|hp|bar|psi)(?:\s|$)', 
                  {'mm': 'MM', 'cm': 'CM', 'kg': 'KG', 'gr': 'GRAM', 'ml': 'ML', 'lt': 'LITER', 
                   'pcs': 'PCS', 'set': 'SET', 'inch': 'INCH', 'feet': 'FEET', 'watt': 'WATT', 
                   'volt': 'VOLT', 'amp': 'AMPERE', 'hp': 'HP', 'bar': 'BAR', 'psi': 'PSI'}),
-                (r'([0-9.,]+)\s*diameter\s*(mm|cm|m|inch)', 
+                (r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?diameter\s?(mm|cm|m|inch)', 
                  {'mm': 'MM', 'cm': 'CM', 'm': 'M', 'inch': 'INCH'}),
-                (r'Ø\s*([0-9.,]+)\s*(mm|cm|m|inch)', 
+                (r'Ø\s?([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?(mm|cm|m|inch)', 
                  {'mm': 'MM', 'cm': 'CM', 'm': 'M', 'inch': 'INCH'}),
-                (r'([0-9.,]+)\s*/?(\bhari\b|\bminggu\b|\bulan\b|\btahun\b|\bjam\b|\bhour\b|\bday\b|\bweek\b|\bmonth\b|\byear\b)', 
+                (r'([0-9]{1,10}(?:[.,][0-9]{1,10})?)\s?/?(\bhari\b|\bminggu\b|\bulan\b|\btahun\b|\bjam\b|\bhour\b|\bday\b|\bweek\b|\bmonth\b|\byear\b)', 
                  {'hari': 'HARI', 'minggu': 'MINGGU', 'bulan': 'BULAN', 'tahun': 'TAHUN', 'jam': 'JAM',
                   'hour': 'JAM', 'day': 'HARI', 'week': 'MINGGU', 'month': 'BULAN', 'year': 'TAHUN'})
             ]
@@ -194,13 +187,17 @@ class UnitExtractor:
     
     def _extract_by_priority_patterns(self, text_lower: str) -> Optional[str]:
         try:
+            if len(text_lower) > 5000:
+                logger.warning("Text too long for pattern extraction, truncating to 5000 chars")
+                text_lower = text_lower[:5000]
+            
             priority_order = self._pattern_repository.get_priority_order()
             
             for unit in priority_order:
                 patterns = self._pattern_repository.get_patterns(unit)
                 for pattern in patterns:
                     try:
-                        pattern_with_boundaries = f'(?:^|\\s|\\(|\\[|\\{{|[0-9.,/])({pattern})(?=\\s|\\)|\\]|\\}}|[^a-zA-Z]|$)'
+                        pattern_with_boundaries = f'(?:^|\\s|[\\(\\[{{]|[0-9])({pattern})(?:\\s|[\\)\\]}}]|$)'
                         if re.search(pattern_with_boundaries, text_lower, re.IGNORECASE):
                             return unit
                     except re.error as e:

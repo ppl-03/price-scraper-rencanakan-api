@@ -522,7 +522,7 @@ class TestExtractProductUrl(TestCase):
         soup = BeautifulSoup(html, 'html.parser')
         item = soup.find('div', class_='item-product')
         result = self.parser._extract_product_url(item)
-        self.assertEqual(result, "http://external.com/product")
+        self.assertEqual(result, "https://external.com/product")
     
     def test_extract_url_with_absolute_https_url(self):
         html = '''

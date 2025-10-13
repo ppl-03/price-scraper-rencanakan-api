@@ -189,20 +189,19 @@ class TestAreaPatternStrategy(unittest.TestCase):
         result = strategy.extract_unit("just some text without dimensions")
         self.assertIsNone(result)
     
-    def test_area_pattern_second_pattern_match(self):
+    def test_area_pattern_consolidated_match(self):
         strategy = AreaPatternStrategy()
-        call_count = [0]
-        original_search = re.search
-        
-        def mock_search(pattern, text, flags=0):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return None
-            return original_search(pattern, text, flags)
-        
-        with patch('re.search', side_effect=mock_search):
-            result = strategy.extract_unit("size 10x20mm")
-            self.assertEqual(result, "MM²")
+        # Test that the consolidated pattern matches various formats
+        test_cases = [
+            ("size 10x20mm", "MM²"),
+            ("10 x 20 cm", "CM²"),
+            ("15x25 m", "M²"),
+            ("5x10inch", "INCH²"),
+        ]
+        for text, expected in test_cases:
+            with self.subTest(text=text):
+                result = strategy.extract_unit(text)
+                self.assertEqual(result, expected)
 
 
 class TestAdjacentPatternStrategy(unittest.TestCase):
@@ -339,6 +338,18 @@ class TestUnitExtractorAdvanced(unittest.TestCase):
         result = extractor._extract_by_priority_patterns("test")
         self.assertIsNone(result)
     
+    def test_extract_by_priority_truncates_long_text(self):
+        extractor = UnitExtractor()
+        long_text = "x" * 6000 + " 5 kg"
+        result = extractor._extract_by_priority_patterns(long_text)
+        self.assertIsNone(result)
+    
+    def test_extract_by_priority_handles_text_at_limit(self):
+        extractor = UnitExtractor()
+        text_at_limit = "a" * 4990 + " 5 kg"
+        result = extractor._extract_by_priority_patterns(text_at_limit)
+        self.assertEqual(result, "KG")
+    
     def test_extract_area_units_method(self):
         extractor = UnitExtractor()
         result = extractor._extract_area_units("10 x 20 cm")
@@ -444,6 +455,21 @@ class TestSpecificationFinder(unittest.TestCase):
             specs = finder._extract_from_spans(soup)
             self.assertEqual(specs, [])
     
+    def test_extract_from_spans_success_with_keywords(self):
+        finder = SpecificationFinder()
+        html = '''
+            <span>Product spesifikasi: Test spec</span>
+            <span>Ukuran: 10x20 cm</span>
+            <span>Dimensi dan ukuran produk</span>
+            <span>Random text without keywords</span>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        specs = finder._extract_from_spans(soup)
+        self.assertIn("Product spesifikasi: Test spec", specs)
+        self.assertIn("Ukuran: 10x20 cm", specs)
+        self.assertIn("Dimensi dan ukuran produk", specs)
+        self.assertNotIn("Random text without keywords", specs)
+    
     def test_extract_from_divs_attribute_error(self):
         finder = SpecificationFinder()
         html = '<div class="spec-info">Details</div>'
@@ -462,6 +488,20 @@ class TestSpecificationFinder(unittest.TestCase):
         with patch.object(soup, 'find_all', side_effect=Exception("find_all error")):
             specs = finder._extract_from_divs(soup)
             self.assertEqual(specs, [])
+    
+    def test_extract_from_divs_success_with_keywords(self):
+        finder = SpecificationFinder()
+        html = '''
+            <div class="spec-info">Specification text</div>
+            <div class="product-detail">Detail text</div>
+            <div class="item-description">Description text</div>
+            <div class="other-class">Should be included</div>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        specs = finder._extract_from_divs(soup)
+        self.assertIn("Specification text", specs)
+        self.assertIn("Detail text", specs)
+        self.assertIn("Description text", specs)
 
 
 class TestUnitParserConfiguration(unittest.TestCase):
