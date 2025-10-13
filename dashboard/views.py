@@ -858,42 +858,50 @@ def curated_price_list(request):
 
 @csrf_protect
 def curated_price_create(request):
-    if request.method not in ["GET", "POST"]:
+    if request.method == "GET":
+        form = ItemPriceProvinceForm()
+        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
+    elif request.method == "POST":
+        form = ItemPriceProvinceForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Curated price saved")
+            return redirect("curated_price_list")
+        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
+    else:
         return HttpResponseNotAllowed(["GET", "POST"])
-    
-    form = ItemPriceProvinceForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "Curated price saved")
-        return redirect("curated_price_list")
-    return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
 
 
 @csrf_protect
 def curated_price_update(request, pk):
-    if request.method not in ["GET", "POST"]:
-        return HttpResponseNotAllowed(["GET", "POST"])
-    
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
-    form = ItemPriceProvinceForm(request.POST or None, instance=obj)
-    if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "Curated price updated")
-        return redirect("curated_price_list")
-    return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
+    
+    if request.method == "GET":
+        form = ItemPriceProvinceForm(instance=obj)
+        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
+    elif request.method == "POST":
+        form = ItemPriceProvinceForm(request.POST, instance=obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Curated price updated")
+            return redirect("curated_price_list")
+        return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
+    else:
+        return HttpResponseNotAllowed(["GET", "POST"])
 
 
 @csrf_protect
 def curated_price_delete(request, pk):
-    if request.method not in ["GET", "POST"]:
-        return HttpResponseNotAllowed(["GET", "POST"])
-    
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
-    if request.method == "POST":
+    
+    if request.method == "GET":
+        return render(request, "dashboard/confirm_delete.html", {"title": "Delete Curated Price", "obj": obj})
+    elif request.method == "POST":
         obj.delete()
         messages.success(request, "Curated price deleted")
         return redirect("curated_price_list")
-    return render(request, "dashboard/confirm_delete.html", {"title": "Delete Curated Price", "obj": obj})
+    else:
+        return HttpResponseNotAllowed(["GET", "POST"])
 
 
 @require_POST
