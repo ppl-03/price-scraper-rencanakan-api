@@ -198,8 +198,6 @@ class TestJuraganMaterialViewsDirect(TestCase):
         mock_create.return_value = mock_scraper
         mock_format.return_value = {'success': True}
         
-        request = self.factory.get('/api/juragan_material/scrape/')
-        
         # Verify scraper was called with correct parameters
         mock_scraper.scrape_products.assert_called_once_with(
             keyword='cement',
