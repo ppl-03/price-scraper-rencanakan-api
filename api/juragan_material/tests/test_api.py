@@ -101,9 +101,6 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         mock_scraper = mock_create_scraper.return_value
         mock_scraper.scrape_products.side_effect = RuntimeError("Scraping failed")
         mock_handle_exception.return_value = Mock(status_code=500, content=b'{"error": "Internal error"}')
-        
-        response = self.client.get(self.endpoint_url, {'keyword': 'test'})
-        
         mock_handle_exception.assert_called_once()
         args = mock_handle_exception.call_args[0]
         self.assertIsInstance(args[0], RuntimeError)
@@ -202,7 +199,6 @@ class TestJuraganMaterialViewsDirect(TestCase):
         mock_format.return_value = {'success': True}
         
         request = self.factory.get('/api/juragan_material/scrape/')
-        response = views.scrape_products(request)
         
         # Verify scraper was called with correct parameters
         mock_scraper.scrape_products.assert_called_once_with(
