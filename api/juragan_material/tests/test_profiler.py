@@ -172,9 +172,6 @@ class TestJuraganMaterialProfiler(TestCase):
         mock_scraper2 = Mock()
         mock_create.side_effect = [mock_scraper1, mock_scraper2]
         
-        scraper1 = self.profiler._create_scraper()
-        scraper2 = self.profiler._create_scraper()
-        
         self.assertEqual(mock_create.call_count, 2)
 
 
