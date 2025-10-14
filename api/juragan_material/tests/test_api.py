@@ -44,7 +44,7 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         """Test view with all query parameters."""
         mock_scraper = mock_create_scraper.return_value
         mock_products = [Product(name="Test", price=10000, url="/test")]
-        mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+        mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         
         response = self.client.get(self.endpoint_url, {
@@ -64,7 +64,7 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
     def test_view_with_false_sort_by_price(self, mock_create_scraper):
         """Test view with sort_by_price=false."""
         mock_scraper = mock_create_scraper.return_value
-        mock_result = ScrapingResult(products=[], success=True, url="http://test.com")
+        mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         
         response = self.client.get(self.endpoint_url, {
@@ -83,7 +83,7 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
     def test_view_creates_scraper_on_each_request(self, mock_create_scraper):
         """Test that a new scraper is created for each request."""
         mock_scraper = Mock()
-        mock_result = ScrapingResult(products=[], success=True, url="http://test.com")
+        mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
         
@@ -124,7 +124,7 @@ class TestJuraganMaterialViewsDirect(TestCase):
         # Setup mocks
         mock_validate.return_value = ('test keyword', True, 0, None)
         mock_scraper = Mock()
-        mock_result = ScrapingResult(products=[], success=True, url="http://test.com")
+        mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         mock_create.return_value = mock_scraper
         mock_format.return_value = {'success': True, 'products': []}
@@ -196,7 +196,7 @@ class TestJuraganMaterialViewsDirect(TestCase):
         """Test that parameters are passed correctly to scraper."""
         mock_validate.return_value = ('cement', False, 5, None)
         mock_scraper = Mock()
-        mock_result = ScrapingResult(products=[], success=True, url="http://test.com")
+        mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         mock_create.return_value = mock_scraper
         mock_format.return_value = {'success': True}
