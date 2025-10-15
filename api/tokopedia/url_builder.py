@@ -25,6 +25,25 @@ class TokopediaUrlBuilder(BaseUrlBuilder):
         
         return params
     
+    def _add_price_filters(self, params: dict, min_price: int, max_price: int) -> None:
+        """Add price range filters to params"""
+        if min_price is not None and min_price > 0:
+            params['pmin'] = min_price
+        
+        if max_price is not None and max_price > 0:
+            params['pmax'] = max_price
+    
+    def _add_location_filter(self, params: dict, location_ids: Union[int, List[int]]) -> None:
+        """Add location filter to params - handle both single ID and multiple IDs"""
+        if location_ids is None:
+            return
+        
+        if isinstance(location_ids, list):
+            if location_ids:  # Not empty list
+                params['fcity'] = ','.join(map(str, location_ids))
+        elif isinstance(location_ids, int) and location_ids > 0:
+            params['fcity'] = location_ids
+    
     def build_search_url_with_filters(self, keyword: str, sort_by_price: bool = True, 
                                     page: int = 0, min_price: int = None, max_price: int = None,
                                     location_ids: Union[int, List[int]] = None) -> str:
@@ -48,21 +67,9 @@ class TokopediaUrlBuilder(BaseUrlBuilder):
             
             params = self._build_params(keyword.strip(), sort_by_price, page)
             
-            # Add price filters
-            if min_price is not None and min_price > 0:
-                params['pmin'] = min_price
-            
-            if max_price is not None and max_price > 0:
-                params['pmax'] = max_price
-            
-            # Add location filter - handle both single ID and multiple IDs
-            if location_ids is not None:
-                if isinstance(location_ids, list):
-                    if location_ids:  # Not empty list
-                        # Join multiple IDs with comma
-                        params['fcity'] = ','.join(map(str, location_ids))
-                elif isinstance(location_ids, int) and location_ids > 0:
-                    params['fcity'] = location_ids
+            # Add price and location filters using helper methods
+            self._add_price_filters(params, min_price, max_price)
+            self._add_location_filter(params, location_ids)
             
             # Build the full URL
             full_url = urljoin(self.base_url, self.search_path)

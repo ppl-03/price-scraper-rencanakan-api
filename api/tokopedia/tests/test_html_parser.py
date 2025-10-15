@@ -251,7 +251,7 @@ class TestTokopediaHtmlParser(TestCase):
     def test_parse_products_partial_failures(self):
         """Test parsing when some products fail but others succeed"""
         # Create HTML with one valid and one invalid product
-        html = f'''
+        html = '''
         <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/valid">
             <div class="css-16vw0vn" data-testid="divProductWrapper">
                 <div class="css-11s9vse">

@@ -366,12 +366,7 @@ class TestTokopediaPriceCleaner(TestCase):
     
     def test_clean_price_string_catches_attribute_error_in_processing(self):
         """Test that AttributeError during string processing is caught"""
-        # Create a custom string class that will cause AttributeError during replace
-        class BadStringReplace(str):
-            def replace(self, old, new):
-                raise AttributeError("Replace not available")
-        
-        # We need to pass the isinstance check, so we'll mock int() instead
+        # Mock int() to raise AttributeError
         with patch('builtins.int', side_effect=AttributeError("Attribute error")):
             result = self.price_cleaner.clean_price_string("Rp50.000")
             self.assertIsNone(result)
