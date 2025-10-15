@@ -1,0 +1,75 @@
+from api.core import BaseUrlBuilder
+from api.config import config
+from urllib.parse import urlencode, urljoin
+from typing import List, Union
+
+
+class TokopediaUrlBuilder(BaseUrlBuilder):
+    
+    def __init__(self, base_url: str = None, search_path: str = None):
+        super().__init__(
+            base_url or "https://www.tokopedia.com",
+            search_path or "/p/pertukangan/material-bangunan"
+        )
+    
+    def _build_params(self, keyword: str, sort_by_price: bool, page: int) -> dict:
+        params = {
+            'q': keyword
+        }
+        
+        if sort_by_price:
+            params['ob'] = '3'  # Sort by lowest price first
+        
+        # Add page parameter (Tokopedia uses 1-based pagination)
+        if page > 0:
+            params['page'] = page + 1
+        
+        return params
+    
+    def build_search_url_with_filters(self, keyword: str, sort_by_price: bool = True, 
+                                    page: int = 0, min_price: int = None, max_price: int = None,
+                                    location_ids: Union[int, List[int]] = None) -> str:
+        """
+        Build URL with additional filters for price range and location
+        
+        Args:
+            keyword: Search term
+            sort_by_price: Whether to sort by lowest price
+            page: Page number (0-based)
+            min_price: Minimum price filter
+            max_price: Maximum price filter  
+            location_ids: City/location ID filter (single int or list of ints)
+        """
+        try:
+            if not keyword or not keyword.strip():
+                raise ValueError("Keyword cannot be empty")
+            
+            if page < 0:
+                raise ValueError("Page number cannot be negative")
+            
+            params = self._build_params(keyword.strip(), sort_by_price, page)
+            
+            # Add price filters
+            if min_price is not None and min_price > 0:
+                params['pmin'] = min_price
+            
+            if max_price is not None and max_price > 0:
+                params['pmax'] = max_price
+            
+            # Add location filter - handle both single ID and multiple IDs
+            if location_ids is not None:
+                if isinstance(location_ids, list):
+                    if location_ids:  # Not empty list
+                        # Join multiple IDs with comma
+                        params['fcity'] = ','.join(map(str, location_ids))
+                elif isinstance(location_ids, int) and location_ids > 0:
+                    params['fcity'] = location_ids
+            
+            # Build the full URL
+            full_url = urljoin(self.base_url, self.search_path)
+            url = f"{full_url}?{urlencode(params)}"
+            
+            return url
+            
+        except Exception as e:
+            raise ValueError(f"Failed to build URL: {str(e)}")
