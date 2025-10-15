@@ -1,5 +1,4 @@
 from api.core import BaseUrlBuilder
-from api.config import config
 from urllib.parse import urlencode, urljoin
 from typing import List, Union
 

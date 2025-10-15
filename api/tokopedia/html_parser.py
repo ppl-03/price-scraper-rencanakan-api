@@ -65,7 +65,14 @@ class TokopediaHtmlParser(IHtmlParser):
         if not name:
             return None
         
-        url = self._extract_product_url(item)
+        # Generate URL from product name slug when name exists
+        # But check if the name looks like a price (starts with 'Rp' or 'IDR')
+        # If so, use 'unknown' as fallback since it's not a valid product name
+        if name.startswith(('Rp', 'IDR', 'rp', 'idr')):
+            url = "https://www.tokopedia.com/product/unknown"
+        else:
+            slug = self._generate_slug(name)
+            url = f"https://www.tokopedia.com/product/{slug}"
         
         price = self._extract_product_price(item)
         if not self.price_cleaner.validate_price(price):

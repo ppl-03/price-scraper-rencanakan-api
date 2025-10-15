@@ -1,6 +1,6 @@
 from django.test import TestCase
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from api.tokopedia.price_cleaner import TokopediaPriceCleaner
 
 
