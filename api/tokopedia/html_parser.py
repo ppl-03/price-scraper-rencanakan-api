@@ -81,27 +81,27 @@ class TokopediaHtmlParser(IHtmlParser):
         return self._try_fallback_name_selectors(item)
     
     def _try_primary_name_selector(self, item) -> Optional[str]:
-        element = item.select_one(self._name_selector)
-        if element:
-            name = element.get_text(strip=True)
-            if name:
-                return name
-        return None
+        return self._extract_text_from_selector(item, self._name_selector)
     
     def _try_fallback_name_selectors(self, item) -> Optional[str]:
-        name = self._try_text_selector(item, 'div[data-testid="divProductWrapper"] span')
+        name = self._extract_text_from_selector(item, 'div[data-testid="divProductWrapper"] span')
         if name:
             return name
         
         return self._try_image_alt_selector(item)
     
-    def _try_text_selector(self, item, selector: str) -> Optional[str]:
+    def _extract_text_from_selector(self, item, selector: str) -> Optional[str]:
+        """Extract and return text from an element matching the selector."""
         element = item.select_one(selector)
         if element:
-            name = element.get_text(strip=True)
-            if name:
-                return name
+            text = element.get_text(strip=True)
+            if text:
+                return text
         return None
+    
+    def _try_text_selector(self, item, selector: str) -> Optional[str]:
+        """Deprecated: Use _extract_text_from_selector instead."""
+        return self._extract_text_from_selector(item, selector)
     
     def _try_image_alt_selector(self, item) -> Optional[str]:
         img = item.find('img')
@@ -136,24 +136,28 @@ class TokopediaHtmlParser(IHtmlParser):
         return slug
     
     def _extract_product_price(self, item) -> int:
+        # Try primary price selector
         price_element = item.select_one(self._price_selector)
         if price_element:
-            price_text = price_element.get_text(strip=True)
-            try:
-                price = self.price_cleaner.clean_price(price_text)
-                if self.price_cleaner.validate_price(price):
-                    return price
-            except (TypeError, ValueError):
-                pass
+            price = self._try_clean_price(price_element.get_text(strip=True))
+            if price:
+                return price
         
-        # Fallback: search for any text containing "Rp"
+        # Fallback: search for any text containing "Rp" or "IDR"
         price_texts = item.find_all(string=lambda text: text and ('Rp' in text or 'IDR' in text))
         for price_text in price_texts:
-            try:
-                price = self.price_cleaner.clean_price(price_text.strip())
-                if self.price_cleaner.validate_price(price):
-                    return price
-            except (TypeError, ValueError):
-                continue
+            price = self._try_clean_price(price_text.strip())
+            if price:
+                return price
         
         return 0
+    
+    def _try_clean_price(self, price_text: str) -> Optional[int]:
+        """Try to clean and validate a price text, return None if invalid."""
+        try:
+            price = self.price_cleaner.clean_price(price_text)
+            if self.price_cleaner.validate_price(price):
+                return price
+        except (TypeError, ValueError):
+            pass
+        return None
