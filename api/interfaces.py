@@ -8,6 +8,7 @@ class Product:
     name: str
     price: int
     url: str
+    unit: Optional[str] = None
 
 
 @dataclass

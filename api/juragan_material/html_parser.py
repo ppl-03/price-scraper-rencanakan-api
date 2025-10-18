@@ -7,7 +7,7 @@ from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import JuraganMaterialPriceCleaner
 
 logger = logging.getLogger(__name__)
-
+import requests
 
 class RegexCache:
     """Cache for compiled regex patterns to avoid recompilation."""
@@ -69,10 +69,15 @@ class JuraganMaterialHtmlParser(IHtmlParser):
         url = self._extract_product_url(item)
         
         price = self._extract_product_price(item)
+        
+        unit = ""
+        if url:
+            unit = self._extract_product_unit(url)
+        
         if not self.price_cleaner.is_valid_price(price):
             return None
         
-        return Product(name=name, price=price, url=url)
+        return Product(name=name, price=price, url=url, unit=unit)
     
     def _extract_product_name(self, item) -> Optional[str]:
         """Extract product name from item."""
@@ -165,6 +170,36 @@ class JuraganMaterialHtmlParser(IHtmlParser):
                 continue
         
         return 0
+    
+    def _extract_product_unit(self, url: str) -> str:
+        """Fetch the product detail page and extract the unit."""
+        try:
+            # Handle empty or None URLs
+            if not url:
+                return ''
+            
+            # kalau url relatif, tambahkan domain utama
+            if url.startswith('/'):
+                url = f"https://juraganmaterial.id{url}"
+            
+            response = requests.get(url, timeout=10)
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch product detail page: {url}")
+                return ''
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # ambil div sesuai path yang kamu sebutkan
+            # pastikan selector ini cocok dengan struktur HTML aslinya
+            unit_div = soup.select_one('html > body > div:nth-of-type(1) > div > main > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1) > p:nth-of-type(2)')
+            if unit_div:
+                return unit_div.get_text(strip=True)
+            
+            return ''
+        
+        except Exception as e:
+            logger.error(f"Error fetching unit for {url}: {e}")
+            return ''
     
     def _has_lxml(self) -> bool:
         """Check if lxml parser is available."""
