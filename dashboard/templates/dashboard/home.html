@@ -55,6 +55,101 @@
     .controls { gap:8px; }
     .controls .form-control, .controls .form-select { background:#fff; }
 
+    /* Location badge styling */
+    .location-badge { 
+      transition: all 0.2s ease;
+      border: 1px solid #dee2e6 !important;
+    }
+    .location-badge:hover {
+      background: #e3f2fd !important;
+      border-color: #2196f3 !important;
+      transform: translateY(-1px);
+    }
+
+    /* Better optgroup styling */
+    optgroup {
+      font-weight: 600;
+      color: #495057;
+      background: #f8f9fa;
+    }
+    
+    /* Custom dropdown styling */
+    .dropdown-header {
+      color: #495057;
+      font-weight: 600;
+      font-size: 0.875rem;
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      margin-bottom: 0.25rem;
+    }
+    
+    /* Vendor collapsible header styling */
+    .vendor-toggle {
+      background: #f8f9fa;
+      border: none;
+      padding: 0.5rem 1rem;
+      width: 100%;
+      text-align: left;
+      font-weight: 600;
+      color: #495057;
+      border-bottom: 1px solid #dee2e6;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    
+    .vendor-toggle:hover {
+      background: #e9ecef;
+    }
+    
+    .vendor-toggle .toggle-icon {
+      float: right;
+      transition: transform 0.2s ease;
+    }
+    
+    .vendor-toggle.collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+    
+    .vendor-locations {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .dropdown-item.ps-4 {
+      padding-left: 2rem !important;
+      font-size: 0.9rem;
+      border: none;
+      background: #fff;
+    }
+    
+    .dropdown-item.ps-4:hover {
+      background-color: #f8f9fc;
+      color: #495057;
+    }
+    
+    .dropdown-menu {
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 0;
+    }
+    
+    /* Improved table row hover */
+    .table-hover tbody tr:hover {
+      background-color: #f8f9fc;
+    }
+
+    /* Empty state styling */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #6c757d;
+    }
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
     /* Pagination circles */
     .pagination { justify-content:center; margin-top:20px; gap:8px; }
     .page-link {
@@ -110,37 +205,60 @@
     </form>
 
     <!-- Client-side DataTable-like controls -->
-    <div class="d-flex flex-wrap controls mb-3">
-      <div class="input-group" style="max-width:320px;">
-        <span class="input-group-text">Filter hasil</span>
-        <input id="filterInput" type="text" class="form-control" placeholder="ketik untuk memfilter…">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h6 class="card-title mb-3">
+          Filter & Pencarian
+        </h6>
+        
+        <!-- Row 1: Text filter and Vendor -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label for="filterInput" class="form-label small text-muted">Filter Hasil</label>
+            <input id="filterInput" type="text" class="form-control" placeholder="Ketik untuk memfilter hasil...">
+          </div>
+          <div class="col-md-6">
+            <label for="vendorSelect" class="form-label small text-muted">Vendor</label>
+            <select id="vendorSelect" class="form-select">
+              <option value="">Semua vendor</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Row 2: Location and Price range -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label for="locationSelect" class="form-label small text-muted">Lokasi</label>
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="locationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <span id="selectedLocationText">Semua lokasi</span>
+              </button>
+              <ul class="dropdown-menu w-100" aria-labelledby="locationDropdown" id="locationDropdownMenu">
+                <li><a class="dropdown-item" href="#" data-value="">Semua lokasi</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <!-- Dynamic content will be added here -->
+              </ul>
+            </div>
+            <!-- Hidden input to store the actual selected value -->
+            <input type="hidden" id="locationSelect" value="">
+          </div>
+          <div class="col-md-4">
+            <label for="minPrice" class="form-label small text-muted">Harga Minimum</label>
+            <input id="minPrice" type="number" class="form-control" placeholder="0">
+          </div>
+          <div class="col-md-4">
+            <label for="maxPrice" class="form-label small text-muted">Harga Maksimum</label>
+            <input id="maxPrice" type="number" class="form-control" placeholder="Tidak ada batas">
+          </div>
+        </div>
+        
+        <!-- Clear button -->
+        <div class="d-flex justify-content-end">
+          <button id="clearFilters" class="btn btn-outline-secondary btn-sm">
+            Hapus Semua Filter
+          </button>
+        </div>
       </div>
-
-      <div class="input-group" style="max-width:260px;">
-        <span class="input-group-text">Vendor</span>
-        <select id="vendorSelect" class="form-select">
-          <option value="">Semua vendor</option>
-        </select>
-      </div>
-
-      <div class="input-group" style="max-width:260px;">
-        <span class="input-group-text">Lokasi</span>
-        <select id="locationSelect" class="form-select">
-          <option value="">Semua lokasi</option>
-        </select>
-      </div>
-
-      <div class="input-group" style="max-width:240px;">
-        <span class="input-group-text">Harga min</span>
-        <input id="minPrice" type="number" class="form-control" placeholder="0">
-      </div>
-
-      <div class="input-group" style="max-width:240px;">
-        <span class="input-group-text">Harga max</span>
-        <input id="maxPrice" type="number" class="form-control" placeholder="∞">
-      </div>
-
-      <button id="clearFilters" class="btn btn-outline-secondary btn-pill">Reset</button>
     </div>
 
     <!-- Results card -->
@@ -162,11 +280,11 @@
           <thead>
             <tr>
               <th style="width:5%">No.</th>
-              <th class="th-sort" data-key="item">Nama Produk</th>
-              <th class="th-sort" data-key="price" style="width:18%">Harga</th>
-              <th style="width:10%">Unit</th>
-              <th class="th-sort" data-key="vendor" style="width:18%">Vendor</th>
-              <th class="th-sort" data-key="location" style="width:24%">Lokasi</th>
+              <th class="th-sort" data-key="item" style="width:35%">Nama Produk</th>
+              <th class="th-sort" data-key="price" style="width:15%">Harga</th>
+              <th style="width:8%">Unit</th>
+              <th class="th-sort" data-key="vendor" style="width:15%">Vendor</th>
+              <th class="th-sort" data-key="location" style="width:22%">Lokasi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -179,22 +297,33 @@
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
                 <td class="c-location">
                   {% if r.location %}
-                    {{ r.location }}
-                    {% if r.location_count > 1 %}
-                      <button type="button" class="btn btn-sm btn-outline-primary ms-2" 
+                    <div class="d-flex align-items-center">
+                      <span class="me-2">{{ r.location }}</span>
+                      {% if r.location_count > 1 %}
+                        <span class="badge bg-light text-dark border location-badge" 
+                              role="button"
                               data-vendor="{{ r.source }}"
                               data-locations="{{ r.all_locations|join:'|' }}"
-                              style="font-size: 0.75rem; padding: 2px 8px;">
-                        +{{ r.location_count|add:"-1" }} more
-                      </button>
-                    {% endif %}
+                              data-bs-toggle="tooltip"
+                              title="Click to see all {{ r.location_count }} locations"
+                              style="font-size: 0.7rem; cursor: pointer;">
+                          +{{ r.location_count|add:"-1" }}
+                        </span>
+                      {% endif %}
+                    </div>
                   {% else %}
                     <span class="text-muted">—</span>
                   {% endif %}
                 </td>
               </tr>
             {% empty %}
-              <tr><td colspan="5" class="text-center text-muted py-4">Tidak ada data</td></tr>
+              <tr>
+                <td colspan="6" class="empty-state">
+                  <div class="empty-state-icon">Tidak ada data</div>
+                  <h5>Belum ada data harga</h5>
+                  <p class="mb-0">Gunakan form pencarian di atas untuk mulai mencari harga produk</p>
+                </td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -330,17 +459,17 @@
       const priceNum = toNumber(priceText);
       const locationCell = tr.querySelector(".c-location");
       
-      // Extract modal data from button if present
-      const modalBtn = locationCell?.querySelector("button[data-locations]");
-      const allLocations = modalBtn ? modalBtn.dataset.locations?.split("|") || [] : [];
+      // Extract modal data from span if present (updated from button)
+      const modalSpan = locationCell?.querySelector("span[data-locations]");
+      const allLocations = modalSpan ? modalSpan.dataset.locations?.split("|") || [] : [];
       
-      // Extract location text (excluding button text)
+      // Extract location text (excluding span text)
       let location = "—";
       if (locationCell) {
-        // Clone the cell and remove the button to get clean text
+        // Clone the cell and remove the span to get clean text
         const tempCell = locationCell.cloneNode(true);
-        const tempBtn = tempCell.querySelector("button");
-        if (tempBtn) tempBtn.remove();
+        const tempSpan = tempCell.querySelector("span[data-locations]");
+        if (tempSpan) tempSpan.remove();
         location = tempCell.textContent?.trim() || "—";
       }
       
@@ -356,29 +485,123 @@
       vendorSelect.appendChild(opt);
     }
 
-    // Populate location dropdown (for…of)
+    // Populate location dropdown with vendor grouping and submenus
     const locationSelect = document.getElementById("locationSelect");
-    const allLocationsList = [];
+    const locationDropdownMenu = document.getElementById("locationDropdownMenu");
+    const selectedLocationText = document.getElementById("selectedLocationText");
+    const locationsByVendor = {};
     
-    // Collect all locations from both single locations and allLocations arrays
+    // Group locations by vendor
     for (const d of data) {
+      if (!locationsByVendor[d.vendor]) {
+        locationsByVendor[d.vendor] = new Set();
+      }
+      
       if (d.location && d.location !== "—") {
-        allLocationsList.push(d.location);
+        locationsByVendor[d.vendor].add(d.location);
       }
       if (d.allLocations && d.allLocations.length > 0) {
         for (const loc of d.allLocations) {
           if (loc && loc !== "—") {
-            allLocationsList.push(loc);
+            locationsByVendor[d.vendor].add(loc);
           }
         }
       }
     }
     
-    const uniqueLocations = [...new Set(allLocationsList)].sort();
-    for (const l of uniqueLocations) {
-      const opt = document.createElement("option");
-      opt.value = l; opt.textContent = l;
-      locationSelect.appendChild(opt);
+    // Build the dropdown menu with collapsible vendor sections
+    const sortedVendors = Object.keys(locationsByVendor).sort();
+    for (const vendor of sortedVendors) {
+      if (vendor === "—") continue; // Skip unknown vendors
+      
+      const locations = [...locationsByVendor[vendor]].sort();
+      if (locations.length === 0) continue;
+      
+      // Create vendor collapsible header
+      const vendorToggle = document.createElement("li");
+      vendorToggle.innerHTML = `
+        <button class="vendor-toggle collapsed" type="button" data-vendor="${vendor}">
+          ${vendor}
+          <span class="toggle-icon">▼</span>
+        </button>
+      `;
+      locationDropdownMenu.appendChild(vendorToggle);
+      
+      // Create collapsible container for locations
+      const locationsContainer = document.createElement("li");
+      locationsContainer.className = "vendor-locations";
+      locationsContainer.style.display = "none";
+      locationsContainer.dataset.vendor = vendor;
+      
+      // Add locations to the container
+      let locationsHtml = '';
+      for (const location of locations) {
+        locationsHtml += `<a class="dropdown-item ps-4" href="#" data-value="${location}">${location}</a>`;
+      }
+      locationsContainer.innerHTML = locationsHtml;
+      
+      locationDropdownMenu.appendChild(locationsContainer);
+    }
+    
+    // Add click handlers for vendor toggles (collapsible functionality)
+    const vendorToggles = locationDropdownMenu.querySelectorAll('.vendor-toggle');
+    for (const toggle of vendorToggles) {
+      toggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const vendor = this.dataset.vendor;
+        const locationsContainer = locationDropdownMenu.querySelector(`li.vendor-locations[data-vendor="${vendor}"]`);
+        const icon = this.querySelector('.toggle-icon');
+        
+        // Toggle visibility
+        if (locationsContainer.style.display === "none") {
+          // Collapse all other vendors first
+          const allContainers = locationDropdownMenu.querySelectorAll('.vendor-locations');
+          const allToggles = locationDropdownMenu.querySelectorAll('.vendor-toggle');
+          
+          for (const container of allContainers) {
+            container.style.display = "none";
+          }
+          for (const toggle of allToggles) {
+            toggle.classList.add('collapsed');
+          }
+          
+          // Expand this vendor
+          locationsContainer.style.display = "block";
+          this.classList.remove('collapsed');
+        } else {
+          // Collapse this vendor
+          locationsContainer.style.display = "none";
+          this.classList.add('collapsed');
+        }
+      });
+    }
+    
+    // Add click handlers for dropdown items (location selection)
+    const dropdownItems = locationDropdownMenu.querySelectorAll('a.dropdown-item');
+    for (const item of dropdownItems) {
+      item.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const value = this.dataset.value || "";
+        const text = this.textContent;
+        
+        // Update hidden input and display text
+        locationSelect.value = value;
+        selectedLocationText.textContent = text;
+        
+        // Close the dropdown
+        const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('locationDropdown'));
+        if (dropdown) {
+          dropdown.hide();
+        }
+        
+        // Trigger filter update
+        currentPage = 1;
+        render();
+      });
     }
 
     // ---------- Filtering + Sorting + Pagination ----------
@@ -442,18 +665,22 @@
       for (const d of slice) {
         const tr = document.createElement("tr");
         
-        // Build location cell content
-        let locationHtml = d.location;
+        // Build location cell content with improved design
+        let locationHtml = `<div class="d-flex align-items-center">
+                             <span class="me-2">${d.location}</span>`;
         if (d.allLocations && d.allLocations.length > 1) {
           const moreCount = d.allLocations.length - 1;
           const locationsStr = d.allLocations.join('|');
-          locationHtml += ` <button type="button" class="btn btn-sm btn-outline-primary ms-2" 
+          locationHtml += ` <span class="badge bg-light text-dark border location-badge" 
+                             role="button"
                              data-vendor="${d.vendor}"
                              data-locations="${locationsStr}"
-                             style="font-size: 0.75rem; padding: 2px 8px;">
-                             +${moreCount} more
-                           </button>`;
+                             title="Click to see all ${d.allLocations.length} locations"
+                             style="font-size: 0.7rem; cursor: pointer;">
+                             +${moreCount}
+                           </span>`;
         }
+        locationHtml += `</div>`;
         
         tr.innerHTML = `
           <td>${start + idx + 1}</td>
@@ -464,10 +691,10 @@
           <td class="c-location">${locationHtml}</td>`;
         tbody.appendChild(tr);
         
-        // Add click event listener to the location modal button if it exists
-        const modalBtn = tr.querySelector('button[data-locations]');
-        if (modalBtn) {
-          modalBtn.addEventListener('click', function(e) {
+        // Add click event listener to the location badge if it exists
+        const modalBadge = tr.querySelector('span[data-locations]');
+        if (modalBadge) {
+          modalBadge.addEventListener('click', function(e) {
             e.preventDefault(); // Prevent any default behavior
             e.stopPropagation(); // Stop event bubbling
             
@@ -521,8 +748,8 @@
       });
     }
 
-    // Filters events (for…of)
-    const filterControls = [filterInput, vendorSelect, locationSelect, minPrice, maxPrice];
+    // Filters events (for…of) - excluding locationSelect since it's handled separately
+    const filterControls = [filterInput, vendorSelect, minPrice, maxPrice];
     for (const el of filterControls) {
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
@@ -531,17 +758,22 @@
     // Clear
     clearBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      filterInput.value = ""; vendorSelect.value = ""; locationSelect.value = "";
-      minPrice.value = ""; maxPrice.value = "";
-      currentPage = 1; render();
+      filterInput.value = ""; 
+      vendorSelect.value = ""; 
+      locationSelect.value = "";
+      selectedLocationText.textContent = "Semua lokasi";
+      minPrice.value = ""; 
+      maxPrice.value = "";
+      currentPage = 1; 
+      render();
     });
 
-    // Add click listeners to initially loaded buttons
-    function addLocationButtonListeners() {
-      const initialButtons = document.querySelectorAll('button[data-locations]');
-      for (const button of initialButtons) {
-        if (!button.dataset.listenerAdded) {
-          button.addEventListener('click', function(e) {
+    // Add click listeners to initially loaded spans (updated from buttons)
+    function addLocationSpanListeners() {
+      const initialSpans = document.querySelectorAll('span[data-locations]');
+      for (const span of initialSpans) {
+        if (!span.dataset.listenerAdded) {
+          span.addEventListener('click', function(e) {
             e.preventDefault(); // Prevent any default behavior
             e.stopPropagation(); // Stop event bubbling
             
@@ -549,13 +781,13 @@
             const locationsStr = this.dataset.locations;
             const locations = locationsStr ? locationsStr.split('|') : [];
             
-            console.log('DEBUG: Initial button clicked');
+            console.log('DEBUG: Initial span clicked');
             console.log('DEBUG: Vendor:', vendor);
             console.log('DEBUG: Locations:', locations);
             
             showLocationModal(vendor, locations);
           });
-          button.dataset.listenerAdded = 'true';
+          span.dataset.listenerAdded = 'true';
         }
       }
     }
@@ -563,8 +795,8 @@
     // Initial render
     render();
     
-    // Add listeners to any pre-existing buttons
-    addLocationButtonListeners();
+    // Add listeners to any pre-existing spans (updated from buttons)
+    addLocationSpanListeners();
     
     // Global cleanup function to reset modal state
     function cleanupModalState() {
