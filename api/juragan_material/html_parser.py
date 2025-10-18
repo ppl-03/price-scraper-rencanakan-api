@@ -10,6 +10,10 @@ from .price_cleaner import JuraganMaterialPriceCleaner
 logger = logging.getLogger(__name__)
 import requests
 
+# Parser engine constants to avoid duplicating string literals
+HTML_PARSER = 'html.parser'
+LXML_PARSER = 'lxml'
+
 class RegexCache:
     """Cache for compiled regex patterns to avoid recompilation."""
     SLUG_PATTERN = re.compile(r'[^a-zA-Z0-9\-]')
@@ -39,7 +43,7 @@ class JuraganMaterialHtmlParser(IHtmlParser):
             if not html_content:
                 return []
             
-            parser = 'lxml' if self._has_lxml() else 'html.parser'
+            parser = LXML_PARSER if self._has_lxml() else HTML_PARSER
             soup = BeautifulSoup(html_content, parser)
             products = []
             
@@ -192,7 +196,7 @@ class JuraganMaterialHtmlParser(IHtmlParser):
                 logger.warning(f"Failed to fetch product detail page: {url}")
                 return ''
             
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, HTML_PARSER)
             
             # ambil div sesuai path yang kamu sebutkan
             # pastikan selector ini cocok dengan struktur HTML aslinya
@@ -217,7 +221,7 @@ class JuraganMaterialHtmlParser(IHtmlParser):
                 logger.warning(f"Failed to fetch product detail page: {url}")
                 return ''
             
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, HTML_PARSER)
             
             
             # pastikan selector ini cocok dengan struktur HTML aslinya
