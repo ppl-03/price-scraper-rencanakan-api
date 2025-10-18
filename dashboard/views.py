@@ -186,6 +186,30 @@ def _extract_juragan_product_unit(url: str) -> str:
         return ""
 
 
+def _extract_juragan_product_location(url: str) -> str:
+    """Extract product location from Juragan Material product detail page using groupmate's method."""
+    try:
+        if not url:
+            return ""
+        
+        # Handle relative URLs
+        if url.startswith('/'):
+            url = f"https://juraganmaterial.id{url}"
+        
+        # Fetch product detail page
+        html = _human_get(url)
+        soup = BeautifulSoup(html, HTML_PARSER)
+        
+        # Extract location using the same CSS selector as the groupmate's parser
+        location_element = soup.select_one('#footer-address-link > span:nth-child(2)')
+        if location_element:
+            return location_element.get_text(strip=True)
+        
+        return ""
+    except Exception:
+        return ""
+
+
 def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
     try:
         url = _build_url_defensively(JuraganMaterialUrlBuilder(), keyword, sort_by_price, page)
@@ -208,10 +232,11 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             if price <= 0:
                 continue
 
-            # Extract unit for Juragan Material
+            # Extract unit and location for Juragan Material
             unit = _extract_juragan_product_unit(href) if href else ""
+            location = _extract_juragan_product_location(href) if href else ""
 
-            out.append({"item": name, "value": price, "unit": unit, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
+            out.append({"item": name, "value": price, "unit": unit, "location": location, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
         
         return out, url, len(html)
     except Exception:
@@ -1022,15 +1047,23 @@ def _handle_successful_scrape(request, res, label: str, url: str, html_len: int)
     """Handle successful scrape results."""
     rows = []
     for p in res.products:
-        # Include unit when available (Gemilang parser provides Product.unit)
+        # Include unit and location when available
         unit = getattr(p, "unit", None)
-        rows.append({
+        location = getattr(p, "location", None)
+        
+        product_data = {
             "item": p.name,
             "value": p.price,
             "unit": unit,
             "source": label,
             "url": getattr(p, "url", "")
-        })
+        }
+        
+        # Add location if available
+        if location:
+            product_data["location"] = location
+            
+        rows.append(product_data)
     messages.info(request, f"[{label}] URL: {url} | HTML: {html_len} bytes | parsed={len(rows)}")
     return rows
 
@@ -1160,6 +1193,13 @@ def _collect_vendor_locations(request, prices: list[dict]) -> dict:
         if depo_locations:
             locations_data[DEPO_BANGUNAN_SOURCE] = depo_locations
 
+    # Juragan Material locations
+    juragan_has_prices = any(p.get("source") == JURAGAN_MATERIAL_SOURCE for p in prices)
+    if juragan_has_prices:
+        juragan_locations = _get_juragan_material_locations(prices)
+        if juragan_locations:
+            locations_data[JURAGAN_MATERIAL_SOURCE] = juragan_locations
+
     # Tokopedia locations
     tokopedia_has_prices = any(p.get("source") == TOKOPEDIA_SOURCE for p in prices)
     if tokopedia_has_prices:
@@ -1182,6 +1222,46 @@ def _get_tokopedia_locations() -> list[dict]:
             "source": TOKOPEDIA_SOURCE
         })
     return tokopedia_locations
+
+
+def _get_juragan_material_locations(prices: list[dict]) -> list[dict]:
+    """Get Juragan Material location data from product prices."""
+    juragan_locations = []
+    unique_locations = set()
+    
+    # Extract unique locations from Juragan Material products
+    for price in prices:
+        if price.get("source") == JURAGAN_MATERIAL_SOURCE:
+            location = price.get("location")
+            if location and location not in unique_locations:
+                unique_locations.add(location)
+                juragan_locations.append({
+                    "store_name": f"Juragan Material - {location}",
+                    "address": location,
+                    "source": JURAGAN_MATERIAL_SOURCE
+                })
+    
+    # If no locations found in products, provide fallback locations
+    if not juragan_locations:
+        juragan_locations = [
+            {
+                "store_name": "Juragan Material Jakarta Selatan",
+                "address": "Jakarta Selatan, DKI Jakarta",
+                "source": JURAGAN_MATERIAL_SOURCE
+            },
+            {
+                "store_name": "Juragan Material Bandung",
+                "address": "Bandung, Jawa Barat",
+                "source": JURAGAN_MATERIAL_SOURCE
+            },
+            {
+                "store_name": "Juragan Material Surabaya",
+                "address": "Surabaya, Jawa Timur",
+                "source": JURAGAN_MATERIAL_SOURCE
+            }
+        ]
+    
+    return juragan_locations
 
 
 def _add_location_info_to_prices(prices: list[dict], locations_data: dict) -> list[dict]:
