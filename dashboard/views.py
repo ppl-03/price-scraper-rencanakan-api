@@ -915,36 +915,106 @@ def _extract_tokopedia_product_link(card) -> str:
 
 def _tokopedia_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
     """
-    Tokopedia fallback using simple HTML parsing when the main scraper fails.
+    Enhanced Tokopedia fallback with better handling for JavaScript-heavy sites:
+    1) Try simple GET request first
+    2) If no products found, try Playwright with JavaScript rendering
+    3) Try alternative URL patterns
     """
     try:
-        url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price, page)
-        html = _human_get(url)
-        soup = BeautifulSoup(html, HTML_PARSER)
+        # First attempt: Simple URL
+        prods, url, html_len = _try_simple_tokopedia_url(keyword, sort_by_price, page)
+        if prods:
+            return prods, url, html_len
 
-        # Find product cards
-        cards = soup.select('a[data-testid="lnkProductContainer"]') or \
-                soup.select('div[data-testid="divProductWrapper"]') or \
-                soup.select('div.css-bk6tzz') or \
-                soup.select('div[data-unify="Card"]')
+        # Second attempt: Try with Playwright if available
+        prods, url, html_len = _try_playwright_tokopedia(keyword, url)
+        if prods:
+            return prods, url, html_len
 
-        out = []
-        for card in cards:
-            name = _extract_tokopedia_product_name(card)
-            if not name:
-                continue
+        # Third attempt: Try alternative URLs
+        prods, url, html_len = _try_alternative_tokopedia_urls(keyword)
+        if prods:
+            return prods, url, html_len
 
-            price = _extract_tokopedia_product_price(card)
-            if price <= 0:
-                continue
-
-            href = _extract_tokopedia_product_link(card)
-            
-            out.append({"item": name, "value": price, "source": TOKOPEDIA_SOURCE, "url": href})
-        
-        return out, url, len(html)
+        # Return the best attempt we made
+        return [], url, html_len
     except Exception:
         return [], "", 0
+
+
+def _try_simple_tokopedia_url(keyword: str, sort_by_price: bool = True, page: int = 0):
+    """Try simple Tokopedia URL without complex parameters."""
+    url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price, page)
+    html = _human_get(url)
+    prods = _parse_tokopedia_html(html, url)
+    return prods, url, len(html)
+
+
+def _try_playwright_tokopedia(keyword: str, fallback_url: str):
+    """Try Tokopedia with Playwright for JavaScript rendering."""
+    if not HAS_PLAYWRIGHT:
+        return [], fallback_url, 0
+    
+    url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price=True, page=0)
+    html_js = _fetch_with_playwright(url, wait_selector='div[data-testid="divProductWrapper"]', timeout_ms=15000)
+    
+    if html_js and len(html_js) > len(_human_get(url)):  # Got more content with JS
+        prods_js = _parse_tokopedia_html(html_js, url)
+        if prods_js:
+            return prods_js, url, len(html_js)
+    
+    return [], fallback_url, 0
+
+
+def _try_alternative_tokopedia_urls(keyword: str):
+    """Try alternative Tokopedia search URL patterns."""
+    alt_urls = [
+        f"https://www.tokopedia.com/search?st=product&q={keyword}",
+        f"https://www.tokopedia.com/p/pertukangan/material-bangunan?q={keyword}",
+    ]
+    
+    for alt_url in alt_urls:
+        try:
+            html_alt = _human_get(alt_url)
+            prods_alt = _parse_tokopedia_html(html_alt, alt_url)
+            if prods_alt:
+                return prods_alt, alt_url, len(html_alt)
+        except Exception:
+            continue
+    
+    return [], "", 0
+
+
+def _parse_tokopedia_html(html: str, request_url: str) -> list[dict]:
+    """
+    Parse Tokopedia HTML and extract product data.
+    """
+    if not html:
+        return []
+
+    soup = BeautifulSoup(html, HTML_PARSER)
+
+    # Find product cards with multiple selectors
+    cards = soup.select('a[data-testid="lnkProductContainer"]') or \
+            soup.select('div[data-testid="divProductWrapper"]') or \
+            soup.select('div.css-bk6tzz') or \
+            soup.select('div[data-unify="Card"]')
+
+    out = []
+    for card in cards:
+        name = _extract_tokopedia_product_name(card)
+        if not name:
+            continue
+
+        price = _extract_tokopedia_product_price(card)
+        if price <= 0:
+            continue
+
+        href = _extract_tokopedia_product_link(card)
+        
+        out.append({"item": name, "value": price, "source": TOKOPEDIA_SOURCE, "url": href})
+    
+    return out
 
 
 # ---------------- generic runners ----------------
