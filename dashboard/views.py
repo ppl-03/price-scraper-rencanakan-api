@@ -30,6 +30,7 @@ from api.mitra10.url_builder import Mitra10UrlBuilder
 
 from api.tokopedia.factory import create_tokopedia_scraper
 from api.tokopedia.url_builder import TokopediaUrlBuilder
+from api.tokopedia.scraper import TOKOPEDIA_LOCATION_IDS
 
 # Playwright fallback (optional at runtime)
 HAS_PLAYWRIGHT = False
@@ -1049,6 +1050,21 @@ def home(request):
         # Create a simple mapping of vendor to locations
         if gemilang_locations:
             locations_data[GEMILANG_SOURCE] = gemilang_locations
+
+    # Add predefined Tokopedia locations (if any Tokopedia prices exist)
+    tokopedia_has_prices = any(p.get("source") == TOKOPEDIA_SOURCE for p in prices)
+    if tokopedia_has_prices:
+        tokopedia_locations = []
+        for location_name, location_ids in TOKOPEDIA_LOCATION_IDS.items():
+            # Format location name for display
+            display_name = location_name.replace('_', ' ').title()
+            tokopedia_locations.append({
+                "store_name": f"Tokopedia {display_name}",
+                "address": f"Area ID: {', '.join(map(str, location_ids))}",
+                "source": TOKOPEDIA_SOURCE
+            })
+        if tokopedia_locations:
+            locations_data[TOKOPEDIA_SOURCE] = tokopedia_locations
 
     # sanity: drop unreal prices and dedupe the final list
     prices = [p for p in prices if p.get("value") and p["value"] >= 100]
