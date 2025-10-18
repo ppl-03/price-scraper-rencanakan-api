@@ -44,6 +44,7 @@ USE_BROWSER_FALLBACK = os.getenv("USE_BROWSER_FALLBACK", "auto").lower()  # auto
 
 # Constants to avoid duplication
 GEMILANG_SOURCE = "Gemilang Store"
+DEPO_BANGUNAN_SOURCE = "Depo Bangunan"
 JURAGAN_MATERIAL_SOURCE = "Juragan Material"
 MITRA10_SOURCE = "Mitra10"
 TOKOPEDIA_SOURCE = "Tokopedia"
@@ -1032,57 +1033,62 @@ def _run_location_scraper(request, scraper_func, label: str) -> list[dict]:
         return []
 
 
-# ---------------- views ----------------
-def home(request):
-    keyword = request.GET.get("q", "semen")
+# ---------------- helper functions for home view ----------------
+def _scrape_all_vendors(request, keyword: str) -> list[dict]:
+    """Scrape prices from all vendors."""
     prices = []
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE)
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan")
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback)
+    return prices
 
-    # Get locations for Gemilang (only when it has prices)
+
+def _collect_vendor_locations(request, prices: list[dict]) -> dict:
+    """Collect location data for vendors that have prices."""
     locations_data = {}
+    
+    # Gemilang locations
     gemilang_has_prices = any(p.get("source") == GEMILANG_SOURCE for p in prices)
     if gemilang_has_prices:
         gemilang_locations = _run_location_scraper(request, create_gemilang_location_scraper, GEMILANG_SOURCE)
-        # Create a simple mapping of vendor to locations
         if gemilang_locations:
             locations_data[GEMILANG_SOURCE] = gemilang_locations
 
-    # Get locations for Depo Bangunan (only when it has prices)
-    depo_has_prices = any(p.get("source") == "Depo Bangunan" for p in prices)
+    # Depo Bangunan locations
+    depo_has_prices = any(p.get("source") == DEPO_BANGUNAN_SOURCE for p in prices)
     if depo_has_prices:
-        depo_locations = _run_location_scraper(request, create_depo_location_scraper, "Depo Bangunan")
+        depo_locations = _run_location_scraper(request, create_depo_location_scraper, DEPO_BANGUNAN_SOURCE)
         if depo_locations:
-            locations_data["Depo Bangunan"] = depo_locations
+            locations_data[DEPO_BANGUNAN_SOURCE] = depo_locations
 
-    # Add predefined Tokopedia locations (if any Tokopedia prices exist)
+    # Tokopedia locations
     tokopedia_has_prices = any(p.get("source") == TOKOPEDIA_SOURCE for p in prices)
     if tokopedia_has_prices:
-        tokopedia_locations = []
-        for location_name, location_ids in TOKOPEDIA_LOCATION_IDS.items():
-            # Format location name for display
-            display_name = location_name.replace('_', ' ').title()
-            tokopedia_locations.append({
-                "store_name": f"Tokopedia {display_name}",
-                "address": f"Area ID: {', '.join(map(str, location_ids))}",
-                "source": TOKOPEDIA_SOURCE
-            })
+        tokopedia_locations = _get_tokopedia_locations()
         if tokopedia_locations:
             locations_data[TOKOPEDIA_SOURCE] = tokopedia_locations
 
-    # sanity: drop unreal prices and dedupe the final list
-    prices = [p for p in prices if p.get("value") and p["value"] >= 100]
-    uniq = {}
-    for p in prices:
-        k = (p.get("source"), p.get("url") or "", p.get("item"), p.get("value"))
-        if k not in uniq:
-            uniq[k] = p
-    prices = list(uniq.values())
+    return locations_data
 
-    # Add location info to prices
+
+def _get_tokopedia_locations() -> list[dict]:
+    """Get predefined Tokopedia location data."""
+    tokopedia_locations = []
+    for location_name, location_ids in TOKOPEDIA_LOCATION_IDS.items():
+        # Format location name for display
+        display_name = location_name.replace('_', ' ').title()
+        tokopedia_locations.append({
+            "store_name": f"Tokopedia {display_name}",
+            "address": f"Area ID: {', '.join(map(str, location_ids))}",
+            "source": TOKOPEDIA_SOURCE
+        })
+    return tokopedia_locations
+
+
+def _add_location_info_to_prices(prices: list[dict], locations_data: dict) -> list[dict]:
+    """Add location information to price data."""
     for price in prices:
         vendor_locations = locations_data.get(price.get("source"), [])
         if vendor_locations:
@@ -1095,11 +1101,47 @@ def home(request):
             price["location"] = ""
             price["location_count"] = 0
             price["all_locations"] = []
+    return prices
 
+
+def _clean_and_dedupe_prices(prices: list[dict]) -> list[dict]:
+    """Clean unrealistic prices and remove duplicates."""
+    # Filter out unrealistic prices
+    prices = [p for p in prices if p.get("value") and p["value"] >= 100]
+    
+    # Deduplicate
+    uniq = {}
+    for p in prices:
+        k = (p.get("source"), p.get("url") or "", p.get("item"), p.get("value"))
+        if k not in uniq:
+            uniq[k] = p
+    
+    prices = list(uniq.values())
+    
+    # Sort by price
     try:
         prices.sort(key=lambda x: (x["value"] is None, x["value"]))
     except Exception:
         pass
+    
+    return prices
+
+
+# ---------------- views ----------------
+def home(request):
+    keyword = request.GET.get("q", "semen")
+    
+    # Scrape prices from all vendors
+    prices = _scrape_all_vendors(request, keyword)
+    
+    # Collect location data for vendors with prices
+    locations_data = _collect_vendor_locations(request, prices)
+    
+    # Add location info to prices
+    prices = _add_location_info_to_prices(prices, locations_data)
+    
+    # Clean and deduplicate prices
+    prices = _clean_and_dedupe_prices(prices)
 
     return render(request, "dashboard/home.html", {"prices": prices})
 
@@ -1109,7 +1151,7 @@ def trigger_scrape(request):
     keyword = request.POST.get("q", "semen")
     counts = {
         "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE),
-        "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan"),
+        "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE),
         "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback),
         "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback),
         "tokopedia": _run_vendor_to_count(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback),
