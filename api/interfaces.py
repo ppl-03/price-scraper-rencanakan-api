@@ -8,6 +8,7 @@ class Product:
     name: str
     price: int
     url: str
+    unit: Optional[str] = None
 
 
 @dataclass
@@ -60,6 +61,10 @@ class IPriceScraper(ABC):
     @abstractmethod
     def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> ScrapingResult:
         pass
+    
+    def scrape_product_details(self, product_url: str) -> Optional[Product]:
+
+        return None
 
 
 class ILocationScraper(ABC):
