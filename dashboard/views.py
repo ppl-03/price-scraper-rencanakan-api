@@ -16,7 +16,7 @@ import secrets
 from api.core import BaseHttpClient
 
 # Vendors (use each package's own factory + url builder)
-from api.gemilang.factory import create_gemilang_scraper
+from api.gemilang.factory import create_gemilang_scraper, create_gemilang_location_scraper
 from api.gemilang.url_builder import GemilangUrlBuilder
 
 from api.depobangunan.factory import create_depo_scraper
@@ -808,6 +808,32 @@ def _run_vendor_to_count(request, keyword: str, maker, label: str, fallback=None
     return 0
 
 
+def _run_location_scraper(request, scraper_func, label: str) -> list[dict]:
+    """Helper function to run location scraping and return formatted locations."""
+    try:
+        scraper = scraper_func()
+        result = scraper.scrape_locations()
+        
+
+        if getattr(result, "success", False) and getattr(result, "locations", None):
+            locations = []
+            for i, loc in enumerate(result.locations):
+                locations.append({
+                    "store_name": loc.store_name,
+                    "address": loc.address,
+                    "source": label
+                })
+            messages.success(request, f"[{label}] Successfully scraped {len(locations)} locations")
+            return locations
+        else:
+            error_msg = getattr(result, "error_message", "Unknown error")
+            messages.warning(request, f"[{label}] Location scraping failed: {error_msg}")
+            return []
+    except Exception as e:
+        messages.error(request, f"[{label}] Location scraping error: {e}")
+        return []
+
+
 # ---------------- views ----------------
 def home(request):
     keyword = request.GET.get("q", "semen")
@@ -817,6 +843,15 @@ def home(request):
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback)
 
+    # Get locations for Gemilang (only when it has prices)
+    locations_data = {}
+    gemilang_has_prices = any(p.get("source") == "Gemilang Store" for p in prices)
+    if gemilang_has_prices:
+        gemilang_locations = _run_location_scraper(request, create_gemilang_location_scraper, "Gemilang Store")
+        # Create a simple mapping of vendor to locations
+        if gemilang_locations:
+            locations_data["Gemilang Store"] = gemilang_locations
+
     # sanity: drop unreal prices and dedupe the final list
     prices = [p for p in prices if p.get("value") and p["value"] >= 100]
     uniq = {}
@@ -825,6 +860,20 @@ def home(request):
         if k not in uniq:
             uniq[k] = p
     prices = list(uniq.values())
+
+    # Add location info to prices
+    for price in prices:
+        vendor_locations = locations_data.get(price.get("source"), [])
+        if vendor_locations:
+            # Take the first location for display
+            price["location"] = vendor_locations[0].get("store_name", "")
+            price["location_count"] = len(vendor_locations)
+            # Store all locations for modal display
+            price["all_locations"] = [loc.get("store_name", "") for loc in vendor_locations]
+        else:
+            price["location"] = ""
+            price["location_count"] = 0
+            price["all_locations"] = []
 
     try:
         prices.sort(key=lambda x: (x["value"] is None, x["value"]))

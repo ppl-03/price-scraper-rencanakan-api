@@ -157,7 +157,8 @@
               <th style="width:5%">No.</th>
               <th class="th-sort" data-key="item">Nama Produk</th>
               <th class="th-sort" data-key="price" style="width:20%">Harga</th>
-              <th class="th-sort" data-key="vendor" style="width:25%">Vendor</th>
+              <th class="th-sort" data-key="vendor" style="width:20%">Vendor</th>
+              <th class="th-sort" data-key="location" style="width:25%">Lokasi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -167,9 +168,24 @@
                 <td class="c-item">{{ r.item }}</td>
                 <td class="c-price">{{ r.value }}</td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
+                <td class="c-location">
+                  {% if r.location %}
+                    {{ r.location }}
+                    {% if r.location_count > 1 %}
+                      <button type="button" class="btn btn-sm btn-outline-primary ms-2" 
+                              data-vendor="{{ r.source }}"
+                              data-locations="{{ r.all_locations|join:'|' }}"
+                              style="font-size: 0.75rem; padding: 2px 8px;">
+                        +{{ r.location_count|add:"-1" }} more
+                      </button>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
               </tr>
             {% empty %}
-              <tr><td colspan="4" class="text-center text-muted py-4">Tidak ada data</td></tr>
+              <tr><td colspan="5" class="text-center text-muted py-4">Tidak ada data</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -302,7 +318,23 @@
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
       const priceNum = toNumber(priceText);
-      return { item, vendor, price: priceNum };
+      const locationCell = tr.querySelector(".c-location");
+      
+      // Extract modal data from button if present
+      const modalBtn = locationCell?.querySelector("button[data-locations]");
+      const allLocations = modalBtn ? modalBtn.getAttribute("data-locations")?.split("|") || [] : [];
+      
+      // Extract location text (excluding button text)
+      let location = "—";
+      if (locationCell) {
+        // Clone the cell and remove the button to get clean text
+        const tempCell = locationCell.cloneNode(true);
+        const tempBtn = tempCell.querySelector("button");
+        if (tempBtn) tempBtn.remove();
+        location = tempCell.textContent?.trim() || "—";
+      }
+      
+      return { item, vendor, price: priceNum, location, allLocations };
     });
 
     // Populate vendor dropdown (for…of)
@@ -332,7 +364,7 @@
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
       return data.filter(d => {
-        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q);
+        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
         const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
                    (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
@@ -366,17 +398,53 @@
       let idx = 0;
       for (const d of slice) {
         const tr = document.createElement("tr");
+        
+        // Build location cell content
+        let locationHtml = d.location;
+        if (d.allLocations && d.allLocations.length > 1) {
+          const moreCount = d.allLocations.length - 1;
+          const locationsStr = d.allLocations.join('|');
+          locationHtml += ` <button type="button" class="btn btn-sm btn-outline-primary ms-2" 
+                             data-vendor="${d.vendor}"
+                             data-locations="${locationsStr}"
+                             style="font-size: 0.75rem; padding: 2px 8px;">
+                             +${moreCount} more
+                           </button>`;
+        }
+        
         tr.innerHTML = `
           <td>${start + idx + 1}</td>
           <td class="c-item">${d.item}</td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
-          <td class="c-vendor">${d.vendor}</td>`;
+          <td class="c-vendor">${d.vendor}</td>
+          <td class="c-location">${locationHtml}</td>`;
         tbody.appendChild(tr);
+        
+        // Add click event listener to the location modal button if it exists
+        const modalBtn = tr.querySelector('button[data-locations]');
+        if (modalBtn) {
+          modalBtn.addEventListener('click', function(e) {
+            e.preventDefault(); // Prevent any default behavior
+            e.stopPropagation(); // Stop event bubbling
+            
+            const vendor = this.getAttribute('data-vendor');
+            const locationsStr = this.getAttribute('data-locations');
+            const locations = locationsStr ? locationsStr.split('|') : [];
+            
+            console.log('DEBUG: Dynamic button clicked');
+            console.log('DEBUG: Vendor:', vendor);
+            console.log('DEBUG: Locations string:', locationsStr);
+            console.log('DEBUG: Parsed locations:', locations);
+            
+            showLocationModal(vendor, locations);
+          });
+        }
+        
         idx++;
       }
       if (slice.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="4" class="text-center text-muted py-4">Tidak ada data</td>`;
+        tr.innerHTML = `<td colspan="5" class="text-center text-muted py-4">Tidak ada data</td>`;
         tbody.appendChild(tr);
       }
 
@@ -424,8 +492,155 @@
       currentPage = 1; render();
     });
 
+    // Add click listeners to initially loaded buttons
+    function addLocationButtonListeners() {
+      const initialButtons = document.querySelectorAll('button[data-locations]');
+      initialButtons.forEach(button => {
+        if (!button.hasAttribute('data-listener-added')) {
+          button.addEventListener('click', function(e) {
+            e.preventDefault(); // Prevent any default behavior
+            e.stopPropagation(); // Stop event bubbling
+            
+            const vendor = this.getAttribute('data-vendor');
+            const locationsStr = this.getAttribute('data-locations');
+            const locations = locationsStr ? locationsStr.split('|') : [];
+            
+            console.log('DEBUG: Initial button clicked');
+            console.log('DEBUG: Vendor:', vendor);
+            console.log('DEBUG: Locations:', locations);
+            
+            showLocationModal(vendor, locations);
+          });
+          button.setAttribute('data-listener-added', 'true');
+        }
+      });
+    }
+
     // Initial render
     render();
+    
+    // Add listeners to any pre-existing buttons
+    addLocationButtonListeners();
+    
+    // Global cleanup function to reset modal state
+    function cleanupModalState() {
+      console.log('DEBUG: Cleaning up modal state...');
+      // Remove any modal backdrops
+      const backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(backdrop => backdrop.remove());
+      
+      // Remove modal-open class from body
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      
+      // Reset current modal
+      if (currentModal) {
+        try {
+          currentModal.dispose();
+        } catch (e) {
+          console.log('DEBUG: Error disposing modal:', e);
+        }
+        currentModal = null;
+      }
+    }
+    
+    // Add escape key handler to force cleanup if needed
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        cleanupModalState();
+      }
+    });
+    
+    // Add click handler to force cleanup when clicking outside modal
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('modal-backdrop')) {
+        cleanupModalState();
+      }
+    });
+
+    // Location modal functionality
+    let currentModal = null; // Keep track of current modal instance
+    
+    function showLocationModal(vendor, locations) {
+      console.log('DEBUG: showLocationModal called');
+      console.log('DEBUG: Vendor:', vendor);
+      console.log('DEBUG: Locations:', locations);
+      
+      const locationModal = document.getElementById('locationModal');
+      const modalTitle = locationModal.querySelector('.modal-title');
+      const modalBody = locationModal.querySelector('.modal-body');
+      
+      modalTitle.textContent = `${vendor} - Store Locations`;
+      
+      if (locations.length === 0) {
+        modalBody.innerHTML = '<p class="text-muted">No location data available.</p>';
+      } else {
+        let html = '<div class="list-group list-group-flush">';
+        locations.forEach((location, index) => {
+          if (location.trim()) {
+            html += `<div class="list-group-item">
+              <div class="d-flex align-items-center">
+                <span class="badge bg-primary rounded-pill me-2">${index + 1}</span>
+                <span>${location}</span>
+              </div>
+            </div>`;
+          }
+        });
+        html += '</div>';
+        modalBody.innerHTML = html;
+      }
+      
+      // Dispose of any existing modal instance
+      if (currentModal) {
+        currentModal.dispose();
+        currentModal = null;
+      }
+      
+      // Create new modal instance with proper cleanup
+      currentModal = new bootstrap.Modal(locationModal, {
+        backdrop: true,
+        keyboard: true,
+        focus: true
+      });
+      
+      // Add event listener for when modal is hidden
+      locationModal.addEventListener('hidden.bs.modal', function () {
+        console.log('DEBUG: Modal hidden, disposing...');
+        if (currentModal) {
+          currentModal.dispose();
+          currentModal = null;
+        }
+        // Remove any remaining backdrops
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        // Restore body scrolling
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+      }, { once: true }); // Use once: true to automatically remove the listener
+      
+      currentModal.show();
+    }
   </script>
+
+  <!-- Location Modal -->
+  <div class="modal fade" id="locationModal" tabindex="-1" aria-labelledby="locationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="locationModalLabel">Store Locations</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Location list will be populated by JavaScript -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
