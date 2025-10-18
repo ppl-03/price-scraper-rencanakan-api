@@ -1,9 +1,11 @@
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
+from bs4 import BeautifulSoup
 from api.interfaces import Product, HtmlParserError
 from api.gemilang.html_parser import GemilangHtmlParser
 from api.gemilang.price_cleaner import GemilangPriceCleaner
+from api.gemilang.unit_parser import GemilangUnitParser
 class TestGemilangHtmlParser(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -19,11 +21,11 @@ class TestGemilangHtmlParser(TestCase):
         product1 = products[0]
         self.assertEqual(product1.name, "GML KUAS CAT 1inch")
         self.assertEqual(product1.price, 3600)
-        self.assertEqual(product1.url, "/pusat/gml-kuas-cat-1inch")
+        self.assertEqual(product1.url, "https://gemilang-store.com/pusat/gml-kuas-cat-1inch")
         product2 = products[1]
         self.assertEqual(product2.name, "Cat Tembok Spectrum 5Kg")
         self.assertEqual(product2.price, 55000)
-        self.assertEqual(product2.url, "/pusat/cat-tembok-spectrum-5kg")
+        self.assertEqual(product2.url, "https://gemilang-store.com/pusat/cat-tembok-spectrum-5kg")
     def test_parse_empty_html(self):
         products = self.parser.parse_products("")
         self.assertEqual(len(products), 0)
@@ -105,7 +107,7 @@ class TestGemilangHtmlParser(TestCase):
         """
         products = self.parser.parse_products(html_with_href)
         self.assertEqual(len(products), 1)
-        self.assertEqual(products[0].url, "/actual/product/url")
+        self.assertEqual(products[0].url, "https://gemilang-store.com/actual/product/url")
         html_without_href = """
         <div class="item-product">
             <p class="product-name">Test Product Name</p>
@@ -114,7 +116,7 @@ class TestGemilangHtmlParser(TestCase):
         """
         products = self.parser.parse_products(html_without_href)
         self.assertEqual(len(products), 1)
-        self.assertEqual(products[0].url, "/pusat/test-product-name")
+        self.assertEqual(products[0].url, "https://gemilang-store.com/pusat/test-product-name")
     def test_price_extraction_fallback(self):
         html_fallback_price = """
         <div class="item-product">
@@ -221,3 +223,330 @@ class TestGemilangHtmlParser(TestCase):
             with patch.object(self.parser.price_cleaner, 'is_valid_price', return_value=False):
                 products = self.parser.parse_products(html_fallback)
                 self.assertEqual(len(products), 0)  # Invalid price means no product
+
+
+class TestParseProductDetails(TestCase):
+    
+    def setUp(self):
+        self.parser = GemilangHtmlParser()
+    
+    def test_parse_product_details_with_empty_html(self):
+        result = self.parser.parse_product_details("")
+        self.assertIsNone(result)
+    
+    def test_parse_product_details_with_none_html(self):
+        result = self.parser.parse_product_details(None)
+        self.assertIsNone(result)
+    
+    def test_parse_product_details_with_valid_html(self):
+        html = """
+        <html>
+            <h1>Test Product Name</h1>
+            <div class="price">Rp 50.000</div>
+            <table>
+                <tr><th>Spesifikasi</th><td>Unit: Pcs</td></tr>
+            </table>
+        </html>
+        """
+        result = self.parser.parse_product_details(html, "https://test.com/product")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.name, "Test Product Name")
+        self.assertEqual(result.price, 50000)
+        self.assertEqual(result.url, "https://test.com/product")
+    
+    def test_parse_product_details_without_url(self):
+        html = """
+        <html>
+            <h1>Test Product</h1>
+            <div class="price">Rp 25.000</div>
+        </html>
+        """
+        result = self.parser.parse_product_details(html)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.url, "")
+    
+    def test_parse_product_details_no_name_found(self):
+        html = """
+        <html>
+            <div class="price">Rp 30.000</div>
+        </html>
+        """
+        result = self.parser.parse_product_details(html)
+        self.assertIsNone(result)
+    
+    def test_parse_product_details_invalid_price(self):
+        html = """
+        <html>
+            <h1>Test Product</h1>
+            <div class="price">Free</div>
+        </html>
+        """
+        result = self.parser.parse_product_details(html)
+        self.assertIsNone(result)
+    
+    def test_parse_product_details_with_exception(self):
+        with patch('api.gemilang.html_parser.BeautifulSoup', side_effect=Exception("Parse error")):
+            result = self.parser.parse_product_details("<html></html>")
+            self.assertIsNone(result)
+    
+    def test_parse_product_details_with_unit(self):
+        html = """
+        <html>
+            <h1>Cement 50kg</h1>
+            <div class="price">Rp 100.000</div>
+        </html>
+        """
+        with patch.object(self.parser.unit_parser, 'parse_unit', return_value="KG"):
+            result = self.parser.parse_product_details(html)
+            self.assertIsNotNone(result)
+            self.assertEqual(result.unit, "KG")
+
+
+class TestExtractProductNameFromPage(TestCase):
+    
+    def setUp(self):
+        self.parser = GemilangHtmlParser()
+    
+    def test_extract_name_from_h1(self):
+        html = "<html><h1>Product Name from H1</h1></html>"
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_name_from_page(soup)
+        self.assertEqual(result, "Product Name from H1")
+    
+    def test_extract_name_from_product_title_class(self):
+        html = '<html><div class="product-title">Product Title Class</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_name_from_page(soup)
+        self.assertEqual(result, "Product Title Class")
+    
+    def test_extract_name_from_product_name_class(self):
+        html = '<html><p class="product-name">Product Name Class</p></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_name_from_page(soup)
+        self.assertEqual(result, "Product Name Class")
+    
+    def test_extract_name_from_title_tag(self):
+        html = '<html><head><title>Title Tag Product</title></head></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_name_from_page(soup)
+        self.assertEqual(result, "Title Tag Product")
+    
+    def test_extract_name_skips_short_names(self):
+        html = '<html><h1>AB</h1><div class="product-title">Real Product Name</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_name_from_page(soup)
+        self.assertEqual(result, "Real Product Name")
+    
+    def test_extract_name_returns_none_when_no_name(self):
+        html = '<html><div>No product info here</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_name_from_page(soup)
+        self.assertIsNone(result)
+    
+    def test_extract_name_with_whitespace_stripping(self):
+        html = '<html><h1>  Product With Spaces  </h1></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_name_from_page(soup)
+        self.assertEqual(result, "Product With Spaces")
+
+
+class TestExtractProductPriceFromPage(TestCase):
+    
+    def setUp(self):
+        self.parser = GemilangHtmlParser()
+    
+    def test_extract_price_from_price_class(self):
+        html = '<html><div class="price">Rp 45.000</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 45000)
+    
+    def test_extract_price_from_product_price_class(self):
+        html = '<html><span class="product-price">Rp 35.000</span></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 35000)
+    
+    def test_extract_price_from_harga_class(self):
+        html = '<html><div class="harga">Rp 25.000</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 25000)
+    
+    def test_extract_price_from_id_price(self):
+        html = '<html><div id="price">Rp 55.000</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 55000)
+    
+    def test_extract_price_from_class_attribute_selector(self):
+        html = '<html><div class="current-price-display">Rp 65.000</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 65000)
+    
+    def test_extract_price_from_id_attribute_selector(self):
+        html = '<html><span id="product-price-123">Rp 75.000</span></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 75000)
+    
+    def test_extract_price_from_price_current_class(self):
+        html = '<html><div class="price-current">Rp 85.000</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 85000)
+    
+    def test_extract_price_skips_invalid_prices(self):
+        html = '''
+        <html>
+            <div class="price">Invalid</div>
+            <div class="product-price">Rp 50.000</div>
+        </html>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 50000)
+    
+    def test_extract_price_with_type_error_handling(self):
+        html = '<html><div class="price">Rp 40.000</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        with patch.object(self.parser.price_cleaner, 'clean_price', side_effect=TypeError("Type error")):
+            result = self.parser._extract_product_price_from_page(soup)
+            self.assertEqual(result, 0)
+    
+    def test_extract_price_with_value_error_handling(self):
+        html = '<html><div class="price">Rp 30.000</div></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        with patch.object(self.parser.price_cleaner, 'clean_price', side_effect=ValueError("Value error")):
+            result = self.parser._extract_product_price_from_page(soup)
+            self.assertEqual(result, 0)
+    
+    def test_extract_price_fallback_rp_pattern(self):
+        html = '<html><body>Product costs Rp 12.000 only</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 12000)
+    
+    def test_extract_price_fallback_idr_pattern(self):
+        html = '<html><body>Price: IDR 15.000</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 15000)
+    
+    def test_extract_price_fallback_rupiah_pattern(self):
+        html = '<html><body>Costs 18000 rupiah</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 18000)
+    
+    def test_extract_price_fallback_with_commas(self):
+        html = '<html><body>Rp 1,250,000</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 1250000)
+    
+    def test_extract_price_fallback_with_dots(self):
+        html = '<html><body>Rp 1.250.000</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 1250000)
+    
+    def test_extract_price_fallback_skips_out_of_range_low(self):
+        html = '<html><body>Rp 50 only</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 0)
+    
+    def test_extract_price_fallback_skips_out_of_range_high(self):
+        html = '<html><body>Rp 99.000.000</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 0)
+    
+    def test_extract_price_fallback_skips_invalid_after_cleaning(self):
+        html = '<html><body>Rp 5.000</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        with patch.object(self.parser.price_cleaner, 'is_valid_price', return_value=False):
+            result = self.parser._extract_product_price_from_page(soup)
+            self.assertEqual(result, 0)
+    
+    def test_extract_price_fallback_handles_value_error_in_conversion(self):
+        html = '<html><body>Rp invalid.price</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 0)
+    
+    def test_extract_price_fallback_handles_type_error_in_conversion(self):
+        html = '<html><body>Rp 12.000</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        with patch.object(self.parser.price_cleaner, 'clean_price', side_effect=TypeError("Type error")):
+            result = self.parser._extract_product_price_from_page(soup)
+            self.assertEqual(result, 0)
+    
+    def test_extract_price_returns_zero_when_no_price_found(self):
+        html = '<html><body>No price here</body></html>'
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertEqual(result, 0)
+    
+    def test_extract_price_multiple_matches_returns_first_valid(self):
+        html = '''
+        <html>
+            <body>
+                Prices: Rp 10.000 or Rp 20.000
+            </body>
+        </html>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        result = self.parser._extract_product_price_from_page(soup)
+        self.assertIn(result, [10000, 20000])
+
+
+class TestExtractProductUrl(TestCase):
+    
+    def setUp(self):
+        self.parser = GemilangHtmlParser()
+    
+
+    def test_extract_url_with_absolute_https_url(self):
+        html = '''
+        <div class="item-product">
+            <a href="https://external.com/product">Link</a>
+            <p class="product-name">Test Product</p>
+        </div>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.find('div', class_='item-product')
+        result = self.parser._extract_product_url(item)
+        self.assertEqual(result, "https://external.com/product")
+    
+    def test_extract_url_with_relative_no_leading_slash(self):
+        html = '''
+        <div class="item-product">
+            <a href="product/123">Link</a>
+            <p class="product-name">Test Product</p>
+        </div>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.find('div', class_='item-product')
+        result = self.parser._extract_product_url(item)
+        self.assertEqual(result, "https://gemilang-store.com/product/123")
+
+
+class TestHasLxml(TestCase):
+    
+    def setUp(self):
+        self.parser = GemilangHtmlParser()
+    
+    def test_has_lxml_returns_true_when_lxml_available(self):
+        result = self.parser._has_lxml()
+        self.assertIsInstance(result, bool)
+        
+        with patch('builtins.__import__', return_value=Mock()):
+            result = self.parser._has_lxml()
+            self.assertTrue(result)
