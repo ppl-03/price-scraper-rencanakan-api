@@ -22,11 +22,26 @@ class Product:
     name: str
     price: int
     url: str
+    unit: Optional[str] = None
+
+
+@dataclass
+class Location:
+    store_name: str
+    address: str
 
 
 @dataclass
 class ScrapingResult:
     products: List[Product]
+    success: bool
+    error_message: Optional[str] = None
+    url: Optional[str] = None
+
+
+@dataclass
+class LocationScrapingResult:
+    locations: List[Location]
     success: bool
     error_message: Optional[str] = None
     url: Optional[str] = None
@@ -50,9 +65,25 @@ class IHtmlParser(ABC):
         pass
 
 
+class ILocationParser(ABC):
+    @abstractmethod
+    def parse_locations(self, html_content: str) -> List[Location]:
+        pass
+
+
 class IPriceScraper(ABC):
     @abstractmethod
     def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> ScrapingResult:
+        pass
+    
+    def scrape_product_details(self, product_url: str) -> Optional[Product]:
+
+        return None
+
+
+class ILocationScraper(ABC):
+    @abstractmethod
+    def scrape_locations(self, timeout: int = 30) -> LocationScrapingResult:
         pass
 
 
