@@ -163,9 +163,10 @@
             <tr>
               <th style="width:5%">No.</th>
               <th class="th-sort" data-key="item">Nama Produk</th>
-              <th class="th-sort" data-key="price" style="width:20%">Harga</th>
-              <th class="th-sort" data-key="vendor" style="width:20%">Vendor</th>
-              <th class="th-sort" data-key="location" style="width:25%">Lokasi</th>
+              <th class="th-sort" data-key="price" style="width:18%">Harga</th>
+              <th style="width:10%">Unit</th>
+              <th class="th-sort" data-key="vendor" style="width:18%">Vendor</th>
+              <th class="th-sort" data-key="location" style="width:24%">Lokasi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -174,6 +175,7 @@
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
                 <td class="c-price">{{ r.value }}</td>
+                <td class="c-unit">{{ r.unit|default:'' }}</td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
                 <td class="c-location">
                   {% if r.location %}
@@ -320,10 +322,11 @@
 
     // ---------- Build data from table ----------
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
-    const data = allRows.map(tr => {
+      const data = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
+        const unitText = tr.querySelector(".c-unit")?.textContent || "";
       const priceNum = toNumber(priceText);
       const locationCell = tr.querySelector(".c-location");
       
@@ -341,7 +344,7 @@
         location = tempCell.textContent?.trim() || "—";
       }
       
-      return { item, vendor, price: priceNum, location, allLocations };
+      return { item, vendor, price: priceNum, unit: unitText, location, allLocations };
     });
 
     // Populate vendor dropdown (for…of)
@@ -456,6 +459,7 @@
           <td>${start + idx + 1}</td>
           <td class="c-item">${d.item}</td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
+          <td class="c-unit">${d.unit || ''}</td>
           <td class="c-vendor">${d.vendor}</td>
           <td class="c-location">${locationHtml}</td>`;
         tbody.appendChild(tr);

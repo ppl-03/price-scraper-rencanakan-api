@@ -923,7 +923,15 @@ def _handle_successful_scrape(request, res, label: str, url: str, html_len: int)
     """Handle successful scrape results."""
     rows = []
     for p in res.products:
-        rows.append({"item": p.name, "value": p.price, "source": label, "url": getattr(p, "url", "")})
+        # Include unit when available (Gemilang parser provides Product.unit)
+        unit = getattr(p, "unit", None)
+        rows.append({
+            "item": p.name,
+            "value": p.price,
+            "unit": unit,
+            "source": label,
+            "url": getattr(p, "url", "")
+        })
     messages.info(request, f"[{label}] URL: {url} | HTML: {html_len} bytes | parsed={len(rows)}")
     return rows
 
