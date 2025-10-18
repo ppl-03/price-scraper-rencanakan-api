@@ -54,7 +54,8 @@ def format_scraping_response(result):
             'name': product.name,
             'price': product.price,
             'url': product.url,
-            'unit': product.unit if product.unit else None
+            'unit': product.unit if product.unit else None,
+            'location': product.location if product.location else None,
         }
         for product in result.products
     ]

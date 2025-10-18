@@ -3,6 +3,7 @@ import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
 
+
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import JuraganMaterialPriceCleaner
 
@@ -70,14 +71,22 @@ class JuraganMaterialHtmlParser(IHtmlParser):
         
         price = self._extract_product_price(item)
         
-        unit = ""
         if url:
             unit = self._extract_product_unit(url)
-        
+            location = self._extract_product_location_xpath(url)
         if not self.price_cleaner.is_valid_price(price):
             return None
         
-        return Product(name=name, price=price, url=url, unit=unit)
+        return Product(name=name, price=price, url=url, unit=unit, location=location)
+    
+    def _extract_product_location(self, item) -> Optional[str]:
+        """Extract product location from item."""
+        location_element = item.find('div', class_='location')
+        if location_element:
+            location = location_element.get_text(strip=True)
+            if location:
+                return location
+        return None
     
     def _extract_product_name(self, item) -> Optional[str]:
         """Extract product name from item."""
@@ -174,10 +183,6 @@ class JuraganMaterialHtmlParser(IHtmlParser):
     def _extract_product_unit(self, url: str) -> str:
         """Fetch the product detail page and extract the unit."""
         try:
-            # Handle empty or None URLs
-            if not url:
-                return ''
-            
             # kalau url relatif, tambahkan domain utama
             if url.startswith('/'):
                 url = f"https://juraganmaterial.id{url}"
@@ -199,6 +204,31 @@ class JuraganMaterialHtmlParser(IHtmlParser):
         
         except Exception as e:
             logger.error(f"Error fetching unit for {url}: {e}")
+            return ''
+    
+    def _extract_product_location_xpath(self, url: str) -> str:
+        """Fetch the product detail page and extract the location using full XPath."""
+        try:
+            if url.startswith('/'):
+                url = f"https://juraganmaterial.id{url}"
+            
+            response = requests.get(url, timeout=10)
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch product detail page: {url}")
+                return ''
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            
+            # pastikan selector ini cocok dengan struktur HTML aslinya
+            location_div= soup.select_one('#footer-address-link > span:nth-child(2)')
+            if location_div:
+                return location_div.get_text(strip=True)
+            
+            return ''
+        
+        except Exception as e:
+            logger.error(f"Error fetching location for {url}: {e}")
             return ''
     
     def _has_lxml(self) -> bool:
