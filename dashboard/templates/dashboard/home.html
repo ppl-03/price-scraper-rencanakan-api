@@ -355,7 +355,23 @@
 
     // Populate location dropdown (for…of)
     const locationSelect = document.getElementById("locationSelect");
-    const uniqueLocations = [...new Set(data.map(d => d.location).filter(l => l && l !== "—"))].sort();
+    const allLocationsList = [];
+    
+    // Collect all locations from both single locations and allLocations arrays
+    for (const d of data) {
+      if (d.location && d.location !== "—") {
+        allLocationsList.push(d.location);
+      }
+      if (d.allLocations && d.allLocations.length > 0) {
+        for (const loc of d.allLocations) {
+          if (loc && loc !== "—") {
+            allLocationsList.push(loc);
+          }
+        }
+      }
+    }
+    
+    const uniqueLocations = [...new Set(allLocationsList)].sort();
     for (const l of uniqueLocations) {
       const opt = document.createElement("option");
       opt.value = l; opt.textContent = l;
@@ -383,7 +399,13 @@
       return data.filter(d => {
         const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
-        const lm = !l || d.location === l;
+        
+        // Enhanced location matching: check both primary location and all locations
+        let lm = !l || d.location === l;
+        if (!lm && d.allLocations && d.allLocations.length > 0) {
+          lm = d.allLocations.includes(l);
+        }
+        
         const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
                    (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
         return qmatch && vm && lm && pm;
