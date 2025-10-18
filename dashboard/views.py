@@ -19,7 +19,7 @@ from api.core import BaseHttpClient
 from api.gemilang.factory import create_gemilang_scraper, create_gemilang_location_scraper
 from api.gemilang.url_builder import GemilangUrlBuilder
 
-from api.depobangunan.factory import create_depo_scraper
+from api.depobangunan.factory import create_depo_scraper, create_depo_location_scraper
 from api.depobangunan.url_builder import DepoUrlBuilder
 
 from api.juragan_material.factory import create_juraganmaterial_scraper
@@ -1050,6 +1050,13 @@ def home(request):
         # Create a simple mapping of vendor to locations
         if gemilang_locations:
             locations_data[GEMILANG_SOURCE] = gemilang_locations
+
+    # Get locations for Depo Bangunan (only when it has prices)
+    depo_has_prices = any(p.get("source") == "Depo Bangunan" for p in prices)
+    if depo_has_prices:
+        depo_locations = _run_location_scraper(request, create_depo_location_scraper, "Depo Bangunan")
+        if depo_locations:
+            locations_data["Depo Bangunan"] = depo_locations
 
     # Add predefined Tokopedia locations (if any Tokopedia prices exist)
     tokopedia_has_prices = any(p.get("source") == TOKOPEDIA_SOURCE for p in prices)
