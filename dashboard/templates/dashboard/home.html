@@ -4,104 +4,428 @@
   <meta charset="utf-8">
   <title>Harga Satuan – Rencanakan</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap CSS -->
+  {% load static %}
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { background:#f7f9fb; font-family: Arial, sans-serif; color:#333; }
-    .navbar{ background:#fff; box-shadow:0 2px 4px rgba(0,0,0,.05); }
-    .navbar-brand{ font-weight:600; color:#003366!important; position:absolute; left:50%; transform:translateX(-50%); }
-    .navbar-right{ margin-left:auto; }
-    .content-wrapper{ margin-top:30px; }
+
+    /* Top bar with only the logo + avatar */
+    .topbar { background:#fff; }
+    .brand-wrap { display:flex; align-items:center; gap:12px; }
+    .brand-logo { height:36px; width:auto; }
+    .avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; }
+
+    .content-wrapper{ margin-top:24px; }
     .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
-    .table th{ border:none; color:#444; font-weight:600; }
+    .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
     .table td{ vertical-align: middle; border-color:#f1f3f5; }
+
+    /* Sort indicators */
+    .th-sort { position:relative; padding-right:18px; }
+    .th-sort::after {
+      content:"↕"; position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:.9rem; opacity:.35;
+    }
+    .th-sort.asc::after { content:"↑"; opacity:.9; }
+    .th-sort.desc::after { content:"↓"; opacity:.9; }
+
+    /* Primary button color = #00365a */
+    .btn-brand { background:#00365a; border-color:#00365a; color:#fff; }
+    .btn-brand:hover, .btn-brand:focus { background:#022b47; border-color:#022b47; color:#fff; }
     .btn-pill{ border-radius:999px; padding:10px 20px; font-weight:600; }
+
+    /* Oval warning */
+    .alert-vendor {
+      background:#c6d1d8; color:#00365a;
+      border-radius:50px; padding:10px 18px; font-size:.95rem; margin-bottom:1rem; border:1px solid #b7c3cb;
+    }
+    .alert-vendor strong { font-weight:700; }
+
+    /* Inline loading (inside results card) */
+    .loading-inline { display:none; min-height:200px; place-items:center; padding:24px; }
+    .loading-panel{
+      background:#fff; border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,.10);
+      padding:18px 22px; display:flex; align-items:center; gap:12px; border:1px solid #eef2f6;
+    }
+    .ring { width:26px; height:26px; border:3px solid #e9eef5; border-top-color:#0d6efd; border-radius:50%; animation:spin .9s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg) } }
+
+    /* Controls row (filters like DataTables) */
+    .controls { gap:8px; }
+    .controls .form-control, .controls .form-select { background:#fff; }
+
+    /* Pagination circles */
+    .pagination { justify-content:center; margin-top:20px; gap:8px; }
+    .page-link {
+      border-radius:50%!important; width:36px; height:36px;
+      display:flex; align-items:center; justify-content:center;
+      color:#00365a; border:none; background:#eef3f6;
+    }
+    .page-item.active .page-link { background:#00365a; color:#fff; }
+    .page-item .page-link:hover { background:#dfe7ec; color:#00365a; }
+
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
   </style>
 </head>
 <body>
-  <!-- Top navbar -->
-  <nav class="navbar navbar-light bg-white shadow-sm px-4">
-    <a class="navbar-brand" href="#">Rencanakan</a>
-    <div class="d-flex align-items-center navbar-right">
-      <span class="me-2">John Doe</span>
-      <img src="https://via.placeholder.com/32" class="rounded-circle" alt="profile">
+  <!-- Top bar with logo only -->
+  <header class="topbar py-3">
+    <div class="container d-flex align-items-center justify-content-between">
+      <div class="brand-wrap">
+        <img class="brand-logo" src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan logo">
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <img class="avatar" src="https://i.imgur.com/7k12rjS.png" alt="profile">
+      </div>
     </div>
-  </nav>
+  </header>
 
   <div class="container content-wrapper">
 
-    <!-- Flash messages (hide info-level so the blue boxes don't show) -->
+    <!-- Oval warning banner ABOVE the search bar (only if messages exist) -->
     {% if messages %}
-      <div class="mb-3">
+      <div id="alerts" class="mb-2">
         {% for m in messages %}
           {% if m.level_tag != 'info' %}
-            <div class="alert alert-{{ m.tags|default:'secondary' }} mb-2" role="alert">{{ m }}</div>
+            <div class="alert-vendor js-vendor-msg" data-raw="{{ m|escape }}">
+              <strong>Warning!</strong> {{ m }}
+            </div>
           {% endif %}
         {% endfor %}
       </div>
     {% endif %}
 
-    <!-- Search bar -->
-    <form action="{% url 'home' %}" method="get" class="mb-4">
+    <!-- Backend search (hits your scrapers) -->
+    <form id="searchForm" action="{% url 'home' %}" method="get" class="mb-3" novalidate>
       <div class="input-group">
-        <input
-          type="text"
-          name="q"
-          class="form-control"
-          placeholder="Cari produk (contoh: semen, pasir, batu...)"
-          value="{{ request.GET.q|default_if_none:'' }}"
-          aria-label="Kata kunci produk"
-        >
-        <button type="submit" class="btn btn-primary btn-pill">Search</button>
+        <input id="qInput" type="text" name="q" class="form-control"
+               placeholder="Cari produk (contoh: semen, pasir, batu...)"
+               value="{{ request.GET.q|default_if_none:'' }}" autocomplete="off">
+        <button id="searchBtn" type="submit" class="btn btn-brand btn-pill d-inline-flex align-items-center gap-2">
+          <span class="btn-text">Search</span>
+          <span class="btn-spinner spinner-border spinner-border-sm" style="display:none" aria-hidden="true"></span>
+        </button>
       </div>
     </form>
 
-    <!-- Simple products table -->
+    <!-- Client-side DataTable-like controls -->
+    <div class="d-flex flex-wrap controls mb-3">
+      <div class="input-group" style="max-width:320px;">
+        <span class="input-group-text">Filter hasil</span>
+        <input id="filterInput" type="text" class="form-control" placeholder="ketik untuk memfilter…">
+      </div>
+
+      <div class="input-group" style="max-width:260px;">
+        <span class="input-group-text">Vendor</span>
+        <select id="vendorSelect" class="form-select">
+          <option value="">Semua vendor</option>
+        </select>
+      </div>
+
+      <div class="input-group" style="max-width:240px;">
+        <span class="input-group-text">Harga min</span>
+        <input id="minPrice" type="number" class="form-control" placeholder="0">
+      </div>
+
+      <div class="input-group" style="max-width:240px;">
+        <span class="input-group-text">Harga max</span>
+        <input id="maxPrice" type="number" class="form-control" placeholder="∞">
+      </div>
+
+      <button id="clearFilters" class="btn btn-outline-secondary btn-pill">Reset</button>
+    </div>
+
+    <!-- Results card -->
     <div class="card">
-      <div class="card-body p-0">
-        <table class="table table-hover mb-0">
+      <!-- Inline loading state -->
+      <div id="loadingInline" class="loading-inline">
+        <output id="loadingStatus" class="loading-panel" aria-live="polite" aria-label="Mengambil harga">
+          <span class="ring" aria-hidden="true"></span>
+          <span>
+            <span class="fw-semibold">Mengambil harga…</span>
+            <span class="text-muted small d-block">Mohon tunggu sebentar</span>
+          </span>
+        </output>
+      </div>
+
+      <!-- Table -->
+      <div id="resultsWrap" class="card-body p-0">
+        <table class="table table-hover mb-0" id="pricesTable">
           <thead>
             <tr>
               <th style="width:5%">No.</th>
-              <th>Nama Produk</th>
-              <th style="width:20%">Harga</th>
-              <th style="width:25%">Vendor</th>
+              <th class="th-sort" data-key="item">Nama Produk</th>
+              <th class="th-sort" data-key="price" style="width:20%">Harga</th>
+              <th class="th-sort" data-key="vendor" style="width:25%">Vendor</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tableBody">
             {% for r in prices %}
               <tr>
                 <td>{{ forloop.counter }}</td>
-                <td>{{ r.item }}</td>
+                <td class="c-item">{{ r.item }}</td>
                 <td class="c-price">{{ r.value }}</td>
-                <td>{{ r.source|default:"—" }}</td>
+                <td class="c-vendor">{{ r.source|default:"—" }}</td>
               </tr>
             {% empty %}
-              <tr>
-                <td colspan="4" class="text-center text-muted py-4">No data</td>
-              </tr>
+              <tr><td colspan="4" class="text-center text-muted py-4">Tidak ada data</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
 
+    <!-- Pagination -->
+    <nav aria-label="Hasil pencarian">
+      <ul id="pagination" class="pagination"></ul>
+    </nav>
+
     <div class="footer">© 2025 rencanakan.id</div>
   </div>
 
-  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-  <!-- Format prices as IDR on the client -->
   <script>
-    const idf = new Intl.NumberFormat("id-ID", { style:"currency", currency:"IDR", minimumFractionDigits: 0 });
-    document.querySelectorAll(".c-price").forEach(td => {
-      const raw = String(td.textContent || "").replace(/[^\d.-]/g,"");
-      const num = Number(raw);
-      if (isFinite(num)) td.textContent = idf.format(num);
+    // ---------- Price formatting: "IDR 30,400" (code, comma thousands, NO decimals) ----------
+    const idf = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "IDR",
+      currencyDisplay: "code",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     });
+
+    // Helper: parse numeric text without regex/replace (keeps linters happy)
+    function toNumber(text) {
+      let out = "";
+      for (const ch of String(text || "")) {
+        if ((ch >= "0" && ch <= "9") || ch === "-" ) out += ch;
+      }
+      return Number(out || "0");
+    }
+
+    // Format any server-rendered price cells immediately (for…of)
+    const priceCells = document.querySelectorAll(".c-price");
+    for (const td of priceCells) {
+      const num = toNumber(td.textContent);
+      if (Number.isFinite(num)) td.textContent = idf.format(Math.round(num));
+    }
+
+    // ---------- Friendly vendor error messages ----------
+    function rewriteVendorMessage(raw) {
+      // simple, safe extraction of [Vendor]
+      let vendor = null;
+      const open = raw.indexOf("[");
+      if (open !== -1) {
+        const close = raw.indexOf("]", open + 1);
+        if (close !== -1) vendor = raw.slice(open + 1, close).trim();
+      }
+
+      // Handle specific Mitra10 "no products" message
+      if (vendor === "Mitra10" && /package returned no products.*fallback also found none/i.test(raw)) {
+        return `<strong>Mitra10</strong> sedang tidak tersedia saat ini. Data dari vendor lain tetap ditampilkan. Silakan coba lagi nanti.`;
+      }
+
+      const httpIdx = raw.toLowerCase().indexOf("http error");
+      if (httpIdx !== -1) {
+        const windowStr = raw.slice(httpIdx, httpIdx + 40);
+        const m = windowStr.match(/HTTP error\s+(\d{3})/i);
+        if (m) {
+          const code = m[1];
+          return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak tersedia (HTTP ${code}). Data dari vendor lain tetap ditampilkan. Coba lagi beberapa menit lagi.`;
+        }
+      }
+      if (/timeout|timed\s*out|connection.*(timed|time).*out/i.test(raw)) {
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> tidak merespons tepat waktu. Menampilkan hasil dari sumber lain sementara ini.`;
+      }
+      if (/captcha|blocked|forbid|403/i.test(raw)) {
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> membatasi akses otomatis saat ini. Kami akan mencoba lagi nanti.`;
+      }
+      if (/parse|selector|structure|changed/i.test(raw)) {
+        return `Struktur halaman <strong>${vendor ?? 'vendor'}</strong> berubah, sehingga data tidak dapat diambil. Akan kami sesuaikan secepatnya.`;
+      }
+
+      // Generic "no products" fallback
+      if (/no products|tidak ada produk|found none/i.test(raw)) {
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak dapat memberikan data produk. Data dari vendor lain tetap tersedia.`;
+      }
+
+      return raw;
+    }
+
+    // Use for…of and dataset instead of forEach/getAttribute
+    const vendorMsgs = document.querySelectorAll(".js-vendor-msg");
+    for (const el of vendorMsgs) {
+      const raw = el.dataset.raw || el.textContent || "";
+      el.innerHTML = rewriteVendorMessage(raw);
+    }
+
+    // ---------- Inline search loading ----------
+    const form = document.getElementById("searchForm");
+    const qInput = document.getElementById("qInput");
+    const results = document.getElementById("resultsWrap");
+    const loadingInline = document.getElementById("loadingInline");
+    const btn = document.getElementById("searchBtn");
+    const btnText = btn?.querySelector(".btn-text");
+    const btnSpin = btn?.querySelector(".btn-spinner");
+
+    function showInlineLoading() {
+      if (results) results.style.display = "none";
+      if (loadingInline) { loadingInline.style.display = "grid"; loadingInline.style.placeItems = "center"; }
+      if (btn && btnText && btnSpin) {
+        btn.setAttribute("disabled", "disabled");
+        qInput?.setAttribute("readonly", "readonly");
+        btnSpin.style.display = "inline-block";
+        btnText.textContent = "Searching…";
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const hasRows = !!document.querySelector("#resultsWrap tbody tr");
+      if (hasRows) {
+        if (loadingInline) loadingInline.style.display = "none";
+        if (results) results.style.display = "block";
+        if (btn && btnText && btnSpin) {
+          btn.removeAttribute("disabled");
+          qInput?.removeAttribute("readonly");
+          btnSpin.style.display = "none";
+          btnText.textContent = "Search";
+        }
+      }
+    });
+    form?.addEventListener("submit", () => { showInlineLoading(); });
+
+    // ---------- Build data from table ----------
+    const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
+    const data = allRows.map(tr => {
+      const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
+      const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
+      const priceText = tr.querySelector(".c-price")?.textContent || "0";
+      const priceNum = toNumber(priceText);
+      return { item, vendor, price: priceNum };
+    });
+
+    // Populate vendor dropdown (for…of)
+    const vendorSelect = document.getElementById("vendorSelect");
+    const uniqueVendors = [...new Set(data.map(d => d.vendor).filter(Boolean))].sort();
+    for (const v of uniqueVendors) {
+      const opt = document.createElement("option");
+      opt.value = v; opt.textContent = v;
+      vendorSelect.appendChild(opt);
+    }
+
+    // ---------- Filtering + Sorting + Pagination ----------
+    const perPage = 10;
+    const pagination = document.getElementById("pagination");
+    const tbody = document.getElementById("tableBody");
+    const filterInput = document.getElementById("filterInput");
+    const minPrice = document.getElementById("minPrice");
+    const maxPrice = document.getElementById("maxPrice");
+    const clearBtn  = document.getElementById("clearFilters");
+    let sortKey = null;
+    let sortDir = 'asc';
+    let currentPage = 1;
+
+    function applyFilters() {
+      const q = (filterInput.value || "").toLowerCase();
+      const v = vendorSelect.value || "";
+      const min = Number(minPrice.value || "");
+      const max = Number(maxPrice.value || "");
+      return data.filter(d => {
+        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q);
+        const vm = !v || d.vendor === v;
+        const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
+                   (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
+        return qmatch && vm && pm;
+      });
+    }
+
+    function applySort(rows) {
+      if (!sortKey) return rows;
+      const sorted = [...rows].sort((a,b) => {
+        let A = a[sortKey], B = b[sortKey];
+        if (typeof A === 'string') { A = A.toLowerCase(); B = B.toLowerCase(); }
+        if (A < B) return sortDir === 'asc' ? -1 : 1;
+        if (A > B) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+      return sorted;
+    }
+
+    function render() {
+      let rows = applyFilters();
+      rows = applySort(rows);
+
+      const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
+      if (currentPage > pageCount) currentPage = pageCount;
+
+      // Render tbody
+      tbody.innerHTML = "";
+      const start = (currentPage - 1) * perPage;
+      const slice = rows.slice(start, start + perPage);
+      let idx = 0;
+      for (const d of slice) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${start + idx + 1}</td>
+          <td class="c-item">${d.item}</td>
+          <td class="c-price">${idf.format(Math.round(d.price))}</td>
+          <td class="c-vendor">${d.vendor}</td>`;
+        tbody.appendChild(tr);
+        idx++;
+      }
+      if (slice.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="4" class="text-center text-muted py-4">Tidak ada data</td>`;
+        tbody.appendChild(tr);
+      }
+
+      // Render pagination
+      pagination.innerHTML = "";
+      for (let i = 1; i <= pageCount; i++) {
+        const li = document.createElement("li");
+        li.className = "page-item" + (i === currentPage ? " active" : "");
+        const a = document.createElement("a");
+        a.className = "page-link"; a.href="#"; a.textContent = i;
+        a.addEventListener("click", e => { e.preventDefault(); currentPage = i; render(); });
+        li.appendChild(a); pagination.appendChild(li);
+      }
+    }
+
+    // Header sorting (for…of + dataset)
+    const sortHeaders = document.querySelectorAll("th.th-sort");
+    for (const th of sortHeaders) {
+      th.addEventListener("click", () => {
+        const key = th.dataset.key;
+        if (sortKey === key) {
+          sortDir = (sortDir === 'asc') ? 'desc' : 'asc';
+        } else {
+          sortKey = key; sortDir = 'asc';
+        }
+        for (const x of sortHeaders) x.classList.remove("asc","desc");
+        th.classList.add(sortDir);
+        currentPage = 1;
+        render();
+      });
+    }
+
+    // Filters events (for…of)
+    const filterControls = [filterInput, vendorSelect, minPrice, maxPrice];
+    for (const el of filterControls) {
+      el.addEventListener("input", () => { currentPage = 1; render(); });
+      el.addEventListener("change", () => { currentPage = 1; render(); });
+    }
+
+    // Clear
+    clearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      filterInput.value = ""; vendorSelect.value = "";
+      minPrice.value = ""; maxPrice.value = "";
+      currentPage = 1; render();
+    });
+
+    // Initial render
+    render();
   </script>
 </body>
 </html>
