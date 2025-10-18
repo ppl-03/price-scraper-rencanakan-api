@@ -48,6 +48,7 @@ MITRA10_SOURCE = "Mitra10"
 TOKOPEDIA_SOURCE = "Tokopedia"
 DASHBOARD_FORM_TEMPLATE = "dashboard/form.html"
 JSON_LD_TYPE_KEY = "@type"
+HTML_PARSER = "html.parser"
 
 
 # ---------------- small utilities ----------------
@@ -163,7 +164,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
     try:
         url = _build_url_defensively(JuraganMaterialUrlBuilder(), keyword, sort_by_price, page)
         html = _human_get(url)
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, HTML_PARSER)
 
         # Find product cards
         cards = soup.select("div.product-card") or \
@@ -629,7 +630,7 @@ def _parse_mitra10_html(html: str, request_url: str) -> list[dict]:
     if not html:
         return []
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, HTML_PARSER)
     seen = set()
 
     # Try JSON-LD first
@@ -890,7 +891,7 @@ def _tokopedia_fallback(keyword: str, sort_by_price: bool = True, page: int = 0)
     try:
         url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price, page)
         html = _human_get(url)
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, HTML_PARSER)
 
         # Find product cards
         cards = soup.select('a[data-testid="lnkProductContainer"]') or \
@@ -1012,7 +1013,6 @@ def _run_location_scraper(request, scraper_func, label: str) -> list[dict]:
                     "address": loc.address,
                     "source": label
                 })
-            messages.success(request, f"[{label}] Successfully scraped {len(locations)} locations")
             return locations
         else:
             error_msg = getattr(result, "error_message", "Unknown error")
