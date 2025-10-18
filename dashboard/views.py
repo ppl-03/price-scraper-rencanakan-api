@@ -39,6 +39,7 @@ except Exception:
 USE_BROWSER_FALLBACK = os.getenv("USE_BROWSER_FALLBACK", "auto").lower()  # auto|always|never
 
 # Constants to avoid duplication
+GEMILANG_SOURCE = "Gemilang Store"
 JURAGAN_MATERIAL_SOURCE = "Juragan Material"
 MITRA10_SOURCE = "Mitra10"
 DASHBOARD_FORM_TEMPLATE = "dashboard/form.html"
@@ -838,19 +839,19 @@ def _run_location_scraper(request, scraper_func, label: str) -> list[dict]:
 def home(request):
     keyword = request.GET.get("q", "semen")
     prices = []
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store")
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan")
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback)
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback)
 
     # Get locations for Gemilang (only when it has prices)
     locations_data = {}
-    gemilang_has_prices = any(p.get("source") == "Gemilang Store" for p in prices)
+    gemilang_has_prices = any(p.get("source") == GEMILANG_SOURCE for p in prices)
     if gemilang_has_prices:
-        gemilang_locations = _run_location_scraper(request, create_gemilang_location_scraper, "Gemilang Store")
+        gemilang_locations = _run_location_scraper(request, create_gemilang_location_scraper, GEMILANG_SOURCE)
         # Create a simple mapping of vendor to locations
         if gemilang_locations:
-            locations_data["Gemilang Store"] = gemilang_locations
+            locations_data[GEMILANG_SOURCE] = gemilang_locations
 
     # sanity: drop unreal prices and dedupe the final list
     prices = [p for p in prices if p.get("value") and p["value"] >= 100]
@@ -887,10 +888,10 @@ def home(request):
 def trigger_scrape(request):
     keyword = request.POST.get("q", "semen")
     counts = {
-        "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), "Gemilang Store"),
+        "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE),
         "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan"),
         "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback),
-        "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), "Mitra10", _mitra10_fallback),
+        "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback),
     }
     messages.success(
         request,
