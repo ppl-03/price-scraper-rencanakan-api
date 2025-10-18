@@ -123,6 +123,13 @@
         </select>
       </div>
 
+      <div class="input-group" style="max-width:260px;">
+        <span class="input-group-text">Lokasi</span>
+        <select id="locationSelect" class="form-select">
+          <option value="">Semua lokasi</option>
+        </select>
+      </div>
+
       <div class="input-group" style="max-width:240px;">
         <span class="input-group-text">Harga min</span>
         <input id="minPrice" type="number" class="form-control" placeholder="0">
@@ -346,6 +353,15 @@
       vendorSelect.appendChild(opt);
     }
 
+    // Populate location dropdown (for…of)
+    const locationSelect = document.getElementById("locationSelect");
+    const uniqueLocations = [...new Set(data.map(d => d.location).filter(l => l && l !== "—"))].sort();
+    for (const l of uniqueLocations) {
+      const opt = document.createElement("option");
+      opt.value = l; opt.textContent = l;
+      locationSelect.appendChild(opt);
+    }
+
     // ---------- Filtering + Sorting + Pagination ----------
     const perPage = 10;
     const pagination = document.getElementById("pagination");
@@ -361,14 +377,16 @@
     function applyFilters() {
       const q = (filterInput.value || "").toLowerCase();
       const v = vendorSelect.value || "";
+      const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
       return data.filter(d => {
         const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
+        const lm = !l || d.location === l;
         const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
                    (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
-        return qmatch && vm && pm;
+        return qmatch && vm && lm && pm;
       });
     }
 
@@ -478,7 +496,7 @@
     }
 
     // Filters events (for…of)
-    const filterControls = [filterInput, vendorSelect, minPrice, maxPrice];
+    const filterControls = [filterInput, vendorSelect, locationSelect, minPrice, maxPrice];
     for (const el of filterControls) {
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
@@ -487,7 +505,7 @@
     // Clear
     clearBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      filterInput.value = ""; vendorSelect.value = "";
+      filterInput.value = ""; vendorSelect.value = ""; locationSelect.value = "";
       minPrice.value = ""; maxPrice.value = "";
       currentPage = 1; render();
     });

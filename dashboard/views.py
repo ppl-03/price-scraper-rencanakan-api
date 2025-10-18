@@ -28,6 +28,9 @@ from api.juragan_material.url_builder import JuraganMaterialUrlBuilder
 from api.mitra10.factory import create_mitra10_scraper
 from api.mitra10.url_builder import Mitra10UrlBuilder
 
+from api.tokopedia.factory import create_tokopedia_scraper
+from api.tokopedia.url_builder import TokopediaUrlBuilder
+
 # Playwright fallback (optional at runtime)
 HAS_PLAYWRIGHT = False
 try:
@@ -42,6 +45,7 @@ USE_BROWSER_FALLBACK = os.getenv("USE_BROWSER_FALLBACK", "auto").lower()  # auto
 GEMILANG_SOURCE = "Gemilang Store"
 JURAGAN_MATERIAL_SOURCE = "Juragan Material"
 MITRA10_SOURCE = "Mitra10"
+TOKOPEDIA_SOURCE = "Tokopedia Bangunan"
 DASHBOARD_FORM_TEMPLATE = "dashboard/form.html"
 JSON_LD_TYPE_KEY = "@type"
 
@@ -729,6 +733,190 @@ def _try_alternative_mitra10_urls(keyword: str):
     return [], "", 0
 
 
+# ---------------- Tokopedia helpers + fallback ----------------
+def _extract_tokopedia_product_name(card) -> str | None:
+    """Extract product name from Tokopedia card."""
+    # Try primary selector
+    name = _try_primary_tokopedia_name(card)
+    if name:
+        return name
+    
+    # Try fallback selectors
+    name = _try_fallback_tokopedia_name(card)
+    if name:
+        return name
+    
+    # Try image alt text
+    return _try_tokopedia_image_alt(card)
+
+
+def _try_primary_tokopedia_name(card) -> str | None:
+    """Try primary Tokopedia name selector."""
+    for sel in ['span.css-20kt3o', 'span[data-testid="lblProductName"]', '.css-20kt3o']:
+        el = card.select_one(sel)
+        if el and el.get_text(strip=True):
+            return _clean_text(el.get_text(" ", strip=True))
+    return None
+
+
+def _try_fallback_tokopedia_name(card) -> str | None:
+    """Try fallback Tokopedia name selectors."""
+    for sel in ['div[data-testid="divProductWrapper"] span', 'span', 'h3', 'h2', 'h1']:
+        el = card.select_one(sel)
+        if el and el.get_text(strip=True):
+            text = _clean_text(el.get_text(" ", strip=True))
+            # Skip if it looks like a price
+            if not text.startswith(('Rp', 'IDR', 'rp', 'idr')) and len(text) > 3:
+                return text
+    return None
+
+
+def _try_tokopedia_image_alt(card) -> str | None:
+    """Try extracting name from image alt text."""
+    img = card.find("img")
+    if img and img.get("alt"):
+        alt_text = _clean_text(img["alt"])
+        if len(alt_text) > 3 and not alt_text.startswith(('Rp', 'IDR')):
+            return alt_text
+    return None
+
+
+def _extract_tokopedia_product_price(card) -> int:
+    """Extract product price from Tokopedia card."""
+    # Try primary price selector
+    price = _try_primary_tokopedia_price(card)
+    if price > 0:
+        return price
+    
+    # Try secondary price selectors
+    price = _try_secondary_tokopedia_price(card)
+    if price > 0:
+        return price
+    
+    # Try currency text fallback
+    return _try_currency_text_tokopedia_price(card)
+
+
+def _try_primary_tokopedia_price(card) -> int:
+    """Try primary Tokopedia price selector."""
+    for sel in ['span.css-o5uqv', 'span[data-testid="lblProductPrice"]', '.css-o5uqv']:
+        el = card.select_one(sel)
+        if el:
+            price_text = el.get_text(" ", strip=True)
+            # Use Tokopedia price cleaning logic
+            clean_price = _clean_tokopedia_price(price_text)
+            if clean_price > 0:
+                return clean_price
+    return 0
+
+
+def _try_secondary_tokopedia_price(card) -> int:
+    """Try secondary Tokopedia price selectors."""
+    for sel in ['span', 'div', 'p']:
+        elements = card.select(sel)
+        for el in elements:
+            text = el.get_text(" ", strip=True)
+            if 'Rp' in text or 'IDR' in text:
+                clean_price = _clean_tokopedia_price(text)
+                if clean_price > 0:
+                    return clean_price
+    return 0
+
+
+def _try_currency_text_tokopedia_price(card) -> int:
+    """Try extracting price from currency text in Tokopedia card."""
+    for t in card.find_all(string=lambda s: s and ("Rp" in s or "IDR" in s)):
+        clean_price = _clean_tokopedia_price(str(t).strip())
+        if clean_price > 0:
+            return clean_price
+    return 0
+
+
+def _clean_tokopedia_price(price_text: str) -> int:
+    """Clean Tokopedia price string and convert to integer."""
+    if not price_text:
+        return 0
+    
+    try:
+        # Remove whitespace and normalize
+        price_text = price_text.strip()
+        
+        # Extract price using regex (Tokopedia format: Rp62.500)
+        import re
+        price_pattern = re.compile(r'Rp\s*([\d,\.]+)', re.IGNORECASE)
+        match = price_pattern.search(price_text)
+        
+        if not match:
+            # Fallback: try to extract just numbers
+            number_pattern = re.compile(r'[\d,\.]+')
+            number_match = number_pattern.search(price_text)
+            if not number_match:
+                return 0
+            price_text = number_match.group()
+        else:
+            price_text = match.group(1)
+        
+        # Remove separators and convert to integer
+        # Tokopedia uses dots as thousand separators
+        clean_price = price_text.replace(',', '').replace('.', '')
+        
+        # Convert to integer
+        return int(clean_price)
+        
+    except (ValueError, AttributeError):
+        return 0
+
+
+def _extract_tokopedia_product_link(card) -> str:
+    """Extract product link from Tokopedia card."""
+    # Try primary link selector
+    link = card.select_one('a[data-testid="lnkProductContainer"]')
+    if link and link.get("href"):
+        return link.get("href")
+    
+    # Try fallback link selectors
+    for sel in ['a[href*="/p/"]', 'a[href*="/product/"]', 'a[href]']:
+        link = card.select_one(sel)
+        if link and link.get("href"):
+            return link.get("href")
+    
+    return "https://www.tokopedia.com/p/pertukangan/material-bangunan"
+
+
+def _tokopedia_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
+    """
+    Tokopedia fallback using simple HTML parsing when the main scraper fails.
+    """
+    try:
+        url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price, page)
+        html = _human_get(url)
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Find product cards
+        cards = soup.select('a[data-testid="lnkProductContainer"]') or \
+                soup.select('div[data-testid="divProductWrapper"]') or \
+                soup.select('div.css-bk6tzz') or \
+                soup.select('div[data-unify="Card"]')
+
+        out = []
+        for card in cards:
+            name = _extract_tokopedia_product_name(card)
+            if not name:
+                continue
+
+            price = _extract_tokopedia_product_price(card)
+            if price <= 0:
+                continue
+
+            href = _extract_tokopedia_product_link(card)
+            
+            out.append({"item": name, "value": price, "source": TOKOPEDIA_SOURCE, "url": href})
+        
+        return out, url, len(html)
+    except Exception:
+        return [], "", 0
+
+
 # ---------------- generic runners ----------------
 def _handle_successful_scrape(request, res, label: str, url: str, html_len: int) -> list[dict]:
     """Handle successful scrape results."""
@@ -843,6 +1031,7 @@ def home(request):
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan")
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback)
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback)
 
     # Get locations for Gemilang (only when it has prices)
     locations_data = {}
@@ -892,11 +1081,12 @@ def trigger_scrape(request):
         "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), "Depo Bangunan"),
         "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback),
         "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback),
+        "tokopedia": _run_vendor_to_count(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback),
     }
     messages.success(
         request,
-        "Scrape completed. Gemilang={gemilang}, Depo={depo}, JuraganMaterial={juragan}, Mitra10={mitra}".format(
-            gemilang=counts["gemilang"], depo=counts["depo"], juragan=counts["juragan"], mitra=counts["mitra10"]
+        "Scrape completed. Gemilang={gemilang}, Depo={depo}, JuraganMaterial={juragan}, Mitra10={mitra}, Tokopedia={tokopedia}".format(
+            gemilang=counts["gemilang"], depo=counts["depo"], juragan=counts["juragan"], mitra=counts["mitra10"], tokopedia=counts["tokopedia"]
         )
     )
     return redirect("home")
