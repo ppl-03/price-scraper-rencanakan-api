@@ -322,7 +322,7 @@
       
       // Extract modal data from button if present
       const modalBtn = locationCell?.querySelector("button[data-locations]");
-      const allLocations = modalBtn ? modalBtn.getAttribute("data-locations")?.split("|") || [] : [];
+      const allLocations = modalBtn ? modalBtn.dataset.locations?.split("|") || [] : [];
       
       // Extract location text (excluding button text)
       let location = "—";
@@ -427,8 +427,8 @@
             e.preventDefault(); // Prevent any default behavior
             e.stopPropagation(); // Stop event bubbling
             
-            const vendor = this.getAttribute('data-vendor');
-            const locationsStr = this.getAttribute('data-locations');
+            const vendor = this.dataset.vendor;
+            const locationsStr = this.dataset.locations;
             const locations = locationsStr ? locationsStr.split('|') : [];
             
             console.log('DEBUG: Dynamic button clicked');
@@ -495,14 +495,14 @@
     // Add click listeners to initially loaded buttons
     function addLocationButtonListeners() {
       const initialButtons = document.querySelectorAll('button[data-locations]');
-      initialButtons.forEach(button => {
-        if (!button.hasAttribute('data-listener-added')) {
+      for (const button of initialButtons) {
+        if (!button.dataset.listenerAdded) {
           button.addEventListener('click', function(e) {
             e.preventDefault(); // Prevent any default behavior
             e.stopPropagation(); // Stop event bubbling
             
-            const vendor = this.getAttribute('data-vendor');
-            const locationsStr = this.getAttribute('data-locations');
+            const vendor = this.dataset.vendor;
+            const locationsStr = this.dataset.locations;
             const locations = locationsStr ? locationsStr.split('|') : [];
             
             console.log('DEBUG: Initial button clicked');
@@ -511,9 +511,9 @@
             
             showLocationModal(vendor, locations);
           });
-          button.setAttribute('data-listener-added', 'true');
+          button.dataset.listenerAdded = 'true';
         }
-      });
+      }
     }
 
     // Initial render
@@ -527,7 +527,9 @@
       console.log('DEBUG: Cleaning up modal state...');
       // Remove any modal backdrops
       const backdrops = document.querySelectorAll('.modal-backdrop');
-      backdrops.forEach(backdrop => backdrop.remove());
+      for (const backdrop of backdrops) {
+        backdrop.remove();
+      }
       
       // Remove modal-open class from body
       document.body.classList.remove('modal-open');
@@ -577,7 +579,8 @@
         modalBody.innerHTML = '<p class="text-muted">No location data available.</p>';
       } else {
         let html = '<div class="list-group list-group-flush">';
-        locations.forEach((location, index) => {
+        for (let index = 0; index < locations.length; index++) {
+          const location = locations[index];
           if (location.trim()) {
             html += `<div class="list-group-item">
               <div class="d-flex align-items-center">
@@ -586,7 +589,7 @@
               </div>
             </div>`;
           }
-        });
+        }
         html += '</div>';
         modalBody.innerHTML = html;
       }
@@ -613,7 +616,9 @@
         }
         // Remove any remaining backdrops
         const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(backdrop => backdrop.remove());
+        for (const backdrop of backdrops) {
+          backdrop.remove();
+        }
         // Restore body scrolling
         document.body.classList.remove('modal-open');
         document.body.style.overflow = '';
