@@ -45,7 +45,7 @@ USE_BROWSER_FALLBACK = os.getenv("USE_BROWSER_FALLBACK", "auto").lower()  # auto
 GEMILANG_SOURCE = "Gemilang Store"
 JURAGAN_MATERIAL_SOURCE = "Juragan Material"
 MITRA10_SOURCE = "Mitra10"
-TOKOPEDIA_SOURCE = "Tokopedia Bangunan"
+TOKOPEDIA_SOURCE = "Tokopedia"
 DASHBOARD_FORM_TEMPLATE = "dashboard/form.html"
 JSON_LD_TYPE_KEY = "@type"
 
