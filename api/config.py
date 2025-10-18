@@ -31,6 +31,9 @@ class ScraperConfig:
     depobangunan_base_url: str = 'https://www.depobangunan.co.id'
     depobangunan_search_path: str = '/catalogsearch/result/'
     
+    blibli_base_url: str = 'https://www.blibli.com'
+    blibli_search_path: str = '/cari/'
+    
     @classmethod
     def from_environment(cls) -> 'ScraperConfig':
         return cls(
@@ -52,6 +55,8 @@ class ScraperConfig:
             juragan_material_search_path=os.getenv('JURAGAN_MATERIAL_SEARCH_PATH', '/produk'),
             depobangunan_base_url=os.getenv('DEPOBANGUNAN_BASE_URL', 'https://www.depobangunan.co.id'),
             depobangunan_search_path=os.getenv('DEPOBANGUNAN_SEARCH_PATH', '/catalogsearch/result/'),
+            blibli_base_url=os.getenv('BLIBLI_BASE_URL', 'https://www.blibli.com'),
+            blibli_search_path=os.getenv('BLIBLI_SEARCH_PATH', '/cari/'),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -74,6 +79,8 @@ class ScraperConfig:
             'juragan_material_search_path': self.juragan_material_search_path,
             'depobangunan_base_url': self.depobangunan_base_url,
             'depobangunan_search_path': self.depobangunan_search_path,
+            'blibli_base_url': self.blibli_base_url,
+            'blibli_search_path': self.blibli_search_path,
         }
 
 
