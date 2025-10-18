@@ -24,5 +24,6 @@ urlpatterns = [
     path('api/juragan_material/', include('api.juragan_material.urls')),
     path('api/depobangunan/', include('api.depobangunan.urls')),
     path('api/mitra10/', include('api.mitra10.urls')),
+    path('api/tokopedia/', include('api.tokopedia.urls')),
     path("", include("dashboard.urls")),
 ]

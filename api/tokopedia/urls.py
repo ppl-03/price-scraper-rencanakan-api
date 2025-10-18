@@ -1,9 +1,9 @@
 from django.urls import path
 from . import views
 
-app_name = 'depobangunan'
+app_name = 'tokopedia'
 
 urlpatterns = [
     path('scrape/', views.scrape_products, name='scrape_products'),
-    path('locations/', views.depobangunan_locations_view, name='depobangunan_locations'),
+    path('scrape-with-filters/', views.scrape_products_with_filters, name='scrape_products_with_filters'),
 ]
