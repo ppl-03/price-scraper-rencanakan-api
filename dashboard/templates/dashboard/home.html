@@ -302,10 +302,13 @@
                       {% if r.location_count > 1 %}
                         <span class="badge bg-light text-dark border location-badge" 
                               role="button"
+                              tabindex="0"
                               data-vendor="{{ r.source }}"
                               data-locations="{{ r.all_locations|join:'|' }}"
                               data-bs-toggle="tooltip"
                               title="Click to see all {{ r.location_count }} locations"
+                              aria-label="Show all {{ r.location_count }} locations for {{ r.source }}"
+                              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
                               style="font-size: 0.7rem; cursor: pointer;">
                           +{{ r.location_count|add:"-1" }}
                         </span>
@@ -552,7 +555,6 @@
         
         const vendor = this.dataset.vendor;
         const locationsContainer = locationDropdownMenu.querySelector(`li.vendor-locations[data-vendor="${vendor}"]`);
-        const icon = this.querySelector('.toggle-icon');
         
         // Toggle visibility
         if (locationsContainer.style.display === "none") {
@@ -673,9 +675,12 @@
           const locationsStr = d.allLocations.join('|');
           locationHtml += ` <span class="badge bg-light text-dark border location-badge" 
                              role="button"
+                             tabindex="0"
                              data-vendor="${d.vendor}"
                              data-locations="${locationsStr}"
                              title="Click to see all ${d.allLocations.length} locations"
+                             aria-label="Show all ${d.allLocations.length} locations for ${d.vendor}"
+                             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
                              style="font-size: 0.7rem; cursor: pointer;">
                              +${moreCount}
                            </span>`;
@@ -694,7 +699,7 @@
         // Add click event listener to the location badge if it exists
         const modalBadge = tr.querySelector('span[data-locations]');
         if (modalBadge) {
-          modalBadge.addEventListener('click', function(e) {
+          const handleLocationModal = function(e) {
             e.preventDefault(); // Prevent any default behavior
             e.stopPropagation(); // Stop event bubbling
             
@@ -702,12 +707,19 @@
             const locationsStr = this.dataset.locations;
             const locations = locationsStr ? locationsStr.split('|') : [];
             
-            console.log('DEBUG: Dynamic button clicked');
+            console.log('DEBUG: Dynamic badge clicked');
             console.log('DEBUG: Vendor:', vendor);
             console.log('DEBUG: Locations string:', locationsStr);
             console.log('DEBUG: Parsed locations:', locations);
             
             showLocationModal(vendor, locations);
+          };
+          
+          modalBadge.addEventListener('click', handleLocationModal);
+          modalBadge.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleLocationModal.call(this, e);
+            }
           });
         }
         
@@ -773,7 +785,7 @@
       const initialSpans = document.querySelectorAll('span[data-locations]');
       for (const span of initialSpans) {
         if (!span.dataset.listenerAdded) {
-          span.addEventListener('click', function(e) {
+          const handleLocationModal = function(e) {
             e.preventDefault(); // Prevent any default behavior
             e.stopPropagation(); // Stop event bubbling
             
@@ -786,6 +798,13 @@
             console.log('DEBUG: Locations:', locations);
             
             showLocationModal(vendor, locations);
+          };
+          
+          span.addEventListener('click', handleLocationModal);
+          span.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleLocationModal.call(this, e);
+            }
           });
           span.dataset.listenerAdded = 'true';
         }
