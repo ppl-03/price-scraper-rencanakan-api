@@ -88,35 +88,23 @@ def scrape_products(request):
             'error': 'Internal server error occurred'
         }, status=500)
 
-
 @require_http_methods(["GET"])
 def scrape_locations(request):
-    """View function for fetching Mitra10 store locations"""
+    """Django view to scrape Mitra10 store locations."""
     try:
-        timeout_param = request.GET.get('timeout', '60')
-        try:
-            timeout = int(timeout_param)
-        except ValueError:
-            return _create_error_response('Timeout parameter must be a valid integer')
-
         scraper = create_mitra10_location_scraper()
-        result = scraper.scrape_locations_batch(timeout=timeout)
+        result = scraper.scrape_locations()
 
-        locations_data = [
-            {'location': location} for location in result.locations
-        ]
-
-        response_data = {
-            'success': result.success,
-            'locations': locations_data,
-            'count': len(result.locations),
-            'error_message': result.error_message,
-            'attempts_made': result.attempts_made,
-            'source': 'mitra10_website'
-        }
-
-        return JsonResponse(response_data)
+        return JsonResponse({
+            "success": result["success"],
+            "locations": result["locations"],
+            "error_message": result["error_message"]
+        })
 
     except Exception as e:
         logger.error(f"Unexpected error in Mitra10 location scraper: {str(e)}")
-        return _create_error_response('Internal server error occurred', 500)
+        return JsonResponse({
+            "success": False,
+            "locations": [],
+            "error_message": "Internal server error occurred"
+        }, status=500)
