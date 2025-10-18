@@ -162,6 +162,30 @@ def _try_currency_text_juragan_price(card) -> int:
     return 0
 
 
+def _extract_juragan_product_unit(url: str) -> str:
+    """Extract product unit from Juragan Material product detail page."""
+    try:
+        if not url:
+            return ""
+        
+        # Handle relative URLs
+        if url.startswith('/'):
+            url = f"https://juraganmaterial.id{url}"
+        
+        # Fetch product detail page
+        html = _human_get(url)
+        soup = BeautifulSoup(html, HTML_PARSER)
+        
+        # Extract unit using the same CSS selector as the main parser
+        unit_element = soup.select_one('html > body > div:nth-of-type(1) > div > main > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1) > p:nth-of-type(2)')
+        if unit_element:
+            return unit_element.get_text(strip=True)
+        
+        return ""
+    except Exception:
+        return ""
+
+
 def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
     try:
         url = _build_url_defensively(JuraganMaterialUrlBuilder(), keyword, sort_by_price, page)
@@ -184,7 +208,10 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             if price <= 0:
                 continue
 
-            out.append({"item": name, "value": price, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
+            # Extract unit for Juragan Material
+            unit = _extract_juragan_product_unit(href) if href else ""
+
+            out.append({"item": name, "value": price, "unit": unit, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
         
         return out, url, len(html)
     except Exception:
