@@ -167,7 +167,7 @@ class TestGemilangProductModel(TestCase):
             unit="KG"
         )
         
-        expected_string = f"String Test - Rp15000"
+        expected_string = "String Test - Rp15000"
         self.assertEqual(str(product), expected_string)
     
     def test_product_price_must_be_positive(self):
@@ -225,13 +225,13 @@ class TestGemilangProductModel(TestCase):
         self.assertEqual(len(product.unit), 50)
     
     def test_order_by_created_at_descending(self):
-        product1 = GemilangProduct.objects.create(
+        GemilangProduct.objects.create(
             name="First Product",
             price=10000,
             url="https://gemilang-store.com/p1",
             unit="KG"
         )
-        product2 = GemilangProduct.objects.create(
+        GemilangProduct.objects.create(
             name="Second Product",
             price=20000,
             url="https://gemilang-store.com/p2",
