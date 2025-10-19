@@ -15,6 +15,9 @@ from .models import User, Company, UserManager
 # because the same variable is referenced across tests.
 TEST_PASSWORD = secrets.token_urlsafe(12)
 TEST_ADMIN_PASSWORD = secrets.token_urlsafe(12)
+# Use an address reserved for documentation/testing per RFC 5737 to avoid
+# using an actual private network gateway or leaking internal addresses.
+TEST_IP = '192.0.2.1'
 
 
 class CompanyModelTest(TestCase):
@@ -496,11 +499,10 @@ class UserModelTest(TestCase):
         # Initially None
         self.assertIsNone(user.last_activity_at)
         self.assertIsNone(user.last_login_ip)
-        
-        # Update activity
-        test_ip = '192.168.1.1'
+        # Update activity (use reserved documentation IP)
+        test_ip = TEST_IP
         user.update_last_activity(test_ip)
-        
+
         self.assertIsNotNone(user.last_activity_at)
         self.assertEqual(user.last_login_ip, test_ip)
     
