@@ -9,6 +9,64 @@ from api.mitra10.html_parser import Mitra10HtmlParser
 from pathlib import Path
 
 
+class BatchPlaywrightClientHelper:
+    """Helper class for setting up BatchPlaywrightClient mocks in integration tests"""
+    
+    @staticmethod
+    def setup_successful_mock(mock_batch_client, return_html):
+        """Setup BatchPlaywrightClient mock for successful requests"""
+        mock_client_instance = Mock()
+        mock_batch_client.return_value.__enter__.return_value = mock_client_instance
+        mock_client_instance.get.return_value = return_html
+        return mock_client_instance
+    
+    @staticmethod
+    def setup_error_mock(mock_batch_client, error_message="Request timeout after 30s"):
+        """Setup BatchPlaywrightClient mock to raise an error"""
+        mock_batch_client.return_value.__enter__.side_effect = Exception(error_message)
+    
+    @staticmethod
+    def assert_batch_client_called(mock_batch_client, mock_client_instance, expected_url_fragment):
+        """Assert BatchPlaywrightClient was called correctly"""
+        mock_batch_client.assert_called_once_with(headless=True)
+        mock_client_instance.get.assert_called_once()
+        called_url = mock_client_instance.get.call_args[0][0]
+        return expected_url_fragment in called_url
+
+
+class IntegrationTestHelper:
+    """Helper class for common integration test operations"""
+    
+    @staticmethod
+    def assert_successful_scraping_result(test_case, result, expected_url_fragment):
+        """Assert successful scraping result with common checks"""
+        test_case.assertTrue(result.success)
+        test_case.assertIsNone(result.error_message)
+        test_case.assertIsNotNone(result.url)
+        test_case.assertIn(expected_url_fragment, result.url)
+        test_case.assertGreater(len(result.products), 0)
+        
+        # Verify first product structure
+        product = result.products[0]
+        test_case.assertIsInstance(product, Product)
+        test_case.assertIsNotNone(product.name)
+        test_case.assertGreater(product.price, 0)
+        test_case.assertIsNotNone(product.url)
+    
+    @staticmethod
+    def assert_failed_scraping_result(test_case, result, expected_error_fragment):
+        """Assert failed scraping result with common checks"""
+        test_case.assertFalse(result.success)
+        test_case.assertIn(expected_error_fragment, result.error_message)
+        test_case.assertEqual(len(result.products), 0)
+    
+    @staticmethod
+    def assert_empty_scraping_result(test_case, result):
+        """Assert successful but empty scraping result"""
+        test_case.assertTrue(result.success)
+        test_case.assertEqual(len(result.products), 0)
+
+
 class TestMitra10Integration(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -26,109 +84,93 @@ class TestMitra10Integration(TestCase):
             self.url_builder, 
             self.html_parser
         )
-    
-    def _setup_successful_http_response(self):
-        self.mock_http_client.get.return_value = self.mock_html
-    
-    def _setup_http_error(self, error_message="Connection timeout"):
-        self.mock_http_client.get.side_effect = HttpClientError(error_message)
-    
-    def _assert_successful_result(self, result, expected_url_fragment):
-        self.assertTrue(result.success)
-        self.assertIsNone(result.error_message)
-        self.assertIsNotNone(result.url)
-        self.assertIn(expected_url_fragment, result.url)
-        self.assertGreater(len(result.products), 0)
-    
-    def _assert_failed_result(self, result, expected_error_fragment):
-        self.assertFalse(result.success)
-        self.assertIn(expected_error_fragment, result.error_message)
-        self.assertEqual(len(result.products), 0)
+        self.batch_helper = BatchPlaywrightClientHelper()
+        self.test_helper = IntegrationTestHelper()
         
-    def test_complete_scraping_pipeline_success(self):
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_complete_scraping_pipeline_success(self, mock_batch_client):
         keyword = "semen"
-        self._setup_successful_http_response()
+        
+        mock_client_instance = self.batch_helper.setup_successful_mock(mock_batch_client, self.mock_html)
         
         result = self.scraper.scrape_products(keyword)
         
-        self._assert_successful_result(result, "q=semen")
+        self.test_helper.assert_successful_scraping_result(self, result, "q=semen")
         self.assertIn("sort=", result.url)
         
-        product = result.products[0]
-        self.assertIsInstance(product, Product)
-        self.assertIsNotNone(product.name)
-        self.assertGreater(product.price, 0)
-        self.assertIsNotNone(product.url)
+        # Verify BatchPlaywrightClient was used correctly
+        self.assertTrue(self.batch_helper.assert_batch_client_called(
+            mock_batch_client, mock_client_instance, "q=semen"
+        ))
         
-        self.mock_http_client.get.assert_called_once()
-        called_url = self.mock_http_client.get.call_args[0][0]
-        self.assertIn("q=semen", called_url)
-        
-    def test_scraping_with_price_sorting(self):
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scraping_with_price_sorting(self, mock_batch_client):
         keyword = "semen"
-        self._setup_successful_http_response()
+        
+        self.batch_helper.setup_successful_mock(mock_batch_client, self.mock_html)
         
         result = self.scraper.scrape_products(keyword, sort_by_price=True)
         
-        self._assert_successful_result(result, "q=semen")
+        self.test_helper.assert_successful_scraping_result(self, result, "q=semen")
         self.assertIn("sort=", result.url)
         self.assertTrue(
             "%7B%22key%22%3A%22price%22%2C%22value%22%3A%22ASC%22%7D" in result.url or
             "sort=%7B%22key%22%3A%22price%22%2C%22value%22%3A%22ASC%22%7D" in result.url
         )
         
-    def test_scraping_with_http_error(self):
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scraping_with_http_error(self, mock_batch_client):
         keyword = "semen"
-        self._setup_http_error()
+        error_message = "Request timeout after 30s for https://www.mitra10.com/catalogsearch/result?q=semen&sort=%7B%22key%22%3A%22price%22%2C%22value%22%3A%22ASC%22%7D&page=1"
+        
+        self.batch_helper.setup_error_mock(mock_batch_client, error_message)
         
         result = self.scraper.scrape_products(keyword)
         
-        self._assert_failed_result(result, "Connection timeout")
+        self.test_helper.assert_failed_scraping_result(self, result, "Request timeout after 30s")
         
-    def test_scraping_with_empty_html(self):
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scraping_with_empty_html(self, mock_batch_client):
         keyword = "semen"
-        self.mock_http_client.get.return_value = ""
+        
+        self.batch_helper.setup_successful_mock(mock_batch_client, "")
         
         result = self.scraper.scrape_products(keyword)
         
-        self.assertTrue(result.success)
-        self.assertEqual(len(result.products), 0)
+        self.test_helper.assert_empty_scraping_result(self, result)
         
-    def test_scraping_with_no_products_found(self):
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scraping_with_no_products_found(self, mock_batch_client):
         keyword = "nonexistent"
-        self.mock_http_client.get.return_value = "<html><body><div>No products found</div></body></html>"
+        no_products_html = "<html><body><div>No products found</div></body></html>"
+        
+        self.batch_helper.setup_successful_mock(mock_batch_client, no_products_html)
         
         result = self.scraper.scrape_products(keyword)
         
-        self.assertTrue(result.success)
-        self.assertEqual(len(result.products), 0)
+        self.test_helper.assert_empty_scraping_result(self, result)
         
     def test_invalid_keyword_handling(self):
-        result = self.scraper.scrape_products("")
-        self.assertFalse(result.success)
-        self.assertIn("Keyword cannot be empty", result.error_message)
-        
-        result = self.scraper.scrape_products("   ")
-        self.assertFalse(result.success)
-        self.assertIn("Keyword cannot be empty", result.error_message)
+        # These should fail at URL building stage before BatchPlaywrightClient is used
+        for invalid_keyword in ["", "   "]:
+            result = self.scraper.scrape_products(invalid_keyword)
+            self.test_helper.assert_failed_scraping_result(self, result, "Keyword cannot be empty")
         
     def test_factory_function(self):
         scraper = create_mitra10_scraper()
         
         self.assertIsInstance(scraper, IPriceScraper)
         self.assertIsInstance(scraper, Mitra10PriceScraper)
-        self.assertIsNotNone(scraper.http_client)
+        self.assertIsNone(scraper.http_client)  # Factory passes None, scraper handles BatchPlaywrightClient internally
         self.assertIsNotNone(scraper.url_builder)
         self.assertIsNotNone(scraper.html_parser)
 
-        self.assertIsInstance(scraper.http_client, PlaywrightHttpClient)
         self.assertIsInstance(scraper.url_builder, Mitra10UrlBuilder)
         self.assertIsInstance(scraper.html_parser, Mitra10HtmlParser)
-        scraper.http_client.close()
         
-    def test_dependency_injection_flexibility(self):
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_dependency_injection_flexibility(self, mock_batch_client):
         mock_http_client = Mock()
-        mock_http_client.get.return_value = self.mock_html
         
         mock_url_builder = Mock()
         mock_url_builder.build_search_url.return_value = "https://www.mitra10.com/catalogsearch/result?q=test"
@@ -138,11 +180,13 @@ class TestMitra10Integration(TestCase):
             Product(name="Test Mitra10 Product", price=50000, url="/product/test")
         ]
         
+        mock_client_instance = self.batch_helper.setup_successful_mock(mock_batch_client, self.mock_html)
+        
         scraper = Mitra10PriceScraper(mock_http_client, mock_url_builder, mock_html_parser)
         result = scraper.scrape_products("test")
         
         mock_url_builder.build_search_url.assert_called_once_with("test", True, 0)
-        mock_http_client.get.assert_called_once_with("https://www.mitra10.com/catalogsearch/result?q=test")
+        mock_client_instance.get.assert_called_once_with("https://www.mitra10.com/catalogsearch/result?q=test")
         mock_html_parser.parse_products.assert_called_once_with(self.mock_html)
         
         self.assertTrue(result.success)
@@ -156,27 +200,22 @@ class TestMitra10Integration(TestCase):
         scraper = Mitra10PriceScraper(self.mock_http_client, mock_url_builder, self.html_parser)
         result = scraper.scrape_products("test")
         
-        self.assertFalse(result.success)
-        self.assertIn("Unexpected error", result.error_message)
+        self.test_helper.assert_failed_scraping_result(self, result, "URL error")
         
-    @patch('api.mitra10.factory.PlaywrightHttpClient')
     @patch('api.mitra10.factory.Mitra10UrlBuilder')
     @patch('api.mitra10.factory.Mitra10HtmlParser')
-    def test_factory_creates_new_instances(self, mock_parser_class, mock_builder_class, mock_client_class):
-        mock_client = Mock()
+    def test_factory_creates_new_instances(self, mock_parser_class, mock_builder_class):
         mock_builder = Mock()
         mock_parser = Mock()
         
-        mock_client_class.return_value = mock_client
         mock_builder_class.return_value = mock_builder
         mock_parser_class.return_value = mock_parser
         
         scraper = create_mitra10_scraper()
         
-        mock_client_class.assert_called_once()
         mock_builder_class.assert_called_once()
         mock_parser_class.assert_called_once()
         
-        self.assertEqual(scraper.http_client, mock_client)
+        self.assertIsNone(scraper.http_client)  # Factory passes None as http_client
         self.assertEqual(scraper.url_builder, mock_builder)
         self.assertEqual(scraper.html_parser, mock_parser)
