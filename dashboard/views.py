@@ -52,6 +52,10 @@ DASHBOARD_FORM_TEMPLATE = "dashboard/form.html"
 JSON_LD_TYPE_KEY = "@type"
 HTML_PARSER = "html.parser"
 
+# Error message constants
+CONTEXT_MANAGER_ERROR = "context manager"
+UNKNOWN_ERROR_MSG = "Unknown error"
+
 
 # ---------------- small utilities ----------------
 def _digits_to_int(txt: str) -> int:
@@ -1097,32 +1101,41 @@ def _get_bot_challenge_hint(url: str) -> str:
 
 def _run_vendor_to_prices(request, keyword: str, maker, label: str, fallback=None) -> list[dict]:
     try:
-        scraper, urlb = maker()
-        url = _build_url_defensively(urlb, keyword, sort_by_price=True, page=0)
-        html_len = _fetch_len(url)
-        
-        # Handle BatchPlaywrightClient context manager issue
-        res = _safe_scrape_products(scraper, keyword, sort_by_price=True, page=0)
-
-        if getattr(res, "success", False) and getattr(res, "products", None):
-            return _handle_successful_scrape(request, res, label, url, html_len)
-        
-        if fallback:
-            return _handle_fallback_scrape(request, keyword, label, fallback, url, html_len)
-        else:
-            messages.warning(request, f"[{label}] {getattr(res, 'error_message', 'No products parsed')}")
-            return []
-            
+        return _execute_vendor_scraping(request, keyword, maker, label, fallback)
     except Exception as e:
-        error_msg = str(e)
-        if "context manager" in error_msg.lower() or "batchplaywrightclient" in error_msg:
-            messages.info(request, f"[{label}] Switching to alternative data source")
-            if fallback:
-                return _handle_fallback_scrape(request, keyword, label, fallback, url if 'url' in locals() else "", 0)
-            return []
-        else:
-            messages.error(request, f"[{label}] Scraper error: {e}")
-            return []
+        return _handle_vendor_scraping_exception(request, keyword, label, fallback, e)
+
+
+def _execute_vendor_scraping(request, keyword: str, maker, label: str, fallback) -> list[dict]:
+    """Execute the main vendor scraping logic."""
+    scraper, urlb = maker()
+    url = _build_url_defensively(urlb, keyword, sort_by_price=True, page=0)
+    html_len = _fetch_len(url)
+    
+    # Handle BatchPlaywrightClient context manager issue
+    res = _safe_scrape_products(scraper, keyword, sort_by_price=True, page=0)
+
+    if getattr(res, "success", False) and getattr(res, "products", None):
+        return _handle_successful_scrape(request, res, label, url, html_len)
+    
+    if fallback:
+        return _handle_fallback_scrape(request, keyword, label, fallback, url, html_len)
+    else:
+        messages.warning(request, f"[{label}] {getattr(res, 'error_message', 'No products parsed')}")
+        return []
+
+
+def _handle_vendor_scraping_exception(request, keyword: str, label: str, fallback, error: Exception) -> list[dict]:
+    """Handle exceptions during vendor scraping."""
+    error_msg = str(error)
+    if CONTEXT_MANAGER_ERROR in error_msg.lower() or "batchplaywrightclient" in error_msg:
+        messages.info(request, f"[{label}] Switching to alternative data source")
+        if fallback:
+            return _handle_fallback_scrape(request, keyword, label, fallback, "", 0)
+        return []
+    else:
+        messages.error(request, f"[{label}] Scraper error: {error}")
+        return []
 
 
 def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, page: int = 0):
@@ -1133,28 +1146,40 @@ def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, pag
     
     # Check if this scraper uses BatchPlaywrightClient
     if hasattr(scraper, 'http_client') and isinstance(scraper.http_client, BatchPlaywrightClient):
-        # For BatchPlaywrightClient scrapers, use the batch method with context manager
-        try:
-            # Try to use scrape_batch method if available (like Mitra10)
-            if hasattr(scraper, 'scrape_batch'):
-                products = scraper.scrape_batch([keyword])
-                from api.interfaces import ScrapingResult
-                return ScrapingResult(products=products, success=True, url="")
-            else:
-                # Fallback: recreate scraper with context manager
-                with BatchPlaywrightClient() as batch_client:
-                    # Temporarily replace the http_client
-                    original_client = scraper.http_client
-                    scraper.http_client = batch_client
-                    result = scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
-                    scraper.http_client = original_client  # Restore original
-                    return result
-        except Exception as e:
-            from api.interfaces import ScrapingResult
-            return ScrapingResult(products=[], success=False, error_message=str(e))
+        return _handle_playwright_scraper(scraper, keyword, sort_by_price, page)
     else:
         # For regular HTTP client scrapers, use normal method
         return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
+
+
+def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page: int):
+    """Handle scraping for BatchPlaywrightClient-based scrapers."""
+    from api.playwright_client import BatchPlaywrightClient
+    from api.interfaces import ScrapingResult
+    
+    try:
+        # Try to use scrape_batch method if available (like Mitra10)
+        if hasattr(scraper, 'scrape_batch'):
+            products = scraper.scrape_batch([keyword])
+            return ScrapingResult(products=products, success=True, url="")
+        else:
+            return _handle_playwright_scraper_fallback(scraper, keyword, sort_by_price, page)
+    except Exception as e:
+        return ScrapingResult(products=[], success=False, error_message=str(e))
+
+
+def _handle_playwright_scraper_fallback(scraper, keyword: str, sort_by_price: bool, page: int):
+    """Fallback handling for Playwright scrapers without scrape_batch."""
+    from api.playwright_client import BatchPlaywrightClient
+    
+    # Fallback: recreate scraper with context manager
+    with BatchPlaywrightClient() as batch_client:
+        # Temporarily replace the http_client
+        original_client = scraper.http_client
+        scraper.http_client = batch_client
+        result = scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
+        scraper.http_client = original_client  # Restore original
+        return result
 
 
 def _run_vendor_to_count(request, keyword: str, maker, label: str, fallback=None) -> int:
@@ -1182,50 +1207,65 @@ def _run_vendor_to_count(request, keyword: str, maker, label: str, fallback=None
 def _run_location_scraper(request, scraper_func, label: str) -> list[dict]:
     """Helper function to run location scraping and return formatted locations."""
     try:
-        scraper = scraper_func()
-        
-        # Try the expected interface method first
-        if hasattr(scraper, 'scrape_locations_batch'):
-            result = scraper.scrape_locations_batch()
-        # Fallback to the actual implemented method
-        elif hasattr(scraper, 'scrape_locations'):
-            result = scraper.scrape_locations()
-        else:
-            messages.error(request, f"[{label}] No valid scrape method found")
-            return []
-        
-        if getattr(result, "success", False) and getattr(result, "locations", None):
-            locations = []
-            for i, loc in enumerate(result.locations):
-                locations.append({
-                    "store_name": loc.store_name,
-                    "address": loc.address,
-                    "source": label
-                })
-            return locations
-        else:
-            error_msg = getattr(result, "error_message", "Unknown error")
-            messages.warning(request, f"[{label}] Location scraping failed: {error_msg}")
-            return []
+        return _execute_location_scraping(request, scraper_func, label)
     except Exception as e:
-        error_msg = str(e)
-        # Handle abstract class instantiation errors by using fallback locations
-        if "abstract class" in error_msg and "abstract method" in error_msg:
-            messages.info(request, f"[{label}] Using stored location data (live location service unavailable)")
-            if label == GEMILANG_SOURCE:
-                return _get_gemilang_fallback_locations()
-            elif label == DEPO_BANGUNAN_SOURCE:
-                return _get_depo_fallback_locations()
-            else:
-                return []
-        else:
-            messages.warning(request, f"[{label}] Cannot load live locations, using stored locations")
-            if label == GEMILANG_SOURCE:
-                return _get_gemilang_fallback_locations()
-            elif label == DEPO_BANGUNAN_SOURCE:
-                return _get_depo_fallback_locations()
-            else:
-                return []
+        return _handle_location_scraping_exception(request, label, e)
+
+
+def _execute_location_scraping(request, scraper_func, label: str) -> list[dict]:
+    """Execute the main location scraping logic."""
+    scraper = scraper_func()
+    
+    # Try the expected interface method first
+    if hasattr(scraper, 'scrape_locations_batch'):
+        result = scraper.scrape_locations_batch()
+    # Fallback to the actual implemented method
+    elif hasattr(scraper, 'scrape_locations'):
+        result = scraper.scrape_locations()
+    else:
+        messages.error(request, f"[{label}] No valid scrape method found")
+        return []
+    
+    if getattr(result, "success", False) and getattr(result, "locations", None):
+        return _format_location_results(result.locations, label)
+    else:
+        error_msg = getattr(result, "error_message", UNKNOWN_ERROR_MSG)
+        messages.warning(request, f"[{label}] Location scraping failed: {error_msg}")
+        return []
+
+
+def _format_location_results(locations, label: str) -> list[dict]:
+    """Format location results into standardized format."""
+    formatted_locations = []
+    for i, loc in enumerate(locations):
+        formatted_locations.append({
+            "store_name": loc.store_name,
+            "address": loc.address,
+            "source": label
+        })
+    return formatted_locations
+
+
+def _handle_location_scraping_exception(request, label: str, error: Exception) -> list[dict]:
+    """Handle exceptions during location scraping."""
+    error_msg = str(error)
+    # Handle abstract class instantiation errors by using fallback locations
+    if "abstract class" in error_msg and "abstract method" in error_msg:
+        messages.info(request, f"[{label}] Using stored location data (live location service unavailable)")
+        return _get_fallback_locations_by_source(label)
+    else:
+        messages.warning(request, f"[{label}] Cannot load live locations, using stored locations")
+        return _get_fallback_locations_by_source(label)
+
+
+def _get_fallback_locations_by_source(label: str) -> list[dict]:
+    """Get fallback locations based on the source label."""
+    if label == GEMILANG_SOURCE:
+        return _get_gemilang_fallback_locations()
+    elif label == DEPO_BANGUNAN_SOURCE:
+        return _get_depo_fallback_locations()
+    else:
+        return []
 
 
 def _get_gemilang_fallback_locations() -> list[dict]:
@@ -1276,42 +1316,64 @@ def _get_depo_fallback_locations() -> list[dict]:
 def _run_mitra10_location_scraper(request) -> list[dict]:
     """Helper function to run Mitra10 location scraping and return formatted locations."""
     try:
-        scraper = create_mitra10_location_scraper()
-        result = scraper.scrape_locations()
-        
-        # Handle dictionary response (Mitra10 returns a dict, not an object)
-        if isinstance(result, dict) and result.get("success", False) and result.get("locations"):
-            locations = []
-            for location_name in result["locations"]:
-                # Mitra10 location scraper returns location names as strings
-                # Convert them to the expected format
-                locations.append({
-                    "store_name": f"Mitra10 {location_name}",
-                    "address": location_name,
-                    "source": MITRA10_SOURCE
-                })
-            return locations
-        else:
-            error_msg = result.get("error_message", "Unknown error") if isinstance(result, dict) else "Unknown error"
-            # Handle specific error types with appropriate fallbacks
-            if "timeout" in error_msg.lower() or "exceeded" in error_msg.lower():
-                messages.warning(request, f"[{MITRA10_SOURCE}] Website loading slowly, using cached locations")
-                return _get_mitra10_fallback_locations()
-            elif "context manager" in error_msg.lower() or "batchplaywrightclient" in error_msg.lower():
-                messages.warning(request, f"[{MITRA10_SOURCE}] Browser connection issue, using cached locations")
-                return _get_mitra10_fallback_locations()
-            else:
-                messages.warning(request, f"[{MITRA10_SOURCE}] Cannot load live locations, using cached locations")
-                return _get_mitra10_fallback_locations()
+        return _execute_mitra10_location_scraping(request)
     except Exception as e:
-        error_str = str(e)
-        # Handle specific error types with appropriate fallbacks
-        if any(keyword in error_str.lower() for keyword in ["timeout", "exceeded", "context manager", "batchplaywrightclient"]):
-            messages.warning(request, f"[{MITRA10_SOURCE}] Connection issue, using cached locations")
-            return _get_mitra10_fallback_locations()
-        else:
-            messages.warning(request, f"[{MITRA10_SOURCE}] Cannot load live locations, using cached locations")
-            return _get_mitra10_fallback_locations()
+        return _handle_mitra10_scraping_exception(request, e)
+
+
+def _execute_mitra10_location_scraping(request) -> list[dict]:
+    """Execute Mitra10 location scraping logic."""
+    scraper = create_mitra10_location_scraper()
+    result = scraper.scrape_locations()
+    
+    # Handle dictionary response (Mitra10 returns a dict, not an object)
+    if isinstance(result, dict) and result.get("success", False) and result.get("locations"):
+        return _format_mitra10_locations(result["locations"])
+    else:
+        return _handle_mitra10_scraping_failure(request, result)
+
+
+def _format_mitra10_locations(location_names: list) -> list[dict]:
+    """Format Mitra10 location names into standardized format."""
+    locations = []
+    for location_name in location_names:
+        # Mitra10 location scraper returns location names as strings
+        # Convert them to the expected format
+        locations.append({
+            "store_name": f"Mitra10 {location_name}",
+            "address": location_name,
+            "source": MITRA10_SOURCE
+        })
+    return locations
+
+
+def _handle_mitra10_scraping_failure(request, result) -> list[dict]:
+    """Handle failed Mitra10 scraping with appropriate error messages."""
+    error_msg = result.get("error_message", UNKNOWN_ERROR_MSG) if isinstance(result, dict) else UNKNOWN_ERROR_MSG
+    
+    # Handle specific error types with appropriate fallbacks
+    if "timeout" in error_msg.lower() or "exceeded" in error_msg.lower():
+        messages.warning(request, f"[{MITRA10_SOURCE}] Website loading slowly, using cached locations")
+    elif CONTEXT_MANAGER_ERROR in error_msg.lower() or "batchplaywrightclient" in error_msg.lower():
+        messages.warning(request, f"[{MITRA10_SOURCE}] Browser connection issue, using cached locations")
+    else:
+        messages.warning(request, f"[{MITRA10_SOURCE}] Cannot load live locations, using cached locations")
+    
+    return _get_mitra10_fallback_locations()
+
+
+def _handle_mitra10_scraping_exception(request, error: Exception) -> list[dict]:
+    """Handle exceptions during Mitra10 location scraping."""
+    error_str = str(error)
+    error_keywords = ["timeout", "exceeded", CONTEXT_MANAGER_ERROR, "batchplaywrightclient"]
+    
+    # Handle specific error types with appropriate fallbacks
+    if any(keyword in error_str.lower() for keyword in error_keywords):
+        messages.warning(request, f"[{MITRA10_SOURCE}] Connection issue, using cached locations")
+    else:
+        messages.warning(request, f"[{MITRA10_SOURCE}] Cannot load live locations, using cached locations")
+    
+    return _get_mitra10_fallback_locations()
 
 
 def _get_mitra10_fallback_locations() -> list[dict]:
