@@ -190,6 +190,51 @@ def _extract_juragan_product_unit(url: str) -> str:
         return ""
 
 
+def _extract_depo_product_unit(url: str) -> str:
+    """Extract product unit from Depo Bangunan product detail page."""
+    try:
+        if not url:
+            return ""
+        
+        # Handle relative URLs
+        if url.startswith('/'):
+            url = f"https://www.depobangunan.com{url}"
+        
+        # Fetch product detail page
+        html = _human_get(url)
+        if not html:
+            return ""
+        
+        # Use Depo Bangunan's unit parser to extract unit from detail page
+        from api.depobangunan.unit_parser import DepoBangunanUnitParser
+        unit_parser = DepoBangunanUnitParser()
+        
+        # Try to extract unit from the detail page HTML
+        unit = unit_parser.parse_unit_from_detail_page(html)
+        return unit or ""
+        
+    except Exception:
+        return ""
+
+
+def _extract_depo_product_unit_from_name(name: str) -> str:
+    """Extract product unit from Depo Bangunan product name."""
+    try:
+        if not name:
+            return ""
+        
+        # Use Depo Bangunan's unit parser to extract unit from product name
+        from api.depobangunan.unit_parser import DepoBangunanUnitParser
+        unit_parser = DepoBangunanUnitParser()
+        
+        # Try to extract unit from the product name
+        unit = unit_parser.parse_unit_from_product_name(name)
+        return unit or ""
+        
+    except Exception:
+        return ""
+
+
 def _extract_juragan_product_location(url: str) -> str:
     """Extract product location from Juragan Material product detail page using groupmate's method."""
     try:
@@ -241,6 +286,114 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             location = _extract_juragan_product_location(href) if href else ""
 
             out.append({"item": name, "value": price, "unit": unit, "location": location, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
+        
+        return out, url, len(html)
+    except Exception:
+        return [], "", 0
+
+
+# ---------------- Depo Bangunan fallback ----------------
+def _extract_depo_product_name(card) -> str | None:
+    """Extract product name from Depo Bangunan card."""
+    # Try specific Depo Bangunan selectors
+    for sel in ("strong.product.name.product-item-name a", "strong.product-item-name a", ".product-item-name", ".product-name"):
+        el = card.select_one(sel)
+        if el and el.get_text(strip=True):
+            return _clean_text(el.get_text(" ", strip=True))
+    
+    # Try image alt text fallback
+    img = card.find("img")
+    if img and img.get("alt"):
+        return _clean_text(img["alt"])
+    
+    return None
+
+
+def _extract_depo_product_link(card) -> str:
+    """Extract product link from Depo Bangunan card."""
+    # Try to find the product name link
+    link = card.select_one("strong.product.name.product-item-name a") or \
+           card.select_one("strong.product-item-name a") or \
+           card.select_one("a[href]")
+    
+    if link and link.get("href"):
+        href = link.get("href")
+        # Handle relative URLs
+        if href.startswith('/'):
+            return f"https://www.depobangunan.com{href}"
+        return href
+    
+    return "https://www.depobangunan.com/"
+
+
+def _extract_depo_product_price(card) -> int:
+    """Extract product price from Depo Bangunan card."""
+    # Try data attribute first (most reliable for Depo Bangunan)
+    price_wrapper = card.find('span', {'data-price-type': 'finalPrice'})
+    if price_wrapper and price_wrapper.get('data-price-amount'):
+        try:
+            return int(float(price_wrapper.get('data-price-amount')))
+        except (ValueError, TypeError):
+            pass
+    
+    # Try special price
+    special_price = card.find('span', class_='special-price')
+    if special_price:
+        price_span = special_price.find('span', class_='price')
+        if price_span:
+            price = _digits_to_int(price_span.get_text(" ", strip=True))
+            if price > 0:
+                return price
+    
+    # Try regular price
+    price_box = card.find('div', class_='price-box')
+    if price_box:
+        price_span = price_box.find('span', class_='price')
+        if price_span:
+            price = _digits_to_int(price_span.get_text(" ", strip=True))
+            if price > 0:
+                return price
+    
+    # Try currency text fallback
+    for t in card.find_all(string=lambda s: s and ("Rp" in s or "IDR" in s)):
+        v = _digits_to_int((t or "").strip())
+        if v > 0:
+            return v
+    
+    return 0
+
+
+def _depo_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
+    try:
+        url = _build_url_defensively(DepoUrlBuilder(), keyword, sort_by_price, page)
+        html = _human_get(url)
+        soup = BeautifulSoup(html, HTML_PARSER)
+
+        # Find product cards using Depo Bangunan specific selectors
+        cards = soup.select("li.item.product.product-item") or \
+                soup.select("li.product-item") or \
+                soup.select("div.product-item")
+
+        out = []
+        for card in cards:
+            name = _extract_depo_product_name(card)
+            if not name:
+                continue
+
+            href = _extract_depo_product_link(card)
+            price = _extract_depo_product_price(card)
+            
+            if price <= 0:
+                continue
+
+            # Extract unit from product name first (faster)
+            unit = _extract_depo_product_unit_from_name(name)
+            
+            # If no unit found from name, try extracting from detail page
+            if not unit and href:
+                unit = _extract_depo_product_unit(href)
+
+            out.append({"item": name, "value": price, "unit": unit, "source": DEPO_BANGUNAN_SOURCE, "url": href})
         
         return out, url, len(html)
     except Exception:
@@ -1408,7 +1561,7 @@ def _scrape_all_vendors(request, keyword: str) -> list[dict]:
     """Scrape prices from all vendors."""
     prices = []
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE)
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE)
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback)
@@ -1576,7 +1729,7 @@ def trigger_scrape(request):
     keyword = request.POST.get("q", "semen")
     counts = {
         "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE),
-        "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE),
+        "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback),
         "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback),
         "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback),
         "tokopedia": _run_vendor_to_count(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback),
