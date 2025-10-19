@@ -18,6 +18,154 @@ UNIT_TON = 'TON'
 UNIT_POUND = 'POUND'
 
 
+class UnitConstants:
+    """Centralized constants for all Mitra10 unit types and patterns"""
+    
+    # Unit categories for better organization
+    AREA_UNITS = [UNIT_M2, UNIT_CM2, UNIT_INCH2, UNIT_MM2]
+    VOLUME_UNITS = [UNIT_M3, UNIT_CM3, 'LITER', 'ML', 'GALLON']
+    WEIGHT_UNITS = [UNIT_KG, UNIT_GRAM, UNIT_TON, UNIT_POUND]
+    LENGTH_UNITS = ['M', 'CM', 'MM', 'INCH', 'FEET']
+    ELECTRICAL_UNITS = ['WATT', 'KWH', 'VOLT', 'AMPERE', 'KVA', 'HP']
+    COUNT_UNITS = ['PCS', 'SET', 'PACK', 'BOX', 'ROLL', 'SHEET', 'PAPAN', 'BATANG', 'LEMBAR', 'UNIT']
+    TIME_UNITS = ['HARI', 'MINGGU', 'BULAN', 'TAHUN', 'JAM', 'MENIT', 'DETIK']
+    PRESSURE_UNITS = ['PSI', 'BAR']
+    SPEED_UNITS = ['MPH', 'KMH']
+    
+    @classmethod
+    def get_all_priority_order(cls) -> List[str]:
+        """Unified global priority order for all unit types"""
+        return (
+            cls.AREA_UNITS + cls.VOLUME_UNITS + cls.WEIGHT_UNITS + 
+            cls.LENGTH_UNITS + cls.ELECTRICAL_UNITS + cls.COUNT_UNITS + 
+            cls.TIME_UNITS + cls.PRESSURE_UNITS + cls.SPEED_UNITS
+        )
+    
+    @classmethod
+    def get_unit_patterns(cls) -> Dict[str, List[str]]:
+        """Centralized unit pattern definitions"""
+        return {
+            # Length units
+            'MM': ['mm', 'milimeter', 'millimeter'],
+            'CM': ['cm', 'centimeter', 'sentimeter'],
+            'M': ['meter', 'metre', r'm(?!m|l|g|²|³)'],
+            'INCH': ['inch', 'inchi', '"', '″', 'inc'],
+            'FEET': ['feet', 'ft', '\'', '′'],
+            
+            # Area units
+            UNIT_CM2: ['cm²', 'cm2', 'centimeter persegi', 'sentimeter persegi'],
+            UNIT_M2: ['m²', 'm2', 'meter persegi', 'square meter'],
+            UNIT_INCH2: ['inch²', 'inch2', 'square inch', 'inchi persegi'],
+            UNIT_MM2: ['mm²', 'mm2', 'milimeter persegi'],
+            
+            # Weight units
+            UNIT_KG: ['kg', 'kilogram', 'kilo'],
+            'GRAM': ['gram', 'gr', 'g(?!a)'],
+            'TON': ['ton', 'tonnes'],
+            'POUND': ['pound', 'lb', 'lbs', 'pon'],
+            
+            # Volume units
+            'LITER': ['liter', 'litre', 'l(?!b|t)'],
+            'ML': ['ml', 'mililiter', 'milliliter'],
+            'GALLON': ['gallon', 'gal'],
+            UNIT_M3: ['m³', 'm3', 'meter kubik', 'cubic meter'],
+            UNIT_CM3: ['cm³', 'cm3', 'centimeter kubik', 'cubic centimeter'],
+            
+            # Electrical units
+            'WATT': ['watt', 'w(?!a)', 'daya'],
+            'VOLT': ['volt', 'v(?!a|e)'],
+            'AMPERE': ['ampere', 'amp', 'a(?!l|r|n)'],
+            'KWH': ['kwh', 'kilowatt hour', 'kilowatt-hour'],
+            'KVA': ['kva', 'kilovolt ampere'],
+            'HP': ['hp', 'horsepower', 'horse power'],
+            
+            # Count units
+            'PCS': ['pcs', 'pieces', 'piece', 'buah', 'biji'],
+            'SET': ['set', 'sets'],
+            'PACK': ['pack', 'pak', 'kemasan'],
+            'BOX': ['box', 'kotak', 'dus'],
+            'ROLL': ['roll', 'gulungan', 'gulung'],
+            'SHEET': ['sheet', 'lembar', 'lbr'],
+            'PAPAN': ['papan', 'board', 'plank'],
+            'BATANG': ['batang', 'bar', 'rod', 'stick'],
+            'LEMBAR': ['lembar', 'sheet', 'lbr'],
+            'UNIT': ['unit', 'units'],
+            
+            # Time units
+            'HARI': ['hari', 'day', 'days'],
+            'MINGGU': ['minggu', 'week', 'weeks'],
+            'BULAN': ['bulan', 'month', 'months'],
+            'TAHUN': ['tahun', 'year', 'years'],
+            'JAM': ['jam', 'hour', 'hours', 'hr'],
+            'MENIT': ['menit', 'minute', 'minutes', 'min'],
+            'DETIK': ['detik', 'second', 'seconds', 'sec'],
+            
+            # Pressure and other units
+            'PSI': ['psi', 'pound per square inch'],
+            'BAR': ['bar', 'tekanan'],
+            'MPH': ['mph', 'mile per hour'],
+            'KMH': ['kmh', 'km/h', 'kilometer per hour']
+        }
+    
+    @classmethod
+    def get_unit_mappings(cls) -> Dict[str, str]:
+        """Centralized unit mappings for normalization"""
+        return {
+            'mm': 'MM', 'cm': 'CM', 'kg': UNIT_KG, 'gr': UNIT_GRAM, 'ml': 'ML', 'lt': 'LITER', 
+            'pcs': 'PCS', 'set': 'SET', 'inch': 'INCH', 'feet': 'FEET', 'watt': 'WATT', 
+            'volt': 'VOLT', 'amp': 'AMPERE', 'hp': 'HP', 'bar': 'BAR', 'psi': 'PSI',
+            'm': 'M', 'hari': 'HARI', 'minggu': 'MINGGU', 'bulan': 'BULAN', 'tahun': 'TAHUN', 
+            'jam': 'JAM', 'hour': 'JAM', 'day': 'HARI', 'week': 'MINGGU', 'month': 'BULAN', 
+            'year': 'TAHUN', 'sak': 'SAK', 'karung': 'SAK', 'bag': 'SAK', 'zak': 'SAK',
+            'roll': 'ROLL', 'lembar': 'LEMBAR', 'sheet': 'SHEET', 'batang': 'BATANG', 'papan': 'PAPAN'
+        }
+    
+    @classmethod
+    def get_construction_keywords(cls) -> List[str]:
+        """Centralized construction-related keywords"""
+        return [
+            'semen', 'cement', 'beton', 'concrete', 'besi', 'iron', 'steel',
+            'kayu', 'wood', 'plywood', 'triplek', 'papan', 'board',
+            'genteng', 'tile', 'atap', 'roof', 'dinding', 'wall',
+            'lantai', 'floor', 'keramik', 'ceramic', 'granit', 'granite',
+            'marmer', 'marble', 'cat', 'paint', 'pipa', 'pipe',
+            'kabel', 'cable', 'wire', 'kawat', 'baut', 'bolt',
+            'sekrup', 'screw', 'paku', 'nail', 'lem', 'glue',
+            'pasir', 'sand', 'kerikil', 'gravel', 'batako', 'block'
+        ]
+    
+    @classmethod
+    def get_electrical_keywords(cls) -> List[str]:
+        """Centralized electrical-related keywords"""
+        return [
+            'listrik', 'electric', 'kabel', 'cable', 'lampu', 'lamp',
+            'saklar', 'switch', 'stop kontak', 'outlet', 'mcb',
+            'circuit breaker', 'fuse', 'sekering', 'trafo', 'transformer',
+            'genset', 'generator', 'inverter', 'ups', 'stabilizer',
+            'fitting', 'socket', 'plug', 'colokan'
+        ]
+    
+    @classmethod
+    def get_plumbing_keywords(cls) -> List[str]:
+        """Centralized plumbing-related keywords"""
+        return [
+            'pipa', 'pipe', 'pvc', 'fitting', 'elbow', 'tee', 'reducer',
+            'kran', 'faucet', 'valve', 'katup', 'sambungan', 'joint',
+            'seal', 'gasket', 'teflon', 'dop', 'cap', 'tutup'
+        ]
+    
+    @classmethod
+    def get_spec_keywords(cls) -> List[str]:
+        """Centralized specification-related keywords"""
+        return [
+            'ukuran', 'dimensi', 'size', 'dimension', 'spesifikasi', 'specification',
+            'berat', 'weight', 'kapasitas', 'capacity', 'daya', 'power', 'tegangan',
+            'voltage', 'diameter', 'panjang', 'length', 'lebar', 'width', 'tinggi',
+            'height', 'tebal', 'thickness', 'volume', 'isi', 'content', 'kemasan',
+            'packaging', 'satuan', 'unit', 'per', 'setiap', 'each'
+        ]
+
+
 class UnitExtractionStrategy(Protocol):
     
     def extract_unit(self, text: str) -> Optional[str]:
@@ -102,71 +250,11 @@ class ContextChecker:
 
 
 class Mitra10UnitPatternRepository:
+    """Simplified repository using centralized constants"""
     
     def __init__(self):
-        self._unit_patterns = self._initialize_patterns()
-        self._priority_order = self._initialize_priority_order()
-    
-    def _initialize_patterns(self) -> Dict[str, List[str]]:
-        return {
-            'MM': ['mm', 'milimeter', 'millimeter'],
-            'CM': ['cm', 'centimeter', 'sentimeter'],
-            'M': ['meter', 'metre', r'm(?!m|l|g|²|³)'],
-            'INCH': ['inch', 'inchi', '"', '″', 'inc'],
-            'FEET': ['feet', 'ft', '\'', '′'],
-            UNIT_CM2: ['cm²', 'cm2', 'centimeter persegi', 'sentimeter persegi'],
-            UNIT_M2: ['m²', 'm2', 'meter persegi', 'square meter'],
-            UNIT_INCH2: ['inch²', 'inch2', 'square inch', 'inchi persegi'],
-            UNIT_KG: ['kg', 'kilogram', 'kilo'],
-            'GRAM': ['gram', 'gr', 'g(?!a)'],
-            'TON': ['ton', 'tonnes'],
-            'POUND': ['pound', 'lb', 'lbs', 'pon'],
-            'LITER': ['liter', 'litre', 'l(?!b|t)'],
-            'ML': ['ml', 'mililiter', 'milliliter'],
-            'GALLON': ['gallon', 'gal'],
-            'M³': ['m³', 'm3', 'meter kubik', 'cubic meter'],
-            'CM³': ['cm³', 'cm3', 'centimeter kubik', 'cubic centimeter'],
-            'WATT': ['watt', 'w(?!a)', 'daya'],
-            'VOLT': ['volt', 'v(?!a|e)'],
-            'AMPERE': ['ampere', 'amp', 'a(?!l|r|n)'],
-            'KWH': ['kwh', 'kilowatt hour', 'kilowatt-hour'],
-            'PCS': ['pcs', 'pieces', 'piece', 'buah', 'biji'],
-            'SET': ['set', 'sets'],
-            'PACK': ['pack', 'pak', 'kemasan'],
-            'BOX': ['box', 'kotak', 'dus'],
-            'ROLL': ['roll', 'gulungan', 'gulung'],
-            'SHEET': ['sheet', 'lembar', 'lbr'],
-            'PAPAN': ['papan', 'board', 'plank'],
-            'BATANG': ['batang', 'bar', 'rod', 'stick'],
-            'LEMBAR': ['lembar', 'sheet', 'lbr'],
-            'UNIT': ['unit', 'units'],
-            'HARI': ['hari', 'day', 'days'],
-            'MINGGU': ['minggu', 'week', 'weeks'],
-            'BULAN': ['bulan', 'month', 'months'],
-            'TAHUN': ['tahun', 'year', 'years'],
-            'JAM': ['jam', 'hour', 'hours', 'hr'],
-            'MENIT': ['menit', 'minute', 'minutes', 'min'],
-            'DETIK': ['detik', 'second', 'seconds', 'sec'],
-            'KVA': ['kva', 'kilovolt ampere'],
-            'HP': ['hp', 'horsepower', 'horse power'],
-            'PSI': ['psi', 'pound per square inch'],
-            'BAR': ['bar', 'tekanan'],
-            'MPH': ['mph', 'mile per hour'],
-            'KMH': ['kmh', 'km/h', 'kilometer per hour']
-        }
-    
-    def _initialize_priority_order(self) -> List[str]:
-        return [
-            UNIT_M2, UNIT_CM2, UNIT_INCH2, UNIT_MM2,
-            UNIT_M3, UNIT_CM3,
-            UNIT_KG, UNIT_GRAM, UNIT_TON, UNIT_POUND,
-            'M', 'CM', 'MM', 'INCH', 'FEET',
-            'LITER', 'ML', 'GALLON',
-            'WATT', 'KWH', 'VOLT', 'AMPERE', 'KVA', 'HP',
-            'PCS', 'SET', 'PACK', 'BOX', 'ROLL', 'SHEET', 'PAPAN', 'BATANG', 'LEMBAR', 'UNIT',
-            'HARI', 'MINGGU', 'BULAN', 'TAHUN', 'JAM', 'MENIT', 'DETIK',
-            'PSI', 'BAR', 'MPH', 'KMH'
-        ]
+        self._unit_patterns = UnitConstants.get_unit_patterns()
+        self._priority_order = UnitConstants.get_all_priority_order()
     
     def get_patterns(self, unit: str) -> List[str]:
         return self._unit_patterns.get(unit, [])
@@ -196,35 +284,18 @@ class Mitra10AreaPatternStrategy(ErrorHandlingMixin):
 
 
 class Mitra10AdjacentPatternStrategy(ErrorHandlingMixin):
+    """Simplified strategy using centralized constants"""
     
     def __init__(self):
-        self.unit_mappings = {
-            'mm': 'MM', 'cm': 'CM', 'kg': UNIT_KG, 'gr': UNIT_GRAM, 'ml': 'ML', 'lt': 'LITER', 
-            'pcs': 'PCS', 'set': 'SET', 'inch': 'INCH', 'feet': 'FEET', 'watt': 'WATT', 
-            'volt': 'VOLT', 'amp': 'AMPERE', 'hp': 'HP', 'bar': 'BAR', 'psi': 'PSI',
-            'm': 'M', 'hari': 'HARI', 'minggu': 'MINGGU', 'bulan': 'BULAN', 'tahun': 'TAHUN', 
-            'jam': 'JAM', 'hour': 'JAM', 'day': 'HARI', 'week': 'MINGGU', 'month': 'BULAN', 
-            'year': 'TAHUN', 'sak': 'SAK', 'karung': 'SAK', 'bag': 'SAK', 'zak': 'SAK',
-            'roll': 'ROLL', 'lembar': 'LEMBAR', 'sheet': 'SHEET', 'batang': 'BATANG', 'papan': 'PAPAN'
-        }
+        self.unit_mappings = UnitConstants.get_unit_mappings()
         
+        # Centralized pattern definitions
         self.adjacent_patterns = [
-            # Direct unit attachment: "25kg", "100ml", "5pcs"
             (r'(\d{1,10}(?:[.,]\d{1,10})?)(mm|cm|kg|gr|ml|lt|pcs|set|inch|feet|watt|volt|amp|hp|bar|psi)(?:\s|$)', 2),
-            
-            # Diameter patterns: "diameter 25mm"
             (r'diameter\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(mm|cm|m|inch)', 2), 
-            
-            # Symbol diameter: "Ø 25mm"
             (r'Ø\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(mm|cm|m|inch)', 2),
-            
-            # Time units: "per hari", "/ minggu"
             (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?/?(\bhari\b|\bminggu\b|\bulan\b|\btahun\b|\bjam\b|\bhour\b|\bday\b|\bweek\b|\bmonth\b|\byear\b)', 2),
-            
-            # Mitra10 specific patterns for construction materials
             (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?(sak|karung|bag|zak)(?:\s+semen|\s+cement)?', 2),
-            
-            # Roll/sheet patterns common in Mitra10
             (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?(roll|lembar|sheet|batang|papan)', 2)
         ]
     
@@ -307,16 +378,10 @@ class Mitra10UnitExtractor(ErrorHandlingMixin):
 
 
 class Mitra10SpecificationFinder(ErrorHandlingMixin):
+    """Simplified specification finder using centralized constants"""
     
     def __init__(self):
-        # Keywords specific to Mitra10 product specifications
-        self.spec_keywords = [
-            'ukuran', 'dimensi', 'size', 'dimension', 'spesifikasi', 'specification',
-            'berat', 'weight', 'kapasitas', 'capacity', 'daya', 'power', 'tegangan',
-            'voltage', 'diameter', 'panjang', 'length', 'lebar', 'width', 'tinggi',
-            'height', 'tebal', 'thickness', 'volume', 'isi', 'content', 'kemasan',
-            'packaging', 'satuan', 'unit', 'per', 'setiap', 'each'
-        ]
+        self.spec_keywords = UnitConstants.get_spec_keywords()
     
     def find_specification_values(self, soup: BeautifulSoup) -> List[str]:
         specifications = []
@@ -447,42 +512,16 @@ class Mitra10SpecificationFinder(ErrorHandlingMixin):
 
 
 class Mitra10UnitParserConfiguration:
-    
-    def __init__(self):
-        # Keywords specific to Mitra10 construction and hardware products
-        self.construction_keywords = [
-            'semen', 'cement', 'beton', 'concrete', 'besi', 'iron', 'steel',
-            'kayu', 'wood', 'plywood', 'triplek', 'papan', 'board',
-            'genteng', 'tile', 'atap', 'roof', 'dinding', 'wall',
-            'lantai', 'floor', 'keramik', 'ceramic', 'granit', 'granite',
-            'marmer', 'marble', 'cat', 'paint', 'pipa', 'pipe',
-            'kabel', 'cable', 'wire', 'kawat', 'baut', 'bolt',
-            'sekrup', 'screw', 'paku', 'nail', 'lem', 'glue',
-            'pasir', 'sand', 'kerikil', 'gravel', 'batako', 'block'
-        ]
-        
-        self.electrical_keywords = [
-            'listrik', 'electric', 'kabel', 'cable', 'lampu', 'lamp',
-            'saklar', 'switch', 'stop kontak', 'outlet', 'mcb',
-            'circuit breaker', 'fuse', 'sekering', 'trafo', 'transformer',
-            'genset', 'generator', 'inverter', 'ups', 'stabilizer',
-            'fitting', 'socket', 'plug', 'colokan'
-        ]
-        
-        self.plumbing_keywords = [
-            'pipa', 'pipe', 'pvc', 'fitting', 'elbow', 'tee', 'reducer',
-            'kran', 'faucet', 'valve', 'katup', 'sambungan', 'joint',
-            'seal', 'gasket', 'teflon', 'dop', 'cap', 'tutup'
-        ]
+    """Simplified configuration using centralized constants"""
     
     def is_construction_context(self, text: str) -> bool:
-        return ContextChecker.check_keywords_in_text(text, self.construction_keywords, "Mitra10 construction")
+        return ContextChecker.check_keywords_in_text(text, UnitConstants.get_construction_keywords(), "Mitra10 construction")
     
     def is_electrical_context(self, text: str) -> bool:
-        return ContextChecker.check_keywords_in_text(text, self.electrical_keywords, "Mitra10 electrical")
+        return ContextChecker.check_keywords_in_text(text, UnitConstants.get_electrical_keywords(), "Mitra10 electrical")
     
     def is_plumbing_context(self, text: str) -> bool:
-        return ContextChecker.check_keywords_in_text(text, self.plumbing_keywords, "Mitra10 plumbing")
+        return ContextChecker.check_keywords_in_text(text, UnitConstants.get_plumbing_keywords(), "Mitra10 plumbing")
 
 
 class Mitra10UnitParser(ErrorHandlingMixin):
@@ -563,9 +602,13 @@ class Mitra10UnitParser(ErrorHandlingMixin):
         if not found_units:
             return None
         
+        # Filter out empty or None units to get a valid fallback
+        valid_units = [unit for unit in found_units if unit and unit.strip()]
+        fallback_unit = valid_units[0] if valid_units else None
+        
         return self.safe_execute_with_default(
             self._get_prioritized_unit, 
-            found_units[0] if found_units else None, 
+            fallback_unit, 
             "applying Mitra10 priority rules", 
             found_units, 
             html_content
