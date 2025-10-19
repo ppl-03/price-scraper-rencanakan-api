@@ -17,7 +17,7 @@ class CrudCuratedPriceTests(TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_create_curated_price(self):
-        r = self.client.post(reverse("curated_price_create"), {
+        r = self.client.post(reverse("curated_price_create_post"), {
             "item_price": self.item.pk,
             "province": self.prov.pk,
             "price": "35000.00",
@@ -28,7 +28,7 @@ class CrudCuratedPriceTests(TestCase):
 
     def test_update_curated_price(self):
         row = models.ItemPriceProvince.objects.create(item_price=self.item, province=self.prov, price="35000.00")
-        r = self.client.post(reverse("curated_price_update", args=[row.pk]), {
+        r = self.client.post(reverse("curated_price_update_post", args=[row.pk]), {
             "item_price": self.item.pk,
             "province": self.prov.pk,
             "price": "36000.00",
@@ -39,7 +39,7 @@ class CrudCuratedPriceTests(TestCase):
 
     def test_delete_curated_price(self):
         row = models.ItemPriceProvince.objects.create(item_price=self.item, province=self.prov, price="35000.00")
-        r = self.client.post(reverse("curated_price_delete", args=[row.pk]))
+        r = self.client.post(reverse("curated_price_delete_post", args=[row.pk]))
         self.assertEqual(r.status_code, 302)
         self.assertFalse(models.ItemPriceProvince.objects.filter(pk=row.pk).exists())
 
@@ -54,7 +54,7 @@ class CrudCuratedPriceTests(TestCase):
         self.assertContains(r, "Save Price from Scrape")
 
     def test_validation_price_must_be_positive(self):
-        r = self.client.post(reverse("curated_price_create"), {
+        r = self.client.post(reverse("curated_price_create_post"), {
             "item_price": self.item.pk,
             "province": self.prov.pk,
             "price": "0",

@@ -6,15 +6,15 @@ from api.gemilang.views import gemilang_locations_view
 class TestGemilangLocationUrls(TestCase):
     
     def test_gemilang_locations_url_resolves(self):
-        url = reverse('gemilang_locations')
+        url = reverse('gemilang:gemilang_locations')
         self.assertEqual(resolve(url).func, gemilang_locations_view)
     
     def test_gemilang_locations_url_pattern(self):
-        url = reverse('gemilang_locations')
+        url = reverse('gemilang:gemilang_locations')
         self.assertEqual(url, '/api/gemilang/locations/')
     
     def test_gemilang_locations_url_name(self):
-        url = reverse('gemilang_locations')
+        url = reverse('gemilang:gemilang_locations')
         self.assertIsInstance(url, str)
         self.assertTrue(url.endswith('/locations/'))
     
