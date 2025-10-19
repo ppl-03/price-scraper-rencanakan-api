@@ -2,6 +2,7 @@ import logging
 import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
+from html import unescape
 
 from api.interfaces import ILocationParser, Location, HtmlParserError
 
@@ -61,8 +62,9 @@ class HtmlElementExtractor:
                 logger.debug("No store-location div found in item")
                 return None
             
-            self._convert_br_to_newlines(address_div)
-            text = address_div.get_text()
+            # Join text across <br> tags and handle HTML entities
+            text = ' '.join(address_div.stripped_strings)
+            text = unescape(text)
             
             if not self._text_cleaner.is_valid_text(text):
                 logger.debug("Address text is empty or invalid")

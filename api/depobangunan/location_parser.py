@@ -2,6 +2,7 @@ import logging
 import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
+from html import unescape
 
 from api.interfaces import ILocationParser, Location, HtmlParserError
 
@@ -16,7 +17,11 @@ class TextCleaner:
         """Clean and normalize store name text"""
         if not text:
             return ""
-        return text.strip()
+        cleaned = text.strip()
+        # Ensure vendor prefix is present
+        if not re.search(r'depo\s*bangunan', cleaned, re.IGNORECASE):
+            cleaned = f"DEPO BANGUNAN - {cleaned}"
+        return cleaned
     
     @staticmethod
     def clean_address(text: str) -> str:
@@ -72,8 +77,10 @@ class HtmlElementExtractor:
             # Look for the first paragraph that looks like an address
             while current and not address_text:
                 if current.name in ['p', 'div']:
-                    text = current.get_text(strip=True)
-                    # Accept text that looks like an address (contains street/location indicators or Alamat:)
+                    # Join text across multiple lines and handle <br> tags
+                    text = ' '.join(current.stripped_strings)
+                    text = unescape(text)
+                    
                     # Skip non-address content like "Jadwal Buka", "Telepon", etc.
                     if text and not self._is_non_address_content(text):
                         address_text = text
@@ -82,7 +89,7 @@ class HtmlElementExtractor:
             
             # Clean up "Alamat:" prefix if present
             if address_text and address_text.startswith('Alamat:'):
-                address_text = address_text.replace('Alamat:', '').strip()
+                address_text = address_text.split(':', 1)[1].strip()
             
             if not self._text_cleaner.is_valid_text(address_text):
                 logger.debug("Address text is empty or invalid")
@@ -166,15 +173,18 @@ class DepoBangunanLocationParser(ILocationParser):
         """Extract all locations from the parsed HTML"""
         locations = []
         
-        # Find all h2 headers that contain store names (e.g., "Depo Bangunan - Kalimalang")
+        # Find all h2 headers that contain store names
         headers = soup.find_all('h2')
+        
+        # Use case-insensitive regex to detect store headers
+        store_header_re = re.compile(r'depo\s*bangunan', re.IGNORECASE)
         
         for header in headers:
             try:
                 header_text = header.get_text(strip=True)
                 
-                # Check if this is a store location header
-                if 'Depo Bangunan -' in header_text:
+                # Check if this is a store location header (more permissive matching)
+                if store_header_re.search(header_text) or header_text.upper().startswith('DEPO'):
                     location = self._extract_location_from_header(header)
                     if location:
                         locations.append(location)

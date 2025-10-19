@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import Mock, patch
 from api.interfaces import IPriceScraper, HttpClientError, Product
-from api.playwright_client import PlaywrightHttpClient
+from api.playwright_client import BatchPlaywrightClient
 from api.mitra10.factory import create_mitra10_scraper
 from api.mitra10.scraper import Mitra10PriceScraper
 from api.mitra10.url_builder import Mitra10UrlBuilder
@@ -18,7 +18,7 @@ class TestMitra10Integration(TestCase):
         cls.mock_html = fixture_path.read_text(encoding="utf-8")
         
     def setUp(self):
-        self.mock_http_client = Mock(spec=PlaywrightHttpClient)
+        self.mock_http_client = Mock(spec=BatchPlaywrightClient)
         self.url_builder = Mitra10UrlBuilder()
         self.html_parser = Mitra10HtmlParser()
         self.scraper = Mitra10PriceScraper(
@@ -121,10 +121,9 @@ class TestMitra10Integration(TestCase):
         self.assertIsNotNone(scraper.url_builder)
         self.assertIsNotNone(scraper.html_parser)
 
-        self.assertIsInstance(scraper.http_client, PlaywrightHttpClient)
+        self.assertIsInstance(scraper.http_client, BatchPlaywrightClient)
         self.assertIsInstance(scraper.url_builder, Mitra10UrlBuilder)
         self.assertIsInstance(scraper.html_parser, Mitra10HtmlParser)
-        scraper.http_client.close()
         
     def test_dependency_injection_flexibility(self):
         mock_http_client = Mock()
@@ -159,7 +158,7 @@ class TestMitra10Integration(TestCase):
         self.assertFalse(result.success)
         self.assertIn("Unexpected error", result.error_message)
         
-    @patch('api.mitra10.factory.PlaywrightHttpClient')
+    @patch('api.mitra10.factory.BatchPlaywrightClient')
     @patch('api.mitra10.factory.Mitra10UrlBuilder')
     @patch('api.mitra10.factory.Mitra10HtmlParser')
     def test_factory_creates_new_instances(self, mock_parser_class, mock_builder_class, mock_client_class):
