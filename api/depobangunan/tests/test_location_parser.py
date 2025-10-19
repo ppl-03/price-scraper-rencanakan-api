@@ -37,9 +37,9 @@ class TestDepoBangunanLocationParser(TestCase):
         
         # Check first location
         location1 = locations[0]
-        self.assertIn("Depo Bangunan", location1.store_name)
-        self.assertIsNotNone(location1.address)
-        self.assertGreater(len(location1.address), 0)
+        self.assertIn("Depo Bangunan", location1.name)
+        self.assertIsNotNone(location1.code)
+        self.assertGreater(len(location1.code), 0)
 
     def test_parse_empty_html(self):
         """Test parsing empty HTML returns empty list"""
@@ -89,7 +89,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_with_whitespace)
         if len(locations) > 0:
-            self.assertEqual(locations[0].store_name, "Depo Bangunan - Test Store")
+            self.assertEqual(locations[0].name, "Depo Bangunan - Test Store")
 
     def test_extract_address_with_alamat_prefix(self):
         """Test address extraction handles 'Alamat:' prefix"""
@@ -102,8 +102,8 @@ class TestDepoBangunanLocationParser(TestCase):
         locations = self.parser.parse_locations(html_with_alamat)
         self.assertEqual(len(locations), 1)
         # Address should not contain "Alamat:" prefix
-        self.assertNotIn("Alamat:", locations[0].address)
-        self.assertIn("Jl. Test Street", locations[0].address)
+        self.assertNotIn("Alamat:", locations[0].code)
+        self.assertIn("Jl. Test Street", locations[0].code)
 
     def test_parse_html_raises_error_on_critical_failure(self):
         """Test parser handles critical failures gracefully"""
@@ -135,8 +135,8 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_special_chars)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "Depo Bangunan - Store & Co.")
-        self.assertIn("123/A-B", locations[0].address)
+        self.assertEqual(locations[0].name, "Depo Bangunan - Store & Co.")
+        self.assertIn("123/A-B", locations[0].code)
 
     def test_parse_locations_with_nested_elements(self):
         """Test parser handles nested HTML elements"""
@@ -148,7 +148,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_nested)
         self.assertEqual(len(locations), 1)
-        self.assertIn("Nested Store", locations[0].store_name)
+        self.assertIn("Nested Store", locations[0].name)
 
     def test_parse_locations_with_multiple_stores(self):
         """Test parsing multiple stores correctly"""
@@ -166,9 +166,9 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_multiple)
         self.assertEqual(len(locations), 3)
-        self.assertEqual(locations[0].store_name, "Depo Bangunan - Store A")
-        self.assertEqual(locations[1].store_name, "Depo Bangunan - Store B")
-        self.assertEqual(locations[2].store_name, "Depo Bangunan - Store C")
+        self.assertEqual(locations[0].name, "Depo Bangunan - Store A")
+        self.assertEqual(locations[1].name, "Depo Bangunan - Store B")
+        self.assertEqual(locations[2].name, "Depo Bangunan - Store C")
 
     def test_parse_locations_with_unicode_characters(self):
         """Test parser handles Unicode characters"""
@@ -180,7 +180,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_unicode)
         self.assertEqual(len(locations), 1)
-        self.assertIn("Tôkô Spéciàl", locations[0].store_name)
+        self.assertIn("Tôkô Spéciàl", locations[0].name)
 
     def test_parse_locations_with_empty_paragraph(self):
         """Test parser handles empty paragraph tags"""
@@ -218,7 +218,7 @@ class TestDepoBangunanLocationParser(TestCase):
         locations = self.parser.parse_locations(html_wrong_case)
         # Should only match exact case "Depo Bangunan -"
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "Depo Bangunan - Correct Case")
+        self.assertEqual(locations[0].name, "Depo Bangunan - Correct Case")
 
     def test_parse_locations_with_html_entities(self):
         """Test parser handles HTML entities"""
@@ -230,7 +230,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_entities)
         if len(locations) > 0:
-            self.assertIn("&", locations[0].store_name)
+            self.assertIn("&", locations[0].name)
 
     def test_parse_locations_with_mixed_content(self):
         """Test parser handles mixed content with other headers"""
@@ -249,7 +249,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_mixed)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "Depo Bangunan - Valid Store")
+        self.assertEqual(locations[0].name, "Depo Bangunan - Valid Store")
 
     def test_parse_large_number_of_locations(self):
         """Test parser can handle many locations"""
@@ -292,5 +292,6 @@ class TestDepoBangunanLocationParser(TestCase):
         locations = self.parser.parse_locations(html_multi_p)
         if len(locations) > 0:
             # Should extract the paragraph with address
-            self.assertIn("Jl. Test Street", locations[0].address)
-            self.assertNotIn("Jadwal Buka", locations[0].address)
+            self.assertIn("Jl. Test Street", locations[0].code)
+            self.assertNotIn("Jadwal Buka", locations[0].code)
+

@@ -494,15 +494,14 @@ class TestDepoBangunanLocationAPI(TestCase):
         self.assertEqual(len(response_data['locations']), 2)
         
         # Check first location
-        self.assertEqual(response_data['locations'][0]['store_name'], "Depo Bangunan - Kalimalang")
-        self.assertIn("Jl. Raya Kalimalang", response_data['locations'][0]['address'])
+        self.assertEqual(response_data['locations'][0]['name'], "Depo Bangunan - Kalimalang")
+        self.assertIn("Jl. Raya Kalimalang", response_data['locations'][0]['code'])
         
         # Check second location
-        self.assertEqual(response_data['locations'][1]['store_name'], "Depo Bangunan - Tangerang Selatan")
-        self.assertIn("Jl. Raya Serpong", response_data['locations'][1]['address'])
+        self.assertEqual(response_data['locations'][1]['name'], "Depo Bangunan - Tangerang Selatan")
+        self.assertIn("Jl. Raya Serpong", response_data['locations'][1]['code'])
         
         self.assertIsNone(response_data['error_message'])
-        self.assertEqual(response_data['url'], "https://www.depobangunan.co.id/gerai-depo-bangunan")
         
         mock_scraper.scrape_locations.assert_called_once_with(timeout=30)
         

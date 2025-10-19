@@ -15,15 +15,17 @@ class TestGemilangDatabaseHandshake(TestCase):
     
     def test_gemilang_products_table_exists(self):
         with connection.cursor() as cursor:
-            cursor.execute("SHOW TABLES LIKE 'gemilang_products'")
+            # SQLite compatible query
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='gemilang_products'")
             result = cursor.fetchone()
             self.assertIsNotNone(result)
     
     def test_gemilang_products_table_has_correct_columns(self):
         with connection.cursor() as cursor:
-            cursor.execute("DESCRIBE gemilang_products")
+            # SQLite compatible query
+            cursor.execute("PRAGMA table_info(gemilang_products)")
             columns = cursor.fetchall()
-            column_names = [col[0] for col in columns]
+            column_names = [col[1] for col in columns]  # Column name is at index 1 in PRAGMA output
             
             self.assertIn('id', column_names)
             self.assertIn('name', column_names)

@@ -1,6 +1,6 @@
 from django.test import TestCase, RequestFactory
 from unittest.mock import patch, MagicMock
-from api import views
+from api.mitra10 import views
 from django.http import JsonResponse
 
 
@@ -37,7 +37,7 @@ class TestMitra10Views(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Page parameter must be a valid integer", response.content.decode())
 
-    @patch("api.views.create_mitra10_scraper")
+    @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_products_success(self, mock_factory):
         mock_scraper = MagicMock()
         mock_result = MagicMock()
@@ -61,7 +61,7 @@ class TestMitra10Views(TestCase):
         self.assertEqual(data["products"][0]["name"], "Item A")
         mock_scraper.scrape_products.assert_called_once()
 
-    @patch("api.views.create_mitra10_scraper")
+    @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_products_unexpected_error(self, mock_factory):
         mock_factory.side_effect = Exception("unexpected fail")
         request = self.factory.get("/api/mitra10/products?q=hammer")
@@ -69,7 +69,7 @@ class TestMitra10Views(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertIn("Internal server error occurred", response.content.decode())
 
-    @patch("api.views.create_mitra10_location_scraper")
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
     def test_scrape_locations_success(self, mock_factory):
         mock_scraper = MagicMock()
         mock_scraper.scrape_locations.return_value = {
@@ -87,7 +87,7 @@ class TestMitra10Views(TestCase):
         self.assertEqual(len(data["locations"]), 2)
         self.assertEqual(data["locations"][1], "MITRA10 B")
 
-    @patch("api.views.create_mitra10_location_scraper")
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
     def test_scrape_locations_failure(self, mock_factory):
         mock_scraper = MagicMock()
         mock_scraper.scrape_locations.side_effect = Exception("boom")
@@ -99,3 +99,4 @@ class TestMitra10Views(TestCase):
         data = response.json()
         self.assertFalse(data["success"])
         self.assertEqual(data["error_message"], "Internal server error occurred")
+
