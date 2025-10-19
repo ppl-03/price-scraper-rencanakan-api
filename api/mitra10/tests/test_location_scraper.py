@@ -15,7 +15,7 @@ class TestMitra10LocationScraper(TestCase):
         mock_instance = mock_batch.return_value.__enter__.return_value
         mock_instance.client = MagicMock()
 
-        def fake_extract(client, url):
+        async def fake_extract(client, url):
             return ["MITRA10 TEST 1", "MITRA10 TEST 2"]
 
         self.scraper._extract_locations = fake_extract
@@ -30,7 +30,7 @@ class TestMitra10LocationScraper(TestCase):
         mock_instance = mock_batch.return_value.__enter__.return_value
         mock_instance.client = MagicMock()
 
-        def fake_extract(client, url):
+        async def fake_extract(client, url):
             raise RuntimeError("Simulated failure")
 
         self.scraper._extract_locations = fake_extract
@@ -42,52 +42,74 @@ class TestMitra10LocationScraper(TestCase):
     def test_extract_locations_success(self):
         mock_client = MagicMock()
         mock_client._ensure_browser = AsyncMock()  # Mock the async method
-        mock_page = AsyncMock()
+        mock_page = MagicMock()  # Use MagicMock, not AsyncMock
         mock_client.page = mock_page
 
-        # Mock all Playwright calls
-        mock_page.goto.return_value = None
-        mock_page.evaluate.return_value = None
-        mock_page.wait_for_load_state.return_value = None
-        mock_locator = AsyncMock()
-        mock_first = AsyncMock()
-        mock_first.wait_for.return_value = None
+        # Mock all Playwright calls - async methods need AsyncMock return values
+        mock_page.goto = AsyncMock()
+        mock_page.evaluate = AsyncMock()
+        mock_page.wait_for_load_state = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.wait_for_function = AsyncMock()
+        mock_page.wait_for_timeout = AsyncMock()
+        mock_page.click = AsyncMock()
+        mock_page.content = AsyncMock(return_value="<html></html>")
+        
+        # Mock mouse
+        mock_mouse = MagicMock()
+        mock_mouse.move = AsyncMock()
+        mock_mouse.down = AsyncMock()
+        mock_mouse.up = AsyncMock()
+        mock_page.mouse = mock_mouse
+        
+        # locator() is synchronous, returns a Locator object
+        mock_locator = MagicMock()
+        mock_first = MagicMock()
+        mock_first.scroll_into_view_if_needed = AsyncMock()
+        mock_first.click = AsyncMock()  # click is also async!
         mock_locator.first = mock_first
         mock_page.locator.return_value = mock_locator
-        mock_page.wait_for_selector.return_value = None
-        mock_page.wait_for_function.return_value = None
-        mock_page.scroll_into_view_if_needed.return_value = None
-        mock_page.click.return_value = None
-        mock_page.eval_on_selector_all.return_value = ["MITRA10 A", "MITRA10 B"]
-
-        result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
-        self.assertEqual(result, ["MITRA10 A", "MITRA10 B"])
+        
+        # Mock the parser
+        with patch('api.mitra10.location_scraper.Mitra10LocationParser') as mock_parser:
+            mock_parser.parse.return_value = ["MITRA10 A", "MITRA10 B"]
+            result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
+            self.assertEqual(result, ["MITRA10 A", "MITRA10 B"])
 
     def test_extract_locations_click_retry(self):
         mock_client = MagicMock()
         mock_client._ensure_browser = AsyncMock()  # Mock the async method
-        mock_page = AsyncMock()
+        mock_page = MagicMock()  # Use MagicMock, not AsyncMock
         mock_client.page = mock_page
 
+        # Mock all Playwright calls - async methods need AsyncMock return values
+        mock_page.goto = AsyncMock()
+        mock_page.evaluate = AsyncMock()
+        mock_page.wait_for_load_state = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.wait_for_function = AsyncMock()
+        mock_page.wait_for_timeout = AsyncMock()
+        mock_page.content = AsyncMock(return_value="<html></html>")
+        
+        # Mock mouse
+        mock_mouse = MagicMock()
+        mock_mouse.move = AsyncMock()
+        mock_mouse.down = AsyncMock()
+        mock_mouse.up = AsyncMock()
+        mock_page.mouse = mock_mouse
+        
+        # locator() is synchronous, returns a Locator object with async methods
+        mock_locator = MagicMock()
+        mock_first = MagicMock()
+        mock_first.scroll_into_view_if_needed = AsyncMock()
         # Simulate click failure then success
-        mock_page.goto.return_value = None
-        mock_page.evaluate.return_value = None
-        mock_page.wait_for_load_state.return_value = None
-        mock_locator = AsyncMock()
-        mock_first = AsyncMock()
-        mock_first.wait_for.return_value = None
+        mock_first.click = AsyncMock(side_effect=[Exception("Click failed"), None])
         mock_locator.first = mock_first
         mock_page.locator.return_value = mock_locator
-        mock_page.wait_for_selector.return_value = None
-        mock_page.wait_for_function.return_value = None
-        mock_page.scroll_into_view_if_needed.return_value = None
-
-        mock_page.click.side_effect = [Exception("Click failed"), None]
-        mock_page.mouse.move.return_value = None
-        mock_page.mouse.down.return_value = None
-        mock_page.mouse.up.return_value = None
-        mock_page.eval_on_selector_all.return_value = ["MITRA10 RETRY"]
-
-        result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
-        self.assertEqual(result, ["MITRA10 RETRY"])
+        
+        # Mock the parser
+        with patch('api.mitra10.location_scraper.Mitra10LocationParser') as mock_parser:
+            mock_parser.parse.return_value = ["MITRA10 RETRY"]
+            result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
+            self.assertEqual(result, ["MITRA10 RETRY"])
 

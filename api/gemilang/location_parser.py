@@ -169,7 +169,7 @@ class GemilangLocationParser(ILocationParser):
                 store_name = self._element_extractor.extract_store_name(item)
                 if store_name:
                     names.append(store_name)
-                    
+                
                 address = self._element_extractor.extract_address(item)
                 if address:
                     addresses.append(address)
@@ -178,9 +178,16 @@ class GemilangLocationParser(ILocationParser):
                 logger.warning(f"Failed to extract data from item: {str(e)}")
                 continue
         
+        # Pair up names and addresses
         min_count = min(len(names), len(addresses))
         for i in range(min_count):
-            locations.append(self._create_location(names[i], addresses[i]))
+            try:
+                location = self._create_location(names[i], addresses[i])
+                if location:
+                    locations.append(location)
+            except Exception as e:
+                logger.warning(f"Failed to create location: {str(e)}")
+                continue
         
         return locations
     

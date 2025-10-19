@@ -667,15 +667,15 @@ class TestGemilangLocationParser(TestCase):
         parser = GemilangLocationParser()
         
         class MockItem:
-            def find(self, tag, class_=None):
+            def find(self, tag, class_=None, **kwargs):
                 if class_ == 'location_click':
                     mock_link = type('MockLink', (), {})()
-                    mock_link.get_text = lambda strip=False: "Test Store"
+                    mock_link.get_text = lambda **kw: "Test Store"
                     return mock_link
                 elif class_ == 'store-location':
                     mock_div = type('MockDiv', (), {})()
-                    mock_div.get_text = lambda: "Test Address"
-                    mock_div.find_all = lambda tag: []
+                    mock_div.get_text = lambda **kw: "Test Address"
+                    mock_div.find_all = lambda *args, **kwargs: []
                     return mock_div
                 return None
         
@@ -775,20 +775,20 @@ class TestGemilangLocationParser(TestCase):
         parser = GemilangLocationParser()
         
         class MockGoodItem:
-            def find(self, tag, class_=None):
+            def find(self, tag, class_=None, **kwargs):
                 if class_ == 'location_click':
                     mock_link = type('MockLink', (), {})()
-                    mock_link.get_text = lambda strip=False: "Good Store"
+                    mock_link.get_text = lambda **kw: "Good Store"
                     return mock_link
                 elif class_ == 'store-location':
                     mock_div = type('MockDiv', (), {})()
-                    mock_div.get_text = lambda: "Good Address"
-                    mock_div.find_all = lambda tag: []
+                    mock_div.get_text = lambda **kw: "Good Address"
+                    mock_div.find_all = lambda *args, **kwargs: []
                     return mock_div
                 return None
         
         class MockBadItem:
-            def find(self, tag, class_=None):
+            def find(self, tag, class_=None, **kwargs):
                 raise AttributeError("Bad item error")
         
         items = [MockBadItem(), MockGoodItem()]

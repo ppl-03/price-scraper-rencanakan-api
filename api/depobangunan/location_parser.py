@@ -183,8 +183,8 @@ class DepoBangunanLocationParser(ILocationParser):
             try:
                 header_text = header.get_text(strip=True)
                 
-                # Check if this is a store location header (more permissive matching)
-                if store_header_re.search(header_text) or header_text.upper().startswith('DEPO'):
+                # Check if this is a store location header (case-sensitive)
+                if store_header_re.search(header_text):
                     location = self._extract_location_from_header(header)
                     if location:
                         locations.append(location)
