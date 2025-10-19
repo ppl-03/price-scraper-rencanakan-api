@@ -23,8 +23,8 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
         """Test that products without units are enhanced with detail page information."""
         # Mock the base scraper result
         products = [
-            Product(name="Product with unit", price=1000, url="http://example.com/1", unit="KG"),
-            Product(name="Product without unit", price=2000, url="http://example.com/2", unit=None),
+            Product(name="Product with unit", price=1000, url="https://example.com/1", unit="KG"),
+            Product(name="Product without unit", price=2000, url="https://example.com/2", unit=None),
         ]
         mock_result = ScrapingResult(products=products, success=True)
         mock_super_scrape.return_value = mock_result
@@ -51,14 +51,14 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
             self.assertEqual(result.products[1].unit, "KG")
             
             # Verify detail page was fetched
-            self.mock_http_client.get.assert_called_once_with("http://example.com/2")
+            self.mock_http_client.get.assert_called_once_with("https://example.com/2")
             mock_parse_detail.assert_called_once_with(detail_html)
     
     @patch('api.depobangunan.scraper.BasePriceScraper.scrape_products')
     def test_scrape_products_handles_detail_page_fetch_failure(self, mock_super_scrape):
         # Mock the base scraper result with product without unit
         products = [
-            Product(name="Product without unit", price=2000, url="http://example.com/2", unit=None),
+            Product(name="Product without unit", price=2000, url="https://example.com/2", unit=None),
         ]
         mock_result = ScrapingResult(products=products, success=True)
         mock_super_scrape.return_value = mock_result
@@ -117,7 +117,7 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
     
     def test_enhance_product_with_unit_from_detail_page_success(self):
         # Create test product
-        product = Product(name="Test Product", price=1000, url="http://example.com/test", unit=None)
+        product = Product(name="Test Product", price=1000, url="https://example.com/test", unit=None)
         
         # Mock detail page HTML
         detail_html = "<table><tr><td>Ukuran</td><td>2KG</td></tr></table>"
@@ -133,12 +133,12 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
             # Assertions
             self.assertEqual(result.name, "Test Product")
             self.assertEqual(result.price, 1000)
-            self.assertEqual(result.url, "http://example.com/test")
+            self.assertEqual(result.url, "https://example.com/test")
             self.assertEqual(result.unit, "KG")
     
     def test_enhance_product_with_unit_from_detail_page_no_unit_found(self):
         # Create test product
-        product = Product(name="Test Product", price=1000, url="http://example.com/test", unit=None)
+        product = Product(name="Test Product", price=1000, url="https://example.com/test", unit=None)
         
         # Mock detail page HTML
         detail_html = "<html><body>No specifications</body></html>"
@@ -154,7 +154,7 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
             # Assertions - product should remain unchanged
             self.assertEqual(result.name, "Test Product")
             self.assertEqual(result.price, 1000)
-            self.assertEqual(result.url, "http://example.com/test")
+            self.assertEqual(result.url, "https://example.com/test")
             self.assertIsNone(result.unit)
     
     def test_enhance_product_with_unit_from_detail_page_no_url(self):
