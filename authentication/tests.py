@@ -5,7 +5,16 @@ from django.utils import timezone
 from django.core import mail
 from datetime import datetime, timedelta
 from unittest.mock import patch
+import secrets
+
 from .models import User, Company, UserManager
+
+# Use ephemeral test-only passwords generated at runtime to avoid hard-coded
+# credential literals in source. These are deterministic for a single test
+# process (generated once per test module) and safe for use in assertions
+# because the same variable is referenced across tests.
+TEST_PASSWORD = secrets.token_urlsafe(12)
+TEST_ADMIN_PASSWORD = secrets.token_urlsafe(12)
 
 
 class CompanyModelTest(TestCase):
@@ -74,14 +83,14 @@ class CompanyModelTest(TestCase):
         # Create users
         User.objects.create_user(
             email='user1@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='User',
             last_name='One',
             company=company
         )
         User.objects.create_user(
             email='user2@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='User',
             last_name='Two',
             company=company
@@ -93,7 +102,7 @@ class CompanyModelTest(TestCase):
         # Create inactive user
         inactive_user = User.objects.create_user(
             email='inactive@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='Inactive',
             last_name='User',
             company=company
@@ -118,7 +127,7 @@ class CompanyModelTest(TestCase):
         # Add users up to limit
         User.objects.create_user(
             email='user1@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='User',
             last_name='One',
             company=company
@@ -127,7 +136,7 @@ class CompanyModelTest(TestCase):
         
         User.objects.create_user(
             email='user2@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='User',
             last_name='Two',
             company=company
@@ -144,25 +153,24 @@ class UserManagerTest(TestCase):
         """Test creating a regular user"""
         user = User.objects.create_user(
             email='test@example.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='Test',
             last_name='User'
         )
-        
         self.assertEqual(user.email, 'test@example.com')
         self.assertEqual(user.first_name, 'Test')
         self.assertEqual(user.last_name, 'User')
         self.assertTrue(user.is_active)
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
-        self.assertTrue(user.check_password('testpass123'))
+        self.assertTrue(user.check_password(TEST_PASSWORD))
     
     def test_create_user_without_email(self):
         """Test that creating user without email raises error"""
         with self.assertRaises(ValueError) as context:
             User.objects.create_user(
                 email='',
-                password='testpass123'
+                password=TEST_PASSWORD
             )
         self.assertEqual(str(context.exception), 'The Email field must be set')
     
@@ -170,7 +178,7 @@ class UserManagerTest(TestCase):
         """Test creating a superuser"""
         user = User.objects.create_superuser(
             email='admin@example.com',
-            password='adminpass123',
+            password=TEST_ADMIN_PASSWORD,
             first_name='Admin',
             last_name='User'
         )
@@ -185,14 +193,14 @@ class UserManagerTest(TestCase):
         with self.assertRaises(ValueError):
             User.objects.create_superuser(
                 email='admin@example.com',
-                password='adminpass123',
+                password=TEST_ADMIN_PASSWORD,
                 is_staff=False
             )
         
         with self.assertRaises(ValueError):
             User.objects.create_superuser(
                 email='admin@example.com',
-                password='adminpass123',
+                password=TEST_ADMIN_PASSWORD,
                 is_superuser=False
             )
 
@@ -218,7 +226,7 @@ class UserModelTest(TestCase):
     def test_user_creation(self):
         """Test basic user creation"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -234,7 +242,7 @@ class UserModelTest(TestCase):
     def test_user_str_method(self):
         """Test string representation of user"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         self.assertEqual(str(user), 'Test User (test@example.com)')
@@ -242,14 +250,14 @@ class UserModelTest(TestCase):
     def test_email_uniqueness(self):
         """Test that email must be unique"""
         User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
         with self.assertRaises(IntegrityError):
             User.objects.create_user(
                 email='test@example.com',  # Same email
-                password='testpass123',
+                    password=TEST_PASSWORD,
                 first_name='Another',
                 last_name='User'
             )
@@ -262,7 +270,7 @@ class UserModelTest(TestCase):
     def test_get_full_name(self):
         """Test get_full_name method"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         self.assertEqual(user.get_full_name(), 'Test User')
@@ -270,7 +278,7 @@ class UserModelTest(TestCase):
     def test_get_short_name(self):
         """Test get_short_name method"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         self.assertEqual(user.get_short_name(), 'Test')
@@ -278,7 +286,7 @@ class UserModelTest(TestCase):
     def test_initials_property(self):
         """Test initials property"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         self.assertEqual(user.initials, 'TU')
@@ -286,7 +294,7 @@ class UserModelTest(TestCase):
     def test_hashid_property(self):
         """Test hashid property"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -306,7 +314,7 @@ class UserModelTest(TestCase):
     def test_get_by_hashid(self):
         """Test get_by_hashid class method"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -320,7 +328,7 @@ class UserModelTest(TestCase):
     def test_api_token_creation(self):
         """Test API token creation"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -336,7 +344,7 @@ class UserModelTest(TestCase):
     def test_api_token_with_expiry(self):
         """Test API token creation with expiry"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -348,7 +356,7 @@ class UserModelTest(TestCase):
     def test_api_token_validation(self):
         """Test API token validation"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -363,7 +371,7 @@ class UserModelTest(TestCase):
     def test_api_token_validation_with_expiry(self):
         """Test API token validation with expired token"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -377,7 +385,7 @@ class UserModelTest(TestCase):
     def test_revoke_api_token(self):
         """Test revoking specific API token"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -394,7 +402,7 @@ class UserModelTest(TestCase):
     def test_revoke_all_tokens(self):
         """Test revoking all API tokens"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -411,7 +419,7 @@ class UserModelTest(TestCase):
     def test_email_verification(self):
         """Test email verification functionality"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -435,7 +443,7 @@ class UserModelTest(TestCase):
     def test_send_verification_email(self, mock_send_mail):
         """Test sending verification email"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -456,7 +464,7 @@ class UserModelTest(TestCase):
         
         user = User.objects.create_user(
             email='user@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='Test',
             last_name='User',
             company=company1
@@ -471,7 +479,7 @@ class UserModelTest(TestCase):
         # Superuser can access any company
         superuser = User.objects.create_superuser(
             email='admin@test.com',
-            password='adminpass123',
+            password=TEST_ADMIN_PASSWORD,
             first_name='Admin',
             last_name='User'
         )
@@ -481,7 +489,7 @@ class UserModelTest(TestCase):
     def test_update_last_activity(self):
         """Test updating last activity"""
         user = User.objects.create_user(
-            password='testpass123',
+            password=TEST_PASSWORD,
             **self.user_data
         )
         
@@ -532,14 +540,14 @@ class UserModelTest(TestCase):
         # Create users at different times
         user1 = User.objects.create_user(
             email='user1@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='User',
             last_name='One'
         )
         
         user2 = User.objects.create_user(
             email='user2@test.com',
-            password='testpass123',
+            password=TEST_PASSWORD,
             first_name='User',
             last_name='Two'
         )
