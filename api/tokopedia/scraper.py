@@ -52,15 +52,17 @@ class TokopediaPriceScraper(BasePriceScraper):
         location_ids = get_location_ids(location)
         if not location_ids:
             available_locations = list(TOKOPEDIA_LOCATION_IDS.keys())
-            warning_msg = f"Unknown location '{location}'. Available locations: {available_locations}"
+            # Do not log user-controlled data to prevent log injection attacks
+            warning_msg = f"Unknown location provided. Available locations: {available_locations}"
             logger.warning(warning_msg)
             warnings.warn(warning_msg, UserWarning, stacklevel=3)
             
         return location_ids
     
     def scrape_products_with_filters(self, keyword: str, sort_by_price: bool = True, 
-                                   page: int = 0, min_price: int = None, max_price: int = None,
-                                   location: str = None) -> ScrapingResult:
+                                   page: int = 0, min_price: Optional[int] = None, 
+                                   max_price: Optional[int] = None,
+                                   location: Optional[str] = None) -> ScrapingResult:
         """
         Scrape Tokopedia products with advanced filters
         
@@ -108,8 +110,9 @@ class TokopediaPriceScraper(BasePriceScraper):
             )
     
     def scrape_batch_with_filters(self, keywords: List[str], sort_by_price: bool = True,
-                                min_price: int = None, max_price: int = None,
-                                location: str = None) -> List[Product]:
+                                min_price: Optional[int] = None, 
+                                max_price: Optional[int] = None,
+                                location: Optional[str] = None) -> List[Product]:
         """
         Scrape multiple keywords with filters in batch
         
@@ -145,7 +148,8 @@ class TokopediaPriceScraper(BasePriceScraper):
                     all_products.extend(products)
                     
                 except Exception as e:
-                    error_msg = f"Error scraping keyword '{keyword}': {e}"
+                    # Do not log user-controlled data to prevent log injection attacks
+                    error_msg = f"Error scraping keyword in batch: {e}"
                     logger.error(error_msg)
                     continue
         
