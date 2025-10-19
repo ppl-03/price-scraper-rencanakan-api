@@ -1279,9 +1279,10 @@ def _run_mitra10_location_scraper(request) -> list[dict]:
         scraper = create_mitra10_location_scraper()
         result = scraper.scrape_locations()
         
-        if getattr(result, "success", False) and getattr(result, "locations", None):
+        # Handle dictionary response (Mitra10 returns a dict, not an object)
+        if isinstance(result, dict) and result.get("success", False) and result.get("locations"):
             locations = []
-            for location_name in result.locations:
+            for location_name in result["locations"]:
                 # Mitra10 location scraper returns location names as strings
                 # Convert them to the expected format
                 locations.append({
@@ -1291,10 +1292,10 @@ def _run_mitra10_location_scraper(request) -> list[dict]:
                 })
             return locations
         else:
-            error_msg = getattr(result, "error_message", "Unknown error")
+            error_msg = result.get("error_message", "Unknown error") if isinstance(result, dict) else "Unknown error"
             # Handle specific error types with appropriate fallbacks
             if "timeout" in error_msg.lower() or "exceeded" in error_msg.lower():
-                messages.warning(request, f"[{MITRA10_SOURCE}] Store locations loading slowly, using cached locations")
+                messages.warning(request, f"[{MITRA10_SOURCE}] Website loading slowly, using cached locations")
                 return _get_mitra10_fallback_locations()
             elif "context manager" in error_msg.lower() or "batchplaywrightclient" in error_msg.lower():
                 messages.warning(request, f"[{MITRA10_SOURCE}] Browser connection issue, using cached locations")
@@ -1489,6 +1490,7 @@ def _clean_and_dedupe_prices(prices: list[dict]) -> list[dict]:
 
 
 # ---------------- views ----------------
+@require_GET
 def home(request):
     keyword = request.GET.get("q", "semen")
     
