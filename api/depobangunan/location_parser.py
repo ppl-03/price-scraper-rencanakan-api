@@ -176,8 +176,8 @@ class DepoBangunanLocationParser(ILocationParser):
         # Find all h2 headers that contain store names
         headers = soup.find_all('h2')
         
-        # Use case-insensitive regex to detect store headers
-        store_header_re = re.compile(r'depo\s*bangunan', re.IGNORECASE)
+        # Use case-sensitive matching to detect store headers (must match "Depo Bangunan")
+        store_header_re = re.compile(r'Depo\s+Bangunan')
         
         for header in headers:
             try:

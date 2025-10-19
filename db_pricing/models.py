@@ -54,7 +54,7 @@ class GemilangProduct(models.Model):
     name = models.CharField(max_length=500)
     price = models.IntegerField(validators=[MinValueValidator(0)])
     url = models.URLField(max_length=1000)
-    unit = models.CharField(max_length=50, blank=True)
+    unit = models.CharField(max_length=50, blank=True, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

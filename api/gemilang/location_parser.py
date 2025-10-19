@@ -62,9 +62,17 @@ class HtmlElementExtractor:
                 logger.debug("No store-location div found in item")
                 return None
             
-            # Join text across <br> tags and handle HTML entities
-            text = ' '.join(address_div.stripped_strings)
+            # Replace <br> tags with newlines before extracting text
+            for br in address_div.find_all('br'):
+                br.replace_with('\n')
+            
+            # Get text and handle HTML entities
+            text = address_div.get_text(strip=False)
             text = unescape(text)
+            
+            # Clean up excessive whitespace while preserving newlines
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            text = '\n'.join(lines)
             
             if not self._text_cleaner.is_valid_text(text):
                 logger.debug("Address text is empty or invalid")
@@ -177,17 +185,21 @@ class GemilangLocationParser(ILocationParser):
         return locations
     
     def _extract_location_from_item(self, item) -> Optional[Location]:
-        store_name = self._element_extractor.extract_store_name(item)
-        if not store_name:
-            logger.debug("Store name extraction failed")
-            return None
+        try:
+            store_name = self._element_extractor.extract_store_name(item)
+            if not store_name:
+                logger.debug("Store name extraction failed")
+                return None
+                
+            address = self._element_extractor.extract_address(item)
+            if not address:
+                logger.debug("Address extraction failed")
+                return None
             
-        address = self._element_extractor.extract_address(item)
-        if not address:
-            logger.debug("Address extraction failed")
+            return self._create_location(store_name, address)
+        except Exception as e:
+            logger.warning(f"Failed to extract location from item: {str(e)}")
             return None
-        
-        return self._create_location(store_name, address)
     
     def _create_location(self, store_name: str, address: str) -> Location:
         return Location(name=store_name, code=address)

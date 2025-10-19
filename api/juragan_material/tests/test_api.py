@@ -2,6 +2,7 @@ from api.test_utils import BaseScraperAPITestCase
 from unittest.mock import patch, Mock
 from api.interfaces import ScrapingResult, Product
 from django.test import TestCase, RequestFactory
+from django.http import JsonResponse
 from api.juragan_material import views
 
 
@@ -100,11 +101,17 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         """Test view handles exceptions from scraper."""
         mock_scraper = mock_create_scraper.return_value
         mock_scraper.scrape_products.side_effect = RuntimeError("Scraping failed")
-        mock_handle_exception.return_value = Mock(status_code=500, content=b'{"error": "Internal error"}')
+        mock_handle_exception.return_value = JsonResponse({'error': 'Internal error'}, status=500)
+        
+        # Make the request that should trigger the exception
+        response = self.client.get(self.endpoint_url, {'keyword': 'test'})
+        
+        # Verify handle_scraping_exception was called
         mock_handle_exception.assert_called_once()
         args = mock_handle_exception.call_args[0]
         self.assertIsInstance(args[0], RuntimeError)
         self.assertEqual(args[1], "Juragan Material scraper")
+        self.assertEqual(response.status_code, 500)
 
 
 class TestJuraganMaterialViewsDirect(TestCase):
@@ -197,6 +204,10 @@ class TestJuraganMaterialViewsDirect(TestCase):
         mock_scraper.scrape_products.return_value = mock_result
         mock_create.return_value = mock_scraper
         mock_format.return_value = {'success': True}
+        
+        # Make the request
+        request = self.factory.get('/api/juragan_material/scrape/', {'keyword': 'cement', 'sort_by_price': 'false', 'page': '5'})
+        response = views.scrape_products(request)
         
         # Verify scraper was called with correct parameters
         mock_scraper.scrape_products.assert_called_once_with(
