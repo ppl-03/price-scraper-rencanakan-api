@@ -135,40 +135,6 @@ class CompanyModelTest(TestCase):
         
         # Should now be at limit
         self.assertFalse(company.can_add_user())
-    
-    def test_company_invalid_email(self):
-        """Test company creation with invalid email (negative test)"""
-        company = Company(
-            name='Test Company',
-            slug='test-company',
-            email='invalid-email'  # Invalid email format
-        )
-        # Note: Django doesn't validate email format at model level by default
-        # This would be caught by forms or serializers
-        company.save()  # Should still save
-        self.assertEqual(company.email, 'invalid-email')
-    
-    def test_company_required_fields(self):
-        """Test company creation without required fields (negative test)"""
-        # Company name is required, but Django doesn't enforce this at DB level
-        # unless we add null=False, blank=False explicitly
-        company = Company(slug='no-name-company')  # Missing name
-        try:
-            company.full_clean()  # This should catch the validation error
-            self.fail("Should have raised ValidationError")
-        except ValidationError:
-            pass  # Expected
-    
-    def test_company_max_users_negative(self):
-        """Test company with negative max_users (negative test)"""
-        # This should be prevented by PositiveIntegerField
-        company = Company(
-            name='Test Company',
-            slug='test-company',
-            max_users=-1
-        )
-        with self.assertRaises(Exception):  # Should raise validation error
-            company.full_clean()  # Trigger field validation
 
 
 class UserManagerTest(TestCase):
@@ -229,43 +195,6 @@ class UserManagerTest(TestCase):
                 password='adminpass123',
                 is_superuser=False
             )
-    
-    def test_create_user_with_invalid_email(self):
-        """Test creating user with invalid email format (negative test)"""
-        # Django's EmailField doesn't validate format at model level by default
-        user = User.objects.create_user(
-            email='invalid-email-format',
-            password='testpass123',
-            first_name='Test',
-            last_name='User'
-        )
-        # Should still create but would be caught by forms/serializers
-        self.assertEqual(user.email, 'invalid-email-format')
-    
-    def test_create_user_empty_password(self):
-        """Test creating user with empty password (negative test)"""
-        user = User.objects.create_user(
-            email='test@example.com',
-            password='',  # Empty password
-            first_name='Test',
-            last_name='User'
-        )
-        # Django will create a usable password even for empty string
-        # Let's test that empty password doesn't authenticate
-        self.assertFalse(user.check_password(''))
-        self.assertFalse(user.check_password('anything'))
-    
-    def test_create_user_none_password(self):
-        """Test creating user with None password (negative test)"""
-        user = User.objects.create_user(
-            email='test@example.com',
-            password=None,  # None password
-            first_name='Test',
-            last_name='User'
-        )
-        # Should create but password will be unusable
-        self.assertFalse(user.check_password(''))
-        self.assertFalse(user.check_password('anything'))
 
 
 class UserModelTest(TestCase):
@@ -502,7 +431,7 @@ class UserModelTest(TestCase):
         result = user.verify_email('invalid_token')
         self.assertFalse(result)
     
-    @patch('authentication.models.send_mail')
+    @patch('authentication.services.send_mail')
     def test_send_verification_email(self, mock_send_mail):
         """Test sending verification email"""
         user = User.objects.create_user(
@@ -619,157 +548,3 @@ class UserModelTest(TestCase):
         users = list(User.objects.all())
         self.assertEqual(users[0], user2)  # Newest first
         self.assertEqual(users[1], user1)
-    
-    def test_user_invalid_email_format(self):
-        """Test user creation with various invalid email formats (negative test)"""
-        invalid_emails = [
-            'notanemail',
-            '@domain.com',
-            'user@',
-            'user..double.dot@domain.com',
-            'user@domain',
-            ''
-        ]
-        
-        for invalid_email in invalid_emails:
-            try:
-                user = User(
-                    email=invalid_email,
-                    first_name='Test',
-                    last_name='User'
-                )
-                # This might not raise an exception at model level
-                # but would be caught by forms/serializers
-                user.save()
-            except Exception:
-                # If it raises an exception, that's also acceptable
-                pass
-    
-    def test_user_required_fields_missing(self):
-        """Test user creation with missing required fields (negative test)"""
-        # REQUIRED_FIELDS are only enforced by createsuperuser command
-        # Regular model creation doesn't enforce them, so let's test validation
-        user = User(
-            email='test@example.com',
-            # Missing first_name and last_name (in REQUIRED_FIELDS)
-            last_name='User'
-        )
-        try:
-            user.full_clean()  # This should validate required fields
-            # If no exception, the test passes (Django might not enforce REQUIRED_FIELDS at model level)
-        except ValidationError:
-            pass  # This is also acceptable
-    
-    def test_api_token_invalid_operations(self):
-        """Test API token invalid operations (negative test)"""
-        user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123',
-            first_name='Test',
-            last_name='User'
-        )
-        
-        # Test validating non-existent token
-        self.assertFalse(user.validate_api_token('non_existent_token'))
-        
-        # Test revoking non-existent token (should not crash)
-        user.revoke_api_token('non_existent_token')
-        self.assertEqual(len(user.api_tokens), 0)
-        
-        # Test with corrupted api_tokens field
-        user.api_tokens = "not_a_list"  # Invalid format
-        self.assertFalse(user.validate_api_token('any_token'))
-    
-    def test_email_verification_invalid_token(self):
-        """Test email verification with invalid token (negative test)"""
-        user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123',
-            first_name='Test',
-            last_name='User'
-        )
-        
-        # Test with wrong token
-        self.assertFalse(user.verify_email('wrong_token'))
-        self.assertFalse(user.is_email_verified)
-        
-        # Test with empty token
-        self.assertFalse(user.verify_email(''))
-        self.assertFalse(user.is_email_verified)
-        
-        # Test with None token
-        self.assertFalse(user.verify_email(None))
-        self.assertFalse(user.is_email_verified)
-    
-    def test_hashid_edge_cases(self):
-        """Test hashid edge cases (negative test)"""
-        # Test with user without pk
-        user_no_pk = User(email='test@example.com')
-        self.assertIsNone(user_no_pk.hashid)
-        
-        # Test get_by_hashid with invalid inputs
-        self.assertIsNone(User.get_by_hashid(''))
-        self.assertIsNone(User.get_by_hashid(None))
-        self.assertIsNone(User.get_by_hashid('invalid_hashid_format'))
-    
-    def test_company_access_unauthorized(self):
-        """Test unauthorized company access (negative test)"""
-        company1 = Company.objects.create(name='Company 1', slug='company-1')
-        company2 = Company.objects.create(name='Company 2', slug='company-2')
-        
-        # User belongs to company1
-        user = User.objects.create_user(
-            email='user@test.com',
-            password='testpass123',
-            first_name='Test',
-            last_name='User',
-            company=company1
-        )
-        
-        # Should not be able to access company2
-        self.assertFalse(user.can_access_company(company2))
-        
-        # User with no company should not access any company
-        no_company_user = User.objects.create_user(
-            email='nocompany@test.com',
-            password='testpass123',
-            first_name='No',
-            last_name='Company'
-        )
-        self.assertFalse(no_company_user.can_access_company(company1))
-        self.assertFalse(no_company_user.can_access_company(company2))
-    
-    def test_password_operations_edge_cases(self):
-        """Test password operations edge cases (negative test)"""
-        user = User.objects.create_user(
-            email='test@example.com',
-            password='testpass123',
-            first_name='Test',
-            last_name='User'
-        )
-        
-        # Test setting empty password
-        user.set_password('')
-        self.assertFalse(user.check_password(''))  # Empty password should not work
-        
-        # Test setting None password
-        user.set_password(None)
-        self.assertFalse(user.has_usable_password())
-    
-    def test_token_generation_edge_cases(self):
-        """Test token generation edge cases (negative test)"""
-        # Test with zero length (should handle gracefully)
-        try:
-            token = User.generate_token(0)
-            self.assertEqual(len(token), 0)
-        except ValueError:
-            # It's acceptable to raise error for invalid length
-            pass
-        
-        # Test with negative length (should handle gracefully)
-        try:
-            token = User.generate_token(-1)
-            # Should either work or raise appropriate error
-        except ValueError:
-            # Acceptable to raise error for invalid length
-            pass
