@@ -224,18 +224,17 @@ class TestGemilangLocationAPI(TestCase):
         mock_scraper = Mock()
         mock_locations = [
             Location(
-                store_name="GEMILANG - BANJARMASIN KM",
-                address="Jl. Kampung Melayu Darat 39A Rt.8\nBanjarmasin, Kalimantan Selatan\nIndonesia"
+                name="GEMILANG - BANJARMASIN KM",
+                code="Jl. Kampung Melayu Darat 39A Rt.8\nBanjarmasin, Kalimantan Selatan\nIndonesia"
             ),
             Location(
-                store_name="GEMILANG - JAKARTA PUSAT", 
-                address="Jl. Veteran No. 123\nJakarta Pusat, DKI Jakarta\nIndonesia"
+                name="GEMILANG - JAKARTA PUSAT", 
+                code="Jl. Veteran No. 123\nJakarta Pusat, DKI Jakarta\nIndonesia"
             )
         ]
         mock_result = LocationScrapingResult(
             locations=mock_locations,
-            success=True,
-            url="https://gemilang-store.com/pusat/store-locations"
+            success=True
         )
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
@@ -247,10 +246,9 @@ class TestGemilangLocationAPI(TestCase):
         
         self.assertTrue(data['success'])
         self.assertEqual(len(data['locations']), 2)
-        self.assertEqual(data['locations'][0]['store_name'], "GEMILANG - BANJARMASIN KM")
-        self.assertEqual(data['locations'][0]['address'], "Jl. Kampung Melayu Darat 39A Rt.8\nBanjarmasin, Kalimantan Selatan\nIndonesia")
-        self.assertEqual(data['locations'][1]['store_name'], "GEMILANG - JAKARTA PUSAT")
-        self.assertEqual(data['url'], "https://gemilang-store.com/pusat/store-locations")
+        self.assertEqual(data['locations'][0]['name'], "GEMILANG - BANJARMASIN KM")
+        self.assertEqual(data['locations'][0]['code'], "Jl. Kampung Melayu Darat 39A Rt.8\nBanjarmasin, Kalimantan Selatan\nIndonesia")
+        self.assertEqual(data['locations'][1]['name'], "GEMILANG - JAKARTA PUSAT")
         self.assertIsNone(data['error_message'])
         
         mock_scraper.scrape_locations.assert_called_once_with(timeout=30)
@@ -263,8 +261,7 @@ class TestGemilangLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=False,
-            error_message="Connection timeout",
-            url="https://gemilang-store.com/pusat/store-locations"
+            error_message="Connection timeout"
         )
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
@@ -285,8 +282,7 @@ class TestGemilangLocationAPI(TestCase):
         mock_scraper = Mock()
         mock_result = LocationScrapingResult(
             locations=[],
-            success=True,
-            url="https://gemilang-store.com/pusat/store-locations"
+            success=True
         )
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
@@ -303,8 +299,7 @@ class TestGemilangLocationAPI(TestCase):
         mock_scraper = Mock()
         mock_result = LocationScrapingResult(
             locations=[],
-            success=True,
-            url="https://gemilang-store.com/pusat/store-locations"
+            success=True
         )
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper

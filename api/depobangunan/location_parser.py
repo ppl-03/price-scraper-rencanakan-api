@@ -211,4 +211,4 @@ class DepoBangunanLocationParser(ILocationParser):
     
     def _create_location(self, store_name: str, address: str) -> Location:
         """Create a Location object"""
-        return Location(store_name=store_name, address=address)
+        return Location(name=store_name, code=address)

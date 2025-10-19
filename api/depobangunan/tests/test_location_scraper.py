@@ -21,12 +21,12 @@ class TestDepoBangunanLocationScraper(TestCase):
         
         expected_locations = [
             Location(
-                store_name="Depo Bangunan - Kalimalang",
-                address="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
+                name="Depo Bangunan - Kalimalang",
+                code="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
             ),
             Location(
-                store_name="Depo Bangunan - Tangerang Selatan", 
-                address="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
+                name="Depo Bangunan - Tangerang Selatan", 
+                code="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
             )
         ]
         self.mock_location_parser.parse_locations.return_value = expected_locations
@@ -35,8 +35,8 @@ class TestDepoBangunanLocationScraper(TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(len(result.locations), 2)
-        self.assertEqual(result.locations[0].store_name, "Depo Bangunan - Kalimalang")
-        self.assertEqual(result.locations[1].store_name, "Depo Bangunan - Tangerang Selatan")
+        self.assertEqual(result.locations[0].name, "Depo Bangunan - Kalimalang")
+        self.assertEqual(result.locations[1].name, "Depo Bangunan - Tangerang Selatan")
         self.assertIsNone(result.error_message)
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"

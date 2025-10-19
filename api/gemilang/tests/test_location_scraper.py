@@ -20,12 +20,12 @@ class TestGemilangLocationScraper(TestCase):
         
         expected_locations = [
             Location(
-                store_name="GEMILANG - BANJARMASIN KM",
-                address="Jl. Kampung Melayu Darat 39A Rt.8\nBanjarmasin, Kalimantan Selatan\nIndonesia"
+                name="GEMILANG - BANJARMASIN KM",
+                code="Jl. Kampung Melayu Darat 39A Rt.8\nBanjarmasin, Kalimantan Selatan\nIndonesia"
             ),
             Location(
-                store_name="GEMILANG - JAKARTA PUSAT", 
-                address="Jl. Veteran No. 123\nJakarta Pusat, DKI Jakarta\nIndonesia"
+                name="GEMILANG - JAKARTA PUSAT", 
+                code="Jl. Veteran No. 123\nJakarta Pusat, DKI Jakarta\nIndonesia"
             )
         ]
         self.mock_location_parser.parse_locations.return_value = expected_locations
@@ -34,8 +34,8 @@ class TestGemilangLocationScraper(TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(len(result.locations), 2)
-        self.assertEqual(result.locations[0].store_name, "GEMILANG - BANJARMASIN KM")
-        self.assertEqual(result.locations[1].store_name, "GEMILANG - JAKARTA PUSAT")
+        self.assertEqual(result.locations[0].name, "GEMILANG - BANJARMASIN KM")
+        self.assertEqual(result.locations[1].name, "GEMILANG - JAKARTA PUSAT")
         self.assertIsNone(result.error_message)
 
         expected_url = "https://gemilang-store.com/pusat/store-locations"

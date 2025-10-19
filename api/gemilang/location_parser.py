@@ -190,4 +190,4 @@ class GemilangLocationParser(ILocationParser):
         return self._create_location(store_name, address)
     
     def _create_location(self, store_name: str, address: str) -> Location:
-        return Location(store_name=store_name, address=address)
+        return Location(name=store_name, code=address)

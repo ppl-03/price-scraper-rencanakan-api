@@ -82,8 +82,8 @@ class LocationRequestHandler:
     def format_locations_response(self, result) -> dict:
         locations_data = [
             {
-                'store_name': location.store_name,
-                'address': location.address
+                'name': location.name,
+                'code': location.code
             }
             for location in result.locations
         ]
@@ -91,8 +91,7 @@ class LocationRequestHandler:
         return {
             'success': result.success,
             'locations': locations_data,
-            'error_message': result.error_message,
-            'url': result.url
+            'error_message': result.error_message
         }
     
     def create_error_response(self, error_message: str) -> dict:

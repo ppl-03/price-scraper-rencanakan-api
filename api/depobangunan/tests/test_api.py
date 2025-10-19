@@ -467,20 +467,19 @@ class TestDepoBangunanLocationAPI(TestCase):
         
         mock_locations = [
             Location(
-                store_name="Depo Bangunan - Kalimalang",
-                address="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
+                name="Depo Bangunan - Kalimalang",
+                code="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
             ),
             Location(
-                store_name="Depo Bangunan - Tangerang Selatan",
-                address="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
+                name="Depo Bangunan - Tangerang Selatan",
+                code="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
             )
         ]
         
         mock_result = LocationScrapingResult(
             locations=mock_locations,
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -517,8 +516,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=False,
-            error_message="Failed to fetch location data",
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message="Failed to fetch location data"
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -543,8 +541,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -594,8 +591,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -619,8 +615,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -641,8 +636,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
