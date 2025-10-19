@@ -39,7 +39,8 @@ def scrape_products(request):
             {
                 'name': product.name,
                 'price': product.price,
-                'url': product.url
+                'url': product.url,
+                'unit': product.unit
             }
             for product in result.products
         ]
