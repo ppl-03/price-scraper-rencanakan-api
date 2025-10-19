@@ -239,6 +239,51 @@ def _extract_depo_product_unit_from_name(name: str) -> str:
         return ""
 
 
+def _extract_mitra10_product_unit(url: str) -> str:
+    """Extract product unit from Mitra10 product detail page."""
+    try:
+        if not url:
+            return ""
+        
+        # Handle relative URLs
+        if url.startswith('/'):
+            url = f"https://www.mitra10.com{url}"
+        
+        # Fetch product detail page
+        html = _human_get(url)
+        if not html:
+            return ""
+        
+        # Use Mitra10's unit parser to extract unit from detail page
+        from api.mitra10.unit_parser import Mitra10UnitParser
+        unit_parser = Mitra10UnitParser()
+        
+        # Try to extract unit from the detail page HTML
+        unit = unit_parser.parse_unit(html)
+        return unit or ""
+        
+    except Exception:
+        return ""
+
+
+def _extract_mitra10_product_unit_from_name(name: str) -> str:
+    """Extract product unit from Mitra10 product name."""
+    try:
+        if not name:
+            return ""
+        
+        # Use Mitra10's unit parser to extract unit from product name
+        from api.mitra10.unit_parser import Mitra10UnitExtractor
+        unit_extractor = Mitra10UnitExtractor()
+        
+        # Try to extract unit from the product name
+        unit = unit_extractor.extract_unit(name)
+        return unit or ""
+        
+    except Exception:
+        return ""
+
+
 def _extract_juragan_product_location(url: str) -> str:
     """Extract product location from Juragan Material product detail page using groupmate's method."""
     try:
@@ -620,7 +665,15 @@ def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
         if key in seen:
             return
         seen.add(key)
-        out.append({"item": _clean_text(name), "value": price_val, "source": MITRA10_SOURCE, "url": full_url})
+        
+        # Extract unit from product name first (faster)
+        unit = _extract_mitra10_product_unit_from_name(name)
+        
+        # If no unit found from name, try extracting from detail page
+        if not unit and full_url:
+            unit = _extract_mitra10_product_unit(full_url)
+        
+        out.append({"item": _clean_text(name), "value": price_val, "unit": unit, "source": MITRA10_SOURCE, "url": full_url})
 
     jsonld_scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
     for script in jsonld_scripts:
@@ -861,7 +914,14 @@ def _extract_mitra10_product_data(container, request_url: str) -> dict | None:
     if price <= 0:
         return None
 
-    return {"item": name, "value": price, "source": MITRA10_SOURCE, "url": full_url}
+    # Extract unit from product name first (faster)
+    unit = _extract_mitra10_product_unit_from_name(name)
+    
+    # If no unit found from name, try extracting from detail page
+    if not unit and full_url:
+        unit = _extract_mitra10_product_unit(full_url)
+
+    return {"item": name, "value": price, "unit": unit, "source": MITRA10_SOURCE, "url": full_url}
 
 
 def _parse_mitra10_html(html: str, request_url: str) -> list[dict]:
