@@ -1,10 +1,19 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-from .factory import create_mitra10_scraper
+from .factory import create_mitra10_scraper, create_mitra10_location_scraper
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _create_error_response(message: str, status_code: int = 400) -> JsonResponse:
+    """Helper function to create standardized error responses"""
+    return JsonResponse({
+        'success': False,
+        'locations': [],
+        'count': 0,
+        'error_message': message
+    }, status=status_code)
 
 
 @require_http_methods(["GET"])
@@ -77,4 +86,25 @@ def scrape_products(request):
         logger.error(f"Unexpected error in Mitra10 API: {str(e)}", exc_info=True)
         return JsonResponse({
             'error': 'Internal server error occurred'
+        }, status=500)
+
+@require_http_methods(["GET"])
+def scrape_locations(request):
+    """Django view to scrape Mitra10 store locations."""
+    try:
+        scraper = create_mitra10_location_scraper()
+        result = scraper.scrape_locations()
+
+        return JsonResponse({
+            "success": result["success"],
+            "locations": result["locations"],
+            "error_message": result["error_message"]
+        })
+
+    except Exception as e:
+        logger.error(f"Unexpected error in Mitra10 location scraper: {str(e)}")
+        return JsonResponse({
+            "success": False,
+            "locations": [],
+            "error_message": "Internal server error occurred"
         }, status=500)
