@@ -13,7 +13,7 @@ class TestMitra10Views(TestCase):
         response = views._create_error_response("Something went wrong", 418)
         self.assertIsInstance(response, JsonResponse)
         self.assertEqual(response.status_code, 418)
-        content = response.json()
+        content = json.loads(response.content)
         self.assertFalse(content["success"])
         self.assertEqual(content["error_message"], "Something went wrong")
         self.assertEqual(content["locations"], [])
@@ -55,7 +55,7 @@ class TestMitra10Views(TestCase):
         response = views.scrape_products(request)
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = json.loads(response.content)
         self.assertTrue(data["success"])
         self.assertEqual(len(data["products"]), 2)
         self.assertEqual(data["products"][0]["name"], "Item A")
@@ -82,7 +82,7 @@ class TestMitra10Views(TestCase):
         request = self.factory.get("/api/mitra10/locations")
         response = views.scrape_locations(request)
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = json.loads(response.content)
         self.assertTrue(data["success"])
         self.assertEqual(len(data["locations"]), 2)
         self.assertEqual(data["locations"][1], "MITRA10 B")
@@ -96,7 +96,8 @@ class TestMitra10Views(TestCase):
         request = self.factory.get("/api/mitra10/locations")
         response = views.scrape_locations(request)
         self.assertEqual(response.status_code, 500)
-        data = response.json()
+        data = json.loads(response.content)
         self.assertFalse(data["success"])
         self.assertEqual(data["error_message"], "Internal server error occurred")
+
 

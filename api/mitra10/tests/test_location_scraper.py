@@ -10,7 +10,7 @@ class TestMitra10LocationScraper(TestCase):
         self.scraper = Mitra10LocationScraper()
         self.url = "https://www.mitra10.com/"
 
-    @patch("api.location_scraper.BatchPlaywrightClient")
+    @patch("api.mitra10.location_scraper.BatchPlaywrightClient")
     def test_scrape_locations_success(self, mock_batch):
         mock_instance = mock_batch.return_value.__enter__.return_value
         mock_instance.client = MagicMock()
@@ -25,7 +25,7 @@ class TestMitra10LocationScraper(TestCase):
         self.assertEqual(len(result["locations"]), 2)
         self.assertEqual(result["error_message"], "")
 
-    @patch("api.location_scraper.BatchPlaywrightClient")
+    @patch("api.mitra10.location_scraper.BatchPlaywrightClient")
     def test_scrape_locations_failure(self, mock_batch):
         mock_instance = mock_batch.return_value.__enter__.return_value
         mock_instance.client = MagicMock()
@@ -41,6 +41,7 @@ class TestMitra10LocationScraper(TestCase):
 
     def test_extract_locations_success(self):
         mock_client = MagicMock()
+        mock_client._ensure_browser = AsyncMock()  # Mock the async method
         mock_page = AsyncMock()
         mock_client.page = mock_page
 
@@ -64,6 +65,7 @@ class TestMitra10LocationScraper(TestCase):
 
     def test_extract_locations_click_retry(self):
         mock_client = MagicMock()
+        mock_client._ensure_browser = AsyncMock()  # Mock the async method
         mock_page = AsyncMock()
         mock_client.page = mock_page
 
@@ -88,3 +90,4 @@ class TestMitra10LocationScraper(TestCase):
 
         result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
         self.assertEqual(result, ["MITRA10 RETRY"])
+

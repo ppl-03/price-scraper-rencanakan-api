@@ -175,15 +175,17 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.assertTrue(result.success)
         self.mock_location_parser.parse_locations.assert_called_once_with(large_html)
 
-    def test_scrape_locations_url_in_result(self):
-        """Test that result contains the correct URL"""
+    def test_scrape_locations_correct_http_call(self):
+        """Test that HTTP client is called with correct URL"""
         mock_html = "<html>mock html</html>"
         self.mock_http_client.get.return_value = mock_html
         self.mock_location_parser.parse_locations.return_value = []
 
         result = self.scraper.scrape_locations()
 
-        self.assertEqual(result.url, "https://www.depobangunan.co.id/gerai-depo-bangunan")
+        expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.assertTrue(result.success)
 
     def test_scrape_locations_duplicate_locations(self):
         """Test scraping with duplicate locations"""
