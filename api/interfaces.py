@@ -4,30 +4,31 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Product:
-    name: str
-    price: int
-    url: str
-    unit: Optional[str] = None
-
-
-@dataclass
 class Location:
-    store_name: str
-    address: str
-
-
-@dataclass
-class ScrapingResult:
-    products: List[Product]
-    success: bool
-    error_message: Optional[str] = None
-    url: Optional[str] = None
+    name: str
+    code: Optional[str] = None
 
 
 @dataclass
 class LocationScrapingResult:
     locations: List[Location]
+    success: bool
+    error_message: Optional[str] = None
+    attempts_made: int = 1
+
+
+@dataclass
+class Product:
+    name: str
+    price: int
+    url: str
+    unit: Optional[str] = None
+    location: Optional[str] = None
+
+
+@dataclass
+class ScrapingResult:
+    products: List[Product]
     success: bool
     error_message: Optional[str] = None
     url: Optional[str] = None
@@ -51,25 +52,31 @@ class IHtmlParser(ABC):
         pass
 
 
-class ILocationParser(ABC):
-    @abstractmethod
-    def parse_locations(self, html_content: str) -> List[Location]:
-        pass
-
-
 class IPriceScraper(ABC):
     @abstractmethod
     def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> ScrapingResult:
         pass
-    
-    def scrape_product_details(self, product_url: str) -> Optional[Product]:
 
-        return None
+
+class ILocationParser(ABC):
+    @abstractmethod
+    def parse_locations(self, html_content: str) -> List[str]:
+        pass
 
 
 class ILocationScraper(ABC):
     @abstractmethod
-    def scrape_locations(self, timeout: int = 30) -> LocationScrapingResult:
+    def scrape_locations_batch(self, timeout: Optional[int] = None) -> LocationScrapingResult:
+        pass
+
+
+class ILocationValidator(ABC):
+    @abstractmethod
+    def validate_html_content(self, html_content: str) -> bool:
+        pass
+    
+    @abstractmethod
+    def validate_locations(self, locations: List[str]) -> bool:
         pass
 
 
@@ -86,4 +93,16 @@ class HtmlParserError(Exception):
 
 
 class ScraperError(Exception):
+    pass
+
+
+class LocationParserError(Exception):
+    pass
+
+
+class LocationScraperError(Exception):
+    pass
+
+
+class LocationValidatorError(Exception):
     pass

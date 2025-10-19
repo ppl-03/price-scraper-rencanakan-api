@@ -281,3 +281,160 @@ class TestJuraganMaterialHtmlParser(TestCase):
             products = self.parser.parse_products(html_multiple_rp)
             self.assertEqual(len(products), 1)
             self.assertEqual(products[0].price, 40000)
+    
+    def test_new_html_structure_with_sj_classes(self):
+        """Test parsing new Juragan Material HTML structure with sj-text classes."""
+        html_new_structure = """
+        <div class="product-card">
+            <p class="sj-text-display4">Modern Product Name</p>
+            <p class="sj-text-h6 text-text-main">Rp 75.000</p>
+            <a href="/products/modern-product"></a>
+        </div>
+        """
+        products = self.parser.parse_products(html_new_structure)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].name, "Modern Product Name")
+        self.assertEqual(products[0].price, 75000)
+    
+    def test_new_structure_price_with_successful_extraction(self):
+        """Test new structure price extraction returns correctly without exception."""
+        html_new_price = """
+        <div class="product-card">
+            <a href="/test-product">
+                <p class="product-name">Test Product</p>
+            </a>
+            <p class="sj-text-h6 text-text-main">Rp 99.000</p>
+        </div>
+        """
+        products = self.parser.parse_products(html_new_price)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].price, 99000)
+    
+    def test_new_structure_name_extraction_with_empty_name(self):
+        """Test new structure name extraction when sj-text-display4 is empty."""
+        html_empty_new_name = """
+        <div class="product-card">
+            <p class="sj-text-display4"></p>
+            <p class="product-name">Fallback Name</p>
+            <div class="product-card-price">
+                <div class="price">Rp 50.000</div>
+            </div>
+        </div>
+        """
+        products = self.parser.parse_products(html_empty_new_name)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].name, "Fallback Name")
+    
+    def test_new_structure_with_parent_link(self):
+        """Test URL extraction from parent <a> tag (new structure)."""
+        html_parent_link = """
+        <a href="/products/parent-link-product">
+            <div class="product-card">
+                <p class="product-name">Product in Link</p>
+                <div class="product-card-price">
+                    <div class="price">Rp 35.000</div>
+                </div>
+            </div>
+        </a>
+        """
+        products = self.parser.parse_products(html_parent_link)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].url, "/products/parent-link-product")
+    
+    def test_new_structure_parent_link_without_href(self):
+        """Test URL extraction when parent is <a> but has no href."""
+        html_parent_no_href = """
+        <a>
+            <div class="product-card">
+                <p class="product-name">Product No Href</p>
+                <div class="product-card-price">
+                    <div class="price">Rp 42.000</div>
+                </div>
+            </div>
+        </a>
+        """
+        products = self.parser.parse_products(html_parent_no_href)
+        self.assertEqual(len(products), 1)
+        # Should fallback to generating URL from name
+        self.assertEqual(products[0].url, "/products/product-no-href")
+    
+    def test_generate_slug_with_special_characters(self):
+        """Test slug generation with various special characters."""
+        test_cases = [
+            ("Semen@#$%Holcim", "semenholcim"),
+            ("Besi & Baja (10mm)", "besi--baja-10mm"),
+            ("Cat_Tembok 5L", "cattembok-5l"),  # Underscore is removed
+            ("Product!!!Name", "productname"),
+            ("Multiple   Spaces", "multiple-spaces"),  # Multiple spaces become single dash
+        ]
+        for name, expected_slug in test_cases:
+            slug = self.parser._generate_slug(name)
+            self.assertEqual(slug, expected_slug)
+    
+    def test_lxml_available(self):
+        """Test _has_lxml method when lxml is available."""
+        # Since lxml is typically installed, this should return True
+        has_lxml = self.parser._has_lxml()
+        self.assertIsInstance(has_lxml, bool)
+    
+    def test_lxml_not_available(self):
+        """Test _has_lxml method when lxml is not available."""
+        with patch('api.juragan_material.html_parser.JuraganMaterialHtmlParser._has_lxml', return_value=False):
+            parser = JuraganMaterialHtmlParser()
+            html = '<div class="product-card"><p class="product-name">Test</p><div class="product-card-price"><div class="price">Rp 10.000</div></div></div>'
+            products = parser.parse_products(html)
+            # Should still work with html.parser
+            self.assertEqual(len(products), 1)
+    
+    def test_mixed_old_and_new_structure(self):
+        """Test parsing HTML with both old and new structures (backward compatibility)."""
+        html_mixed = """
+        <div class="product-card">
+            <p class="sj-text-display4">New Structure Product</p>
+            <p class="sj-text-h6 text-text-main">Rp 90.000</p>
+        </div>
+        <div class="product-card">
+            <a href="/old-product">
+                <p class="product-name">Old Structure Product</p>
+            </a>
+            <div class="product-card-price">
+                <div class="price">Rp 85.000</div>
+            </div>
+        </div>
+        """
+        products = self.parser.parse_products(html_mixed)
+        self.assertEqual(len(products), 2)
+        self.assertEqual(products[0].name, "New Structure Product")
+        self.assertEqual(products[0].price, 90000)
+        self.assertEqual(products[1].name, "Old Structure Product")
+        self.assertEqual(products[1].price, 85000)
+    
+    def test_price_extraction_fallback_with_no_valid_prices(self):
+        """Test fallback price extraction when no valid price exists."""
+        html_no_valid_price = """
+        <div class="product-card">
+            <p class="product-name">Test Product</p>
+            <span>Rp Hubungi kami</span>
+            <span>Rp Call now</span>
+        </div>
+        """
+        products = self.parser.parse_products(html_no_valid_price)
+        # No valid price means product should not be included
+        self.assertEqual(len(products), 0)
+    
+    def test_url_extraction_with_child_link_no_href(self):
+        """Test URL extraction when child <a> exists but has no href."""
+        html_child_no_href = """
+        <div class="product-card">
+            <a>
+                <p class="product-name">Product Child No Href</p>
+            </a>
+            <div class="product-card-price">
+                <div class="price">Rp 55.000</div>
+            </div>
+        </div>
+        """
+        products = self.parser.parse_products(html_child_no_href)
+        self.assertEqual(len(products), 1)
+        # Should fallback to generating URL from name
+        self.assertEqual(products[0].url, "/products/product-child-no-href")

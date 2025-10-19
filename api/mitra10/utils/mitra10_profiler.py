@@ -133,7 +133,7 @@ class Mitra10Profiler:
                 try:
                     cleaned = cleaner.clean_price(price)
                     cleaner.is_valid_price(cleaned)
-                except (ValueError, TypeError, AttributeError) as e:
+                except (ValueError, TypeError, AttributeError):
                     pass
         profiler.disable()
         

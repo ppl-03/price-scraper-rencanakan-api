@@ -26,5 +26,6 @@ urlpatterns = [
     path('api/depobangunan/', include('api.depobangunan.urls')),
     path('api/mitra10/', include('api.mitra10.urls')),
     path('api/db-status/', db_views.check_database_status, name='check_database_status'),
+    path('api/tokopedia/', include('api.tokopedia.urls')),
     path("", include("dashboard.urls")),
 ]
