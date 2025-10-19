@@ -1,11 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
-from django.contrib.auth.hashers import make_password
 from django.utils import timezone
-from django.core.mail import send_mail
-import hashlib
-import secrets
-import string
+
+from .services import TokenService, HashidService, VerificationService
 
 
 class Company(models.Model):
@@ -141,107 +138,53 @@ class User(AbstractUser):
     
     def save(self, *args, **kwargs):
         """Override save to generate verification token if needed"""
+        # Delegate verification token generation to the VerificationService
         if not self.verification_token and not self.email_verified_at:
-            self.verification_token = self.generate_token()
+            VerificationService.ensure_token(self)
         super().save(*args, **kwargs)
     
     # HasHashid functionality
     @property
     def hashid(self):
-        """Generate obfuscated ID using hash of pk and secret"""
-        if not self.pk:
-            return None
-        secret = "your-secret-key-here"  # Should be in settings
-        raw_string = f"{self.pk}-{secret}"
-        return hashlib.sha256(raw_string.encode()).hexdigest()[:16]
+        """Return obfuscated ID using HashidService"""
+        return HashidService.generate(self.pk)
     
     @classmethod
     def get_by_hashid(cls, hashid):
         """Get user by hashid"""
-        for user in cls.objects.all():
-            if user.hashid == hashid:
-                return user
-        return None
+        return HashidService.find_by_hashid(cls.objects.all(), hashid)
     
     # HasApiTokens functionality
     def create_api_token(self, name="default", expires_at=None):
-        """Create a new API token for the user"""
-        token = self.generate_token(length=64)
-        token_data = {
-            'name': name,
-            'token': token,
-            'created_at': timezone.now().isoformat(),
-            'expires_at': expires_at.isoformat() if expires_at else None,
-            'last_used_at': None
-        }
-        
-        if not isinstance(self.api_tokens, list):
-            self.api_tokens = []
-        
-        self.api_tokens.append(token_data)
-        self.current_access_token = token
-        self.save()
-        return token
+        """Delegate API token creation to TokenService"""
+        return TokenService.create_api_token(self, name=name, expires_at=expires_at)
     
     def revoke_api_token(self, token):
-        """Revoke a specific API token"""
-        if isinstance(self.api_tokens, list):
-            self.api_tokens = [t for t in self.api_tokens if t.get('token') != token]
-            if self.current_access_token == token:
-                self.current_access_token = None
-            self.save()
+        """Delegate token revocation to TokenService"""
+        return TokenService.revoke_api_token(self, token)
     
     def revoke_all_tokens(self):
-        """Revoke all API tokens"""
-        self.api_tokens = []
-        self.current_access_token = None
-        self.save()
+        """Delegate revocation of all tokens to TokenService"""
+        return TokenService.revoke_all_tokens(self)
     
     def validate_api_token(self, token):
-        """Validate if API token exists and is not expired"""
-        if not isinstance(self.api_tokens, list):
-            return False
-        
-        for token_data in self.api_tokens:
-            if token_data.get('token') == token:
-                expires_at = token_data.get('expires_at')
-                if expires_at:
-                    from datetime import datetime
-                    expiry = datetime.fromisoformat(expires_at)
-                    if timezone.now() > expiry:
-                        return False
-                
-                # Update last used
-                token_data['last_used_at'] = timezone.now().isoformat()
-                self.save()
-                return True
-        return False
+        """Delegate token validation to TokenService"""
+        return TokenService.validate_api_token(self, token)
     
     # Email verification
     def send_verification_email(self):
-        """Send email verification"""
-        if not self.verification_token:
-            self.verification_token = self.generate_token()
-            self.save()
-        
-        # Send email with verification link
-        subject = 'Verify your email address'
-        message = f'Please verify your email by clicking this link: /verify-email/{self.verification_token}'
-        send_mail(subject, message, 'noreply@yoursite.com', [self.email])
+        """Delegate verification email sending to VerificationService"""
+        return VerificationService.send_verification_email(self)
     
     def verify_email(self, token):
-        """Verify email with token"""
-        if self.verification_token == token:
-            self.email_verified_at = timezone.now()
-            self.verification_token = None
-            self.save()
-            return True
-        return False
+        """Delegate email verification to VerificationService"""
+        return VerificationService.verify_email(self, token)
     
     # Security features
     def set_password(self, raw_password):
         """Set password with bcrypt hashing"""
-        self.password = make_password(raw_password)
+        # Use Django's make_password via set_password on AbstractUser
+        super().set_password(raw_password)
     
     # Company-related methods
     def can_access_company(self, company):
@@ -249,11 +192,11 @@ class User(AbstractUser):
         return self.company == company or self.is_superuser
     
     # Utility methods
+    # Token generation now handled by TokenService (SRP)
     @staticmethod
     def generate_token(length=32):
-        """Generate secure random token"""
-        alphabet = string.ascii_letters + string.digits
-        return ''.join(secrets.choice(alphabet) for _ in range(length))
+        """Backward-compatible wrapper delegating to TokenService"""
+        return TokenService.generate(length)
     
     def get_full_name(self):
         """Return full name"""
