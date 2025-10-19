@@ -378,4 +378,5 @@ class TestGemilangLocationAPI(TestCase):
         response = self.client.get('/api/gemilang/locations/', {'timeout': '-10'})
         
         self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_locations.assert_called_once_with(timeout=-10)
+        # Negative timeout is clamped to 0 by max(0, timeout) in parse_timeout
+        mock_scraper.scrape_locations.assert_called_once_with(timeout=0)

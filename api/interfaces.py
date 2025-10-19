@@ -4,6 +4,20 @@ from dataclasses import dataclass
 
 
 @dataclass
+class Location:
+    name: str
+    code: Optional[str] = None
+
+
+@dataclass
+class LocationScrapingResult:
+    locations: List[Location]
+    success: bool
+    error_message: Optional[str] = None
+    attempts_made: int = 1
+
+
+@dataclass
 class Product:
     name: str
     price: int
@@ -60,13 +74,23 @@ class IPriceScraper(ABC):
 
 class ILocationParser(ABC):
     @abstractmethod
-    def parse_locations(self, html_content: str) -> List[Location]:
+    def parse_locations(self, html_content: str) -> List[str]:
         pass
 
 
 class ILocationScraper(ABC):
     @abstractmethod
-    def scrape_locations(self) -> LocationScrapingResult:
+    def scrape_locations_batch(self, timeout: Optional[int] = None) -> LocationScrapingResult:
+        pass
+
+
+class ILocationValidator(ABC):
+    @abstractmethod
+    def validate_html_content(self, html_content: str) -> bool:
+        pass
+    
+    @abstractmethod
+    def validate_locations(self, locations: List[str]) -> bool:
         pass
 
 
@@ -83,4 +107,16 @@ class HtmlParserError(Exception):
 
 
 class ScraperError(Exception):
+    pass
+
+
+class LocationParserError(Exception):
+    pass
+
+
+class LocationScraperError(Exception):
+    pass
+
+
+class LocationValidatorError(Exception):
     pass
