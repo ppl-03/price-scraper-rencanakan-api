@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'dashboard',
     "db_pricing",
     "api",
-    'security'
+    'security',
     'authentication',
 ]
 
