@@ -23,11 +23,13 @@ class DepoBangunanAPITest(TestCase):
         mock_product1.name = "Test Product 1"
         mock_product1.price = 5000
         mock_product1.url = "https://www.depobangunan.co.id/test-product-1"
+        mock_product1.unit = "PCS"
         
         mock_product2 = MagicMock()
         mock_product2.name = "Test Product 2"
         mock_product2.price = 7500
         mock_product2.url = "https://www.depobangunan.co.id/test-product-2"
+        mock_product2.unit = "KG"
         
         # Mock the scraping result
         mock_result = MagicMock()
@@ -410,6 +412,7 @@ class DepoBangunanAPITest(TestCase):
         mock_product.name = "Test Product"
         mock_product.price = 1000
         mock_product.url = "https://example.com/product"
+        mock_product.unit = "KG"  # Add proper unit attribute
         
         mock_result = MagicMock()
         mock_result.success = True
