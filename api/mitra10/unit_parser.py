@@ -24,6 +24,83 @@ class UnitExtractionStrategy(Protocol):
         ...
 
 
+class TextProcessingHelper:
+    """Helper class for common text processing operations"""
+    
+    @staticmethod
+    def validate_and_clean_text(text: str, max_length: int = 5000) -> Optional[str]:
+        """Validate and clean text input with smart truncation to preserve important parts"""
+        if not text or not isinstance(text, str):
+            return None
+        
+        text_cleaned = text.lower().strip()
+        if not text_cleaned:
+            return None
+            
+        if len(text_cleaned) > max_length:
+            logger.warning(f"Text too long, truncating to {max_length} chars")
+            # Smart truncation: keep first part and last part to preserve units at the end
+            keep_start = max_length // 2
+            keep_end = max_length - keep_start - 10  # Account for " ... " separator
+            text_cleaned = text_cleaned[:keep_start] + " ... " + text_cleaned[-keep_end:]
+            
+        return text_cleaned
+    
+    @staticmethod
+    def safe_regex_search(pattern: str, text: str, flags: int = re.IGNORECASE) -> Optional[re.Match]:
+        """Safely perform regex search with error handling"""
+        try:
+            return re.search(pattern, text, flags)
+        except re.error as e:
+            logger.warning(f"Regex error with pattern '{pattern}': {e}")
+            return None
+    
+    @staticmethod
+    def safe_regex_finditer(pattern: str, text: str, flags: int = re.IGNORECASE):
+        """Safely perform regex finditer with error handling"""
+        try:
+            return re.finditer(pattern, text, flags)
+        except re.error as e:
+            logger.warning(f"Regex error with pattern '{pattern}': {e}")
+            return []
+
+
+class ErrorHandlingMixin:
+    """Mixin for consistent error handling across classes"""
+    
+    def safe_execute(self, operation, operation_name: str, *args, **kwargs):
+        """Execute operation with consistent error handling"""
+        try:
+            return operation(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error in {operation_name}: {e}")
+            return None
+    
+    def safe_execute_with_default(self, operation, default_value, operation_name: str, *args, **kwargs):
+        """Execute operation with default return value on error"""
+        try:
+            return operation(*args, **kwargs)
+        except Exception as e:
+            logger.warning(f"Error in {operation_name}: {e}")
+            return default_value
+
+
+class ContextChecker:
+    """Helper class for checking text context against keyword lists"""
+    
+    @staticmethod
+    def check_keywords_in_text(text: str, keywords: List[str], context_name: str) -> bool:
+        """Check if any keywords are present in text"""
+        try:
+            if not text or not isinstance(text, str):
+                return False
+            text_lower = text.lower()
+            return any(keyword in text_lower for keyword in keywords)
+        except Exception as e:
+            logger.warning(f"Error checking {context_name} context: {e}")
+            return False
+
+
 class Mitra10UnitPatternRepository:
     
     def __init__(self):
@@ -101,86 +178,78 @@ class Mitra10UnitPatternRepository:
         return self._priority_order.copy()
 
 
-class Mitra10AreaPatternStrategy:
+class Mitra10AreaPatternStrategy(ErrorHandlingMixin):
     
     def extract_unit(self, text_lower: str) -> Optional[str]:
-        try:
-            # Pattern for area calculations like "60x60 cm"
-            area_pattern = r'(\d{1,10}(?:[.,]\d{1,10})?)\s?[x×]\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(cm|mm|m|inch)(?:\s|$)'
-            match = re.search(area_pattern, text_lower, re.IGNORECASE)
-            if match:
-                unit_key = match.group(3).lower()
-                area_map = {'cm': UNIT_CM2, 'mm': UNIT_MM2, 'm': UNIT_M2, 'inch': UNIT_INCH2}
-                return area_map.get(unit_key)
-            
-            return None
-            
-        except re.error as e:
-            logger.warning(f"Regex error in Mitra10 area pattern extraction: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error in Mitra10 area pattern extraction: {e}")
-            return None
+        return self.safe_execute(self._extract_area_unit, "Mitra10 area pattern extraction", text_lower)
+    
+    def _extract_area_unit(self, text_lower: str) -> Optional[str]:
+        # Pattern for area calculations like "60x60 cm"
+        area_pattern = r'(\d{1,10}(?:[.,]\d{1,10})?)\s?[x×]\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(cm|mm|m|inch)(?:\s|$)'
+        match = TextProcessingHelper.safe_regex_search(area_pattern, text_lower)
+        if match:
+            unit_key = match.group(3).lower()
+            area_map = {'cm': UNIT_CM2, 'mm': UNIT_MM2, 'm': UNIT_M2, 'inch': UNIT_INCH2}
+            return area_map.get(unit_key)
+        
+        return None
 
 
-class Mitra10AdjacentPatternStrategy:
+class Mitra10AdjacentPatternStrategy(ErrorHandlingMixin):
+    
+    def __init__(self):
+        self.unit_mappings = {
+            'mm': 'MM', 'cm': 'CM', 'kg': UNIT_KG, 'gr': UNIT_GRAM, 'ml': 'ML', 'lt': 'LITER', 
+            'pcs': 'PCS', 'set': 'SET', 'inch': 'INCH', 'feet': 'FEET', 'watt': 'WATT', 
+            'volt': 'VOLT', 'amp': 'AMPERE', 'hp': 'HP', 'bar': 'BAR', 'psi': 'PSI',
+            'm': 'M', 'hari': 'HARI', 'minggu': 'MINGGU', 'bulan': 'BULAN', 'tahun': 'TAHUN', 
+            'jam': 'JAM', 'hour': 'JAM', 'day': 'HARI', 'week': 'MINGGU', 'month': 'BULAN', 
+            'year': 'TAHUN', 'sak': 'SAK', 'karung': 'SAK', 'bag': 'SAK', 'zak': 'SAK',
+            'roll': 'ROLL', 'lembar': 'LEMBAR', 'sheet': 'SHEET', 'batang': 'BATANG', 'papan': 'PAPAN'
+        }
+        
+        self.adjacent_patterns = [
+            # Direct unit attachment: "25kg", "100ml", "5pcs"
+            (r'(\d{1,10}(?:[.,]\d{1,10})?)(mm|cm|kg|gr|ml|lt|pcs|set|inch|feet|watt|volt|amp|hp|bar|psi)(?:\s|$)', 2),
+            
+            # Diameter patterns: "diameter 25mm"
+            (r'diameter\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(mm|cm|m|inch)', 2), 
+            
+            # Symbol diameter: "Ø 25mm"
+            (r'Ø\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(mm|cm|m|inch)', 2),
+            
+            # Time units: "per hari", "/ minggu"
+            (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?/?(\bhari\b|\bminggu\b|\bulan\b|\btahun\b|\bjam\b|\bhour\b|\bday\b|\bweek\b|\bmonth\b|\byear\b)', 2),
+            
+            # Mitra10 specific patterns for construction materials
+            (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?(sak|karung|bag|zak)(?:\s+semen|\s+cement)?', 2),
+            
+            # Roll/sheet patterns common in Mitra10
+            (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?(roll|lembar|sheet|batang|papan)', 2)
+        ]
     
     def extract_unit(self, text_lower: str) -> Optional[str]:
+        return self.safe_execute(self._extract_adjacent_unit, "Mitra10 adjacent pattern extraction", text_lower)
+    
+    def _extract_adjacent_unit(self, text_lower: str) -> Optional[str]:
+        for pattern, group_index in self.adjacent_patterns:
+            matches = TextProcessingHelper.safe_regex_finditer(pattern, text_lower)
+            for match in matches:
+                unit_result = self._process_match_group(match, group_index)
+                if unit_result:
+                    return unit_result
+        return None
+    
+    def _process_match_group(self, match, group_index: int) -> Optional[str]:
         try:
-            # Patterns specific to Mitra10 product descriptions
-            adjacent_patterns = [
-                # Direct unit attachment: "25kg", "100ml", "5pcs"
-                (r'(\d{1,10}(?:[.,]\d{1,10})?)(mm|cm|kg|gr|ml|lt|pcs|set|inch|feet|watt|volt|amp|hp|bar|psi)(?:\s|$)', 2),
-                
-                # Diameter patterns: "diameter 25mm"
-                (r'diameter\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(mm|cm|m|inch)', 2), 
-                
-                # Symbol diameter: "Ø 25mm"
-                (r'Ø\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(mm|cm|m|inch)', 2),
-                
-                # Time units: "per hari", "/ minggu"
-                (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?/?(\bhari\b|\bminggu\b|\bulan\b|\btahun\b|\bjam\b|\bhour\b|\bday\b|\bweek\b|\bmonth\b|\byear\b)', 2),
-                
-                # Mitra10 specific patterns for construction materials
-                (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?(sak|karung|bag|zak)(?:\s+semen|\s+cement)?', 2),
-                
-                # Roll/sheet patterns common in Mitra10
-                (r'(\d{1,10}(?:[.,]\d{1,10})?)\s?(roll|lembar|sheet|batang|papan)', 2)
-            ]
-            
-            unit_mappings = {
-                'mm': 'MM', 'cm': 'CM', 'kg': UNIT_KG, 'gr': UNIT_GRAM, 'ml': 'ML', 'lt': 'LITER', 
-                'pcs': 'PCS', 'set': 'SET', 'inch': 'INCH', 'feet': 'FEET', 'watt': 'WATT', 
-                'volt': 'VOLT', 'amp': 'AMPERE', 'hp': 'HP', 'bar': 'BAR', 'psi': 'PSI',
-                'm': 'M', 'hari': 'HARI', 'minggu': 'MINGGU', 'bulan': 'BULAN', 'tahun': 'TAHUN', 
-                'jam': 'JAM', 'hour': 'JAM', 'day': 'HARI', 'week': 'MINGGU', 'month': 'BULAN', 
-                'year': 'TAHUN', 'sak': 'SAK', 'karung': 'SAK', 'bag': 'SAK', 'zak': 'SAK',
-                'roll': 'ROLL', 'lembar': 'LEMBAR', 'sheet': 'SHEET', 'batang': 'BATANG', 'papan': 'PAPAN'
-            }
-            
-            for pattern, group_index in adjacent_patterns:
-                try:
-                    matches = re.finditer(pattern, text_lower, re.IGNORECASE)
-                    for match in matches:
-                        try:
-                            unit_key = match.group(group_index).lower()
-                            if unit_key in unit_mappings:
-                                return unit_mappings[unit_key]
-                        except (IndexError, AttributeError) as e:
-                            logger.warning(f"Error processing Mitra10 match group: {e}")
-                            continue
-                except re.error as e:
-                    logger.warning(f"Invalid Mitra10 regex pattern: {pattern}, error: {e}")
-                    continue
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Unexpected error in Mitra10 adjacent pattern extraction: {e}")
+            unit_key = match.group(group_index).lower()
+            return self.unit_mappings.get(unit_key)
+        except (IndexError, AttributeError) as e:
+            logger.debug(f"Error processing Mitra10 match group: {e}")
             return None
 
 
-class Mitra10UnitExtractor:
+class Mitra10UnitExtractor(ErrorHandlingMixin):
     
     def __init__(self, pattern_repository: Mitra10UnitPatternRepository = None):
         self._pattern_repository = pattern_repository or Mitra10UnitPatternRepository()
@@ -188,63 +257,56 @@ class Mitra10UnitExtractor:
         self._adjacent_pattern_strategy = Mitra10AdjacentPatternStrategy()
     
     def extract_unit(self, text: str) -> Optional[str]:
-        if not text or not isinstance(text, str):
+        text_lower = TextProcessingHelper.validate_and_clean_text(text)
+        if not text_lower:
             return None
         
-        try:
-            text_lower = text.lower().strip()
-            if not text_lower:
-                return None
-            
-            # First, try area pattern (highest priority)
-            area_unit = self._area_pattern_strategy.extract_unit(text_lower)
-            if area_unit:
-                return area_unit
-            
-            # Then, standard patterns with priority
-            standard_unit = self._extract_by_priority_patterns(text_lower)
-            if standard_unit:
-                return standard_unit
-            
-            # Finally, adjacent patterns
-            adjacent_unit = self._adjacent_pattern_strategy.extract_unit(text_lower)
-            if adjacent_unit:
-                return adjacent_unit
-            
-            return None
-            
-        except Exception as e:
-            logger.warning(f"Error during Mitra10 unit extraction: {e}")
-            return None
+        return self.safe_execute(self._extract_unit_from_text, "Mitra10 unit extraction", text_lower)
+    
+    def _extract_unit_from_text(self, text_lower: str) -> Optional[str]:
+        # First, try area pattern (highest priority)
+        area_unit = self._area_pattern_strategy.extract_unit(text_lower)
+        if area_unit:
+            return area_unit
+        
+        # Then, standard patterns with priority
+        standard_unit = self._extract_by_priority_patterns(text_lower)
+        if standard_unit:
+            return standard_unit
+        
+        # Finally, adjacent patterns
+        adjacent_unit = self._adjacent_pattern_strategy.extract_unit(text_lower)
+        if adjacent_unit:
+            return adjacent_unit
+        
+        return None
     
     def _extract_by_priority_patterns(self, text_lower: str) -> Optional[str]:
-        try:
-            if len(text_lower) > 5000:
-                logger.warning("Text too long for Mitra10 pattern extraction, truncating to 5000 chars")
-                text_lower = text_lower[:5000]
-            
-            priority_order = self._pattern_repository.get_priority_order()
-            
-            for unit in priority_order:
-                patterns = self._pattern_repository.get_patterns(unit)
-                for pattern in patterns:
-                    try:
-                        # Use word boundaries for better matching
-                        pattern_with_boundaries = f'(?:^|\\s|[\\(\\[{{]|\\d)({pattern})(?:\\s|[\\)\\]}}]|$)'
-                        if re.search(pattern_with_boundaries, text_lower, re.IGNORECASE):
-                            return unit
-                    except re.error as e:
-                        logger.warning(f"Invalid Mitra10 regex pattern '{pattern}' for unit '{unit}': {e}")
-                        continue
-            
+        return self.safe_execute(self._priority_pattern_search, "Mitra10 priority pattern extraction", text_lower)
+    
+    def _priority_pattern_search(self, text_lower: str) -> Optional[str]:
+        text_processed = TextProcessingHelper.validate_and_clean_text(text_lower, 5000)
+        if not text_processed:
             return None
-            
-        except Exception as e:
-            logger.error(f"Error in Mitra10 priority pattern extraction: {e}")
-            return None
+        
+        priority_order = self._pattern_repository.get_priority_order()
+        
+        for unit in priority_order:
+            patterns = self._pattern_repository.get_patterns(unit)
+            for pattern in patterns:
+                if self._match_pattern_with_boundaries(pattern, text_processed):
+                    return unit
+        
+        return None
+    
+    def _match_pattern_with_boundaries(self, pattern: str, text: str) -> bool:
+        # Use word boundaries for better matching
+        pattern_with_boundaries = f'(?:^|\\s|[\\(\\[{{]|\\d)({pattern})(?:\\s|[\\)\\]}}]|$)'
+        match = TextProcessingHelper.safe_regex_search(pattern_with_boundaries, text)
+        return match is not None
 
 
-class Mitra10SpecificationFinder:
+class Mitra10SpecificationFinder(ErrorHandlingMixin):
     
     def __init__(self):
         # Keywords specific to Mitra10 product specifications
@@ -259,26 +321,15 @@ class Mitra10SpecificationFinder:
     def find_specification_values(self, soup: BeautifulSoup) -> List[str]:
         specifications = []
         
-        try:
-            # Extract from Mitra10 specific elements
-            mitra10_specs = self._extract_from_mitra10_elements(soup)
-            specifications.extend(mitra10_specs)
-        except Exception as e:
-            logger.warning(f"Error extracting Mitra10 specific specifications: {e}")
+        extraction_methods = [
+            (self._extract_from_mitra10_elements, "Mitra10 specific specifications"),
+            (self._extract_from_tables, "table specifications"),
+            (self._extract_from_spans_and_divs, "span/div specifications")
+        ]
         
-        try:
-            # Extract from tables (common in product detail pages)
-            table_specs = self._extract_from_tables(soup)
-            specifications.extend(table_specs)
-        except Exception as e:
-            logger.warning(f"Error extracting table specifications: {e}")
-        
-        try:
-            # Extract from spans and divs
-            span_specs = self._extract_from_spans_and_divs(soup)
-            specifications.extend(span_specs)
-        except Exception as e:
-            logger.warning(f"Error extracting span/div specifications: {e}")
+        for method, method_name in extraction_methods:
+            specs = self.safe_execute_with_default(method, [], method_name, soup)
+            specifications.extend(specs)
         
         return specifications
     
@@ -286,48 +337,55 @@ class Mitra10SpecificationFinder:
         """Extract specifications from Mitra10-specific HTML elements"""
         specs = []
         
-        try:
-            # Look for product description areas
-            desc_areas = soup.find_all(['div', 'section'], class_=lambda x: x and any(
-                keyword in x.lower() for keyword in ['product-info', 'product-detail', 'specification', 'deskripsi']
-            ))
-            
-            for area in desc_areas:
-                try:
-                    # Use separator to avoid text concatenation issues
-                    text = area.get_text(separator=' ', strip=True)
-                    if text and len(text) > 10:
-                        specs.append(text)
-                except Exception as e:
-                    logger.debug(f"Error processing Mitra10 description area: {e}")
-                    continue
-        except Exception as e:
-            logger.warning(f"Error finding Mitra10 description areas: {e}")
+        desc_areas = self._find_description_areas(soup)
+        for area in desc_areas:
+            text = self._extract_text_safely(area)
+            if text and len(text) > 10:
+                specs.append(text)
         
         return specs
+    
+    def _find_description_areas(self, soup: BeautifulSoup):
+        """Find product description areas with error handling"""
+        try:
+            return soup.find_all(['div', 'section'], class_=lambda x: x and any(
+                keyword in x.lower() for keyword in ['product-info', 'product-detail', 'specification', 'deskripsi']
+            ))
+        except Exception as e:
+            logger.warning(f"Error finding Mitra10 description areas: {e}")
+            return []
+    
+    def _extract_text_safely(self, element) -> Optional[str]:
+        """Safely extract text from HTML element"""
+        try:
+            return element.get_text(separator=' ', strip=True)
+        except Exception as e:
+            logger.debug(f"Error processing element: {e}")
+            return None
     
     def _extract_from_tables(self, soup: BeautifulSoup) -> List[str]:
         specs = []
-        try:
-            tables = soup.find_all('table')
-            for table in tables:
-                table_specs = self._extract_specs_from_table(table)
-                specs.extend(table_specs)
-        except Exception as e:
-            logger.warning(f"Error finding tables: {e}")
-        
+        tables = self._find_elements_safely(soup, 'table')
+        for table in tables:
+            table_specs = self._extract_specs_from_table(table)
+            specs.extend(table_specs)
         return specs
+    
+    def _find_elements_safely(self, soup: BeautifulSoup, tag: str):
+        """Safely find elements with error handling"""
+        try:
+            return soup.find_all(tag)
+        except Exception as e:
+            logger.warning(f"Error finding {tag} elements: {e}")
+            return []
     
     def _extract_specs_from_table(self, table) -> List[str]:
         specs = []
-        try:
-            rows = table.find_all('tr')
-            for row in rows:
-                spec_value = self._extract_spec_from_row(row)
-                if spec_value:
-                    specs.append(spec_value)
-        except Exception as e:
-            logger.debug(f"Error processing table: {e}")
+        rows = self._find_elements_safely(table, 'tr')
+        for row in rows:
+            spec_value = self._extract_spec_from_row(row)
+            if spec_value:
+                specs.append(spec_value)
         return specs
     
     def _extract_spec_from_row(self, row) -> Optional[str]:
@@ -346,38 +404,46 @@ class Mitra10SpecificationFinder:
     def _extract_from_spans_and_divs(self, soup: BeautifulSoup) -> List[str]:
         specs = []
         
-        try:
-            # Extract from spans
-            spans = soup.find_all('span')
-            for span in spans:
-                try:
-                    text = span.get_text(separator=' ', strip=True)
-                    if text and any(keyword in text.lower() for keyword in self.spec_keywords):
-                        specs.append(text)
-                except AttributeError as e:
-                    logger.debug(f"Error processing span: {e}")
-                    continue
-        except Exception as e:
-            logger.warning(f"Error finding spans: {e}")
+        # Extract from spans
+        spans = self._find_elements_safely(soup, 'span')
+        specs.extend(self._extract_from_elements(spans, 'span'))
         
-        try:
-            # Extract from divs with specification-related classes
-            spec_divs = soup.find_all('div', class_=lambda x: x and any(
-                keyword in x.lower() for keyword in ['spec', 'detail', 'info', 'description', 'produk']
-            ))
-            
-            for div in spec_divs:
-                try:
-                    text = div.get_text(separator=' ', strip=True)
-                    if text and len(text) > 5:
-                        specs.append(text)
-                except AttributeError as e:
-                    logger.debug(f"Error processing div: {e}")
-                    continue
-        except Exception as e:
-            logger.warning(f"Error finding divs: {e}")
+        # Extract from divs with specification-related classes
+        spec_divs = self._find_spec_divs(soup)
+        specs.extend(self._extract_from_elements(spec_divs, 'div'))
         
         return specs
+    
+    def _find_spec_divs(self, soup: BeautifulSoup):
+        """Find divs with specification-related classes"""
+        try:
+            return soup.find_all('div', class_=lambda x: x and any(
+                keyword in x.lower() for keyword in ['spec', 'detail', 'info', 'description', 'produk']
+            ))
+        except Exception as e:
+            logger.warning(f"Error finding spec divs: {e}")
+            return []
+    
+    def _extract_from_elements(self, elements, element_type: str) -> List[str]:
+        """Extract specifications from a list of elements"""
+        specs = []
+        for element in elements:
+            text = self._extract_text_safely(element)
+            if self._is_valid_spec_text(text, element_type):
+                specs.append(text)
+        return specs
+    
+    def _is_valid_spec_text(self, text: str, element_type: str) -> bool:
+        """Check if text is valid for specification extraction"""
+        if not text:
+            return False
+        
+        if element_type == 'span':
+            return any(keyword in text.lower() for keyword in self.spec_keywords)
+        elif element_type == 'div':
+            return len(text) > 5
+        
+        return False
 
 
 class Mitra10UnitParserConfiguration:
@@ -410,37 +476,16 @@ class Mitra10UnitParserConfiguration:
         ]
     
     def is_construction_context(self, text: str) -> bool:
-        try:
-            if not text or not isinstance(text, str):
-                return False
-            text_lower = text.lower()
-            return any(keyword in text_lower for keyword in self.construction_keywords)
-        except Exception as e:
-            logger.warning(f"Error checking Mitra10 construction context: {e}")
-            return False
+        return ContextChecker.check_keywords_in_text(text, self.construction_keywords, "Mitra10 construction")
     
     def is_electrical_context(self, text: str) -> bool:
-        try:
-            if not text or not isinstance(text, str):
-                return False
-            text_lower = text.lower()
-            return any(keyword in text_lower for keyword in self.electrical_keywords)
-        except Exception as e:
-            logger.warning(f"Error checking Mitra10 electrical context: {e}")
-            return False
+        return ContextChecker.check_keywords_in_text(text, self.electrical_keywords, "Mitra10 electrical")
     
     def is_plumbing_context(self, text: str) -> bool:
-        try:
-            if not text or not isinstance(text, str):
-                return False
-            text_lower = text.lower()
-            return any(keyword in text_lower for keyword in self.plumbing_keywords)
-        except Exception as e:
-            logger.warning(f"Error checking Mitra10 plumbing context: {e}")
-            return False
+        return ContextChecker.check_keywords_in_text(text, self.plumbing_keywords, "Mitra10 plumbing")
 
 
-class Mitra10UnitParser:
+class Mitra10UnitParser(ErrorHandlingMixin):
     """
     Unit parser specifically designed for Mitra10 products.
     Handles construction materials, hardware, electrical, and plumbing items.
@@ -464,56 +509,52 @@ class Mitra10UnitParser:
         Returns:
             Optional[str]: Detected unit or None if not found
         """
-        if not html_content or not isinstance(html_content, str):
+        clean_content = TextProcessingHelper.validate_and_clean_text(html_content, max_length=50000)
+        if not clean_content:
             return None
         
-        try:
-            soup = self._create_soup_safely(html_content)
-            if not soup:
-                return None
-            
-            # Extract specifications from HTML
-            specifications = self._extract_specifications_safely(soup)
-            
-            # Extract units from specifications
-            found_units = self._extract_units_from_specifications(specifications)
-            
-            # Apply Mitra10-specific priority rules
-            prioritized_unit = self._apply_mitra10_priority_rules(found_units, html_content)
-            if prioritized_unit:
-                return prioritized_unit
-            
-            # Fallback to full text extraction
-            return self._extract_from_full_text(soup)
-            
-        except Exception as e:
-            logger.error(f"Unexpected error in Mitra10 unit parsing: {e}")
+        return self.safe_execute(self._parse_unit_from_html, "Mitra10 unit parsing", html_content)
+    
+    def _parse_unit_from_html(self, html_content: str) -> Optional[str]:
+        soup = self._create_soup_safely(html_content)
+        if not soup:
             return None
+        
+        # Extract specifications from HTML
+        specifications = self._extract_specifications_safely(soup)
+        
+        # Extract units from specifications
+        found_units = self._extract_units_from_specifications(specifications)
+        
+        # Apply Mitra10-specific priority rules
+        prioritized_unit = self._apply_mitra10_priority_rules(found_units, html_content)
+        if prioritized_unit:
+            return prioritized_unit
+        
+        # Fallback to full text extraction
+        return self._extract_from_full_text(soup)
     
     def _create_soup_safely(self, html_content: str) -> Optional[BeautifulSoup]:
-        try:
-            return BeautifulSoup(html_content, 'html.parser')
-        except Exception as e:
-            logger.warning(f"Error creating soup from Mitra10 HTML: {e}")
-            return None
+        return self.safe_execute_with_default(
+            lambda: BeautifulSoup(html_content, 'html.parser'), 
+            None, 
+            "creating soup from Mitra10 HTML"
+        )
     
     def _extract_specifications_safely(self, soup: BeautifulSoup) -> List[str]:
-        try:
-            return self.spec_finder.find_specification_values(soup)
-        except Exception as e:
-            logger.warning(f"Error extracting Mitra10 specifications: {e}")
-            return []
+        return self.safe_execute_with_default(
+            self.spec_finder.find_specification_values, 
+            [], 
+            "extracting Mitra10 specifications", 
+            soup
+        )
     
     def _extract_units_from_specifications(self, specifications: List[str]) -> List[str]:
         found_units = []
         for spec in specifications:
-            try:
-                unit = self.extractor.extract_unit(spec)
-                if unit:
-                    found_units.append(unit)
-            except Exception as e:
-                logger.debug(f"Error extracting unit from Mitra10 spec '{spec}': {e}")
-                continue
+            unit = self.safe_execute(self.extractor.extract_unit, f"extracting unit from spec '{spec[:50]}...'", spec)
+            if unit:
+                found_units.append(unit)
         
         return found_units
     
@@ -522,18 +563,22 @@ class Mitra10UnitParser:
         if not found_units:
             return None
         
-        try:
-            # Context-based priority
-            context_unit = self._get_context_specific_unit(found_units, html_content)
-            if context_unit:
-                return context_unit
-            
-            # General priority order
-            return self._get_general_priority_unit(found_units)
-            
-        except Exception as e:
-            logger.warning(f"Error applying Mitra10 priority rules: {e}")
-            return found_units[0] if found_units else None
+        return self.safe_execute_with_default(
+            self._get_prioritized_unit, 
+            found_units[0] if found_units else None, 
+            "applying Mitra10 priority rules", 
+            found_units, 
+            html_content
+        )
+    
+    def _get_prioritized_unit(self, found_units: List[str], html_content: str) -> Optional[str]:
+        # Context-based priority
+        context_unit = self._get_context_specific_unit(found_units, html_content)
+        if context_unit:
+            return context_unit
+        
+        # General priority order
+        return self._get_general_priority_unit(found_units)
     
     def _get_context_specific_unit(self, found_units: List[str], html_content: str) -> Optional[str]:
         """Get unit based on product context (construction, electrical, plumbing)"""
@@ -587,9 +632,8 @@ class Mitra10UnitParser:
         return None
     
     def _extract_from_full_text(self, soup: BeautifulSoup) -> Optional[str]:
-        try:
-            full_text = soup.get_text()
-            return self.extractor.extract_unit(full_text)
-        except Exception as e:
-            logger.warning(f"Error extracting from Mitra10 full text: {e}")
-            return None
+        return self.safe_execute_with_default(
+            lambda: self.extractor.extract_unit(soup.get_text()), 
+            None, 
+            "extracting from Mitra10 full text"
+        )

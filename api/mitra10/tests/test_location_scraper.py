@@ -10,6 +10,44 @@ class TestMitra10LocationScraper(unittest.TestCase):
         self.scraper = Mitra10LocationScraper()
         self.url = "https://www.mitra10.com/"
 
+    def _setup_basic_mocks(self, mock_client, mock_page, popup_count=0):
+        """Helper method to set up common mock configurations"""
+        # Set up basic mocks
+        mock_client._ensure_browser = AsyncMock()
+        mock_page.goto = AsyncMock()
+        mock_page.evaluate = AsyncMock()
+        mock_page.wait_for_load_state = AsyncMock()
+        mock_page.wait_for_timeout = AsyncMock()
+        
+        # Mock popup scenario
+        mock_popup_locator = MagicMock()
+        mock_popup_locator.count = AsyncMock(return_value=popup_count)
+        
+        # Mock store button
+        mock_store_locator = MagicMock()
+        mock_store_button = MagicMock()
+        mock_store_locator.first = mock_store_button
+        mock_store_button.scroll_into_view_if_needed = AsyncMock()
+        mock_store_button.click = AsyncMock()
+        
+        def locator_side_effect(selector):
+            if "MuiDialog-root" in selector or "popup-promo" in selector:
+                return mock_popup_locator
+            elif "button.MuiButtonBase-root.jss368" in selector:
+                return mock_store_locator
+            return MagicMock()
+            
+        mock_page.locator.side_effect = locator_side_effect
+        mock_page.mouse = MagicMock()
+        mock_page.mouse.click = AsyncMock()
+        mock_page.mouse.move = AsyncMock()
+        mock_page.mouse.down = AsyncMock()
+        mock_page.mouse.up = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.wait_for_function = AsyncMock()
+        
+        return mock_popup_locator, mock_store_locator, mock_store_button
+
     @patch("api.mitra10.location_scraper.BatchPlaywrightClient")
     def test_comprehensive_location_scraper_coverage(self, mock_batch):
         """Comprehensive test to achieve 100% code coverage for Mitra10LocationScraper"""
@@ -32,37 +70,8 @@ class TestMitra10LocationScraper(unittest.TestCase):
         </html>
         """
 
-        # Set up all required async mocks for successful flow
-        mock_client._ensure_browser = AsyncMock()
-        mock_page.goto = AsyncMock()
-        mock_page.evaluate = AsyncMock()
-        mock_page.wait_for_load_state = AsyncMock()
-        mock_page.wait_for_timeout = AsyncMock()
-        
-        # Mock popup handling - first call returns 1 (popup exists), second returns 0
-        mock_popup_locator = MagicMock()
-        mock_popup_locator.count = AsyncMock(return_value=1)
-        
-        # Mock store button locator
-        mock_store_locator = MagicMock()
-        mock_store_button = MagicMock()
-        mock_store_locator.first = mock_store_button
-        mock_store_button.scroll_into_view_if_needed = AsyncMock()
-        mock_store_button.click = AsyncMock()
-        
-        # Configure page.locator to return appropriate mocks based on selector
-        def locator_side_effect(selector):
-            if "MuiDialog-root" in selector or "popup-promo" in selector:
-                return mock_popup_locator
-            elif "button.MuiButtonBase-root.jss368" in selector:
-                return mock_store_locator
-            return MagicMock()
-            
-        mock_page.locator.side_effect = locator_side_effect
-        mock_page.mouse = MagicMock()
-        mock_page.mouse.click = AsyncMock()
-        mock_page.wait_for_selector = AsyncMock()
-        mock_page.wait_for_function = AsyncMock()
+        # Use helper method for basic setup with popup existing
+        self._setup_basic_mocks(mock_client, mock_page, popup_count=1)
         mock_page.content = AsyncMock(return_value=mock_html_content)
 
         # Test successful scraping
@@ -108,45 +117,15 @@ class TestMitra10LocationScraper(unittest.TestCase):
         </div>
         """
 
-        # Set up basic mocks
-        mock_client._ensure_browser = AsyncMock()
-        mock_page.goto = AsyncMock()
-        mock_page.evaluate = AsyncMock()
-        mock_page.wait_for_load_state = AsyncMock()
-        mock_page.wait_for_timeout = AsyncMock()
+        # Use helper method for basic setup
+        _, _, mock_store_button = self._setup_basic_mocks(mock_client, mock_page, popup_count=0)
         
-        # Mock no popup scenario
-        mock_popup_locator = MagicMock()
-        mock_popup_locator.count = AsyncMock(return_value=0)
-        
-        # Mock store button with click retry scenario
-        mock_store_locator = MagicMock()
-        mock_store_button = MagicMock()
-        mock_store_locator.first = mock_store_button
-        mock_store_button.scroll_into_view_if_needed = AsyncMock()
-        
-        # First two clicks fail, third succeeds
+        # Configure specific retry behavior
         mock_store_button.click = AsyncMock(side_effect=[
             Exception("Click failed attempt 1"),
             Exception("Click failed attempt 2"), 
             None  # Success on third attempt
         ])
-        
-        def locator_side_effect(selector):
-            if "MuiDialog-root" in selector or "popup-promo" in selector:
-                return mock_popup_locator
-            elif "button.MuiButtonBase-root.jss368" in selector:
-                return mock_store_locator
-            return MagicMock()
-            
-        mock_page.locator.side_effect = locator_side_effect
-        mock_page.mouse = MagicMock()
-        mock_page.mouse.click = AsyncMock()
-        mock_page.mouse.move = AsyncMock()
-        mock_page.mouse.down = AsyncMock()
-        mock_page.mouse.up = AsyncMock()
-        mock_page.wait_for_selector = AsyncMock()
-        mock_page.wait_for_function = AsyncMock()
         mock_page.content = AsyncMock(return_value=mock_html_content)
 
         result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
@@ -164,39 +143,11 @@ class TestMitra10LocationScraper(unittest.TestCase):
         mock_page = MagicMock()
         mock_client.page = mock_page
 
-        # Set up basic mocks
-        mock_client._ensure_browser = AsyncMock()
-        mock_page.goto = AsyncMock()
-        mock_page.evaluate = AsyncMock()
-        mock_page.wait_for_load_state = AsyncMock()
-        mock_page.wait_for_timeout = AsyncMock()
+        # Use helper method for basic setup
+        _, _, mock_store_button = self._setup_basic_mocks(mock_client, mock_page, popup_count=0)
         
-        # Mock no popup scenario
-        mock_popup_locator = MagicMock()
-        mock_popup_locator.count = AsyncMock(return_value=0)
-        
-        # Mock store button that always fails to click
-        mock_store_locator = MagicMock()
-        mock_store_button = MagicMock()
-        mock_store_locator.first = mock_store_button
-        mock_store_button.scroll_into_view_if_needed = AsyncMock()
+        # Configure button to always fail
         mock_store_button.click = AsyncMock(side_effect=Exception("Click always fails"))
-        
-        def locator_side_effect(selector):
-            if "MuiDialog-root" in selector or "popup-promo" in selector:
-                return mock_popup_locator
-            elif "button.MuiButtonBase-root.jss368" in selector:
-                return mock_store_locator
-            return MagicMock()
-            
-        mock_page.locator.side_effect = locator_side_effect
-        mock_page.mouse = MagicMock()
-        mock_page.mouse.click = AsyncMock()
-        mock_page.mouse.move = AsyncMock()
-        mock_page.mouse.down = AsyncMock()
-        mock_page.mouse.up = AsyncMock()
-        mock_page.wait_for_selector = AsyncMock()
-        mock_page.wait_for_function = AsyncMock()
 
         # This should raise TimeoutError
         with self.assertRaises(TimeoutError) as context:
@@ -217,36 +168,8 @@ class TestMitra10LocationScraper(unittest.TestCase):
         </div>
         """
 
-        # Set up basic mocks
-        mock_client._ensure_browser = AsyncMock()
-        mock_page.goto = AsyncMock()
-        mock_page.evaluate = AsyncMock()
-        mock_page.wait_for_load_state = AsyncMock()
-        mock_page.wait_for_timeout = AsyncMock()
-        
-        # Mock popup exists scenario
-        mock_popup_locator = MagicMock()
-        mock_popup_locator.count = AsyncMock(return_value=1)  # Popup exists
-        
-        # Mock store button
-        mock_store_locator = MagicMock()
-        mock_store_button = MagicMock()
-        mock_store_locator.first = mock_store_button
-        mock_store_button.scroll_into_view_if_needed = AsyncMock()
-        mock_store_button.click = AsyncMock()
-        
-        def locator_side_effect(selector):
-            if "MuiDialog-root" in selector or "popup-promo" in selector:
-                return mock_popup_locator
-            elif "button.MuiButtonBase-root.jss368" in selector:
-                return mock_store_locator
-            return MagicMock()
-            
-        mock_page.locator.side_effect = locator_side_effect
-        mock_page.mouse = MagicMock()
-        mock_page.mouse.click = AsyncMock()
-        mock_page.wait_for_selector = AsyncMock()
-        mock_page.wait_for_function = AsyncMock()
+        # Use helper method for basic setup with popup existing
+        mock_popup_locator, _, _ = self._setup_basic_mocks(mock_client, mock_page, popup_count=1)
         mock_page.content = AsyncMock(return_value=mock_html_content)
 
         result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
@@ -265,36 +188,8 @@ class TestMitra10LocationScraper(unittest.TestCase):
         # HTML with no valid locations
         mock_html_content = "<html><body>No locations found</body></html>"
 
-        # Set up basic mocks
-        mock_client._ensure_browser = AsyncMock()
-        mock_page.goto = AsyncMock()
-        mock_page.evaluate = AsyncMock()
-        mock_page.wait_for_load_state = AsyncMock()
-        mock_page.wait_for_timeout = AsyncMock()
-        
-        # Mock no popup scenario
-        mock_popup_locator = MagicMock()
-        mock_popup_locator.count = AsyncMock(return_value=0)
-        
-        # Mock store button
-        mock_store_locator = MagicMock()
-        mock_store_button = MagicMock()
-        mock_store_locator.first = mock_store_button
-        mock_store_button.scroll_into_view_if_needed = AsyncMock()
-        mock_store_button.click = AsyncMock()
-        
-        def locator_side_effect(selector):
-            if "MuiDialog-root" in selector or "popup-promo" in selector:
-                return mock_popup_locator
-            elif "button.MuiButtonBase-root.jss368" in selector:
-                return mock_store_locator
-            return MagicMock()
-            
-        mock_page.locator.side_effect = locator_side_effect
-        mock_page.mouse = MagicMock()
-        mock_page.mouse.click = AsyncMock()
-        mock_page.wait_for_selector = AsyncMock()
-        mock_page.wait_for_function = AsyncMock()
+        # Use helper method for basic setup
+        self._setup_basic_mocks(mock_client, mock_page, popup_count=0)
         mock_page.content = AsyncMock(return_value=mock_html_content)
 
         result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
@@ -312,37 +207,11 @@ class TestMitra10LocationScraper(unittest.TestCase):
         </div>
         """
 
-        # Set up basic mocks
-        mock_client._ensure_browser = AsyncMock()
-        mock_page.goto = AsyncMock()
-        # Mock evaluate to raise exception (should be caught and ignored)
+        # Use helper method for basic setup
+        self._setup_basic_mocks(mock_client, mock_page, popup_count=0)
+        
+        # Override evaluate to raise exception (should be caught and ignored)
         mock_page.evaluate = AsyncMock(side_effect=Exception("JS evaluation failed"))
-        mock_page.wait_for_load_state = AsyncMock()
-        mock_page.wait_for_timeout = AsyncMock()
-        
-        # Mock no popup scenario
-        mock_popup_locator = MagicMock()
-        mock_popup_locator.count = AsyncMock(return_value=0)
-        
-        # Mock store button
-        mock_store_locator = MagicMock()
-        mock_store_button = MagicMock()
-        mock_store_locator.first = mock_store_button
-        mock_store_button.scroll_into_view_if_needed = AsyncMock()
-        mock_store_button.click = AsyncMock()
-        
-        def locator_side_effect(selector):
-            if "MuiDialog-root" in selector or "popup-promo" in selector:
-                return mock_popup_locator
-            elif "button.MuiButtonBase-root.jss368" in selector:
-                return mock_store_locator
-            return MagicMock()
-            
-        mock_page.locator.side_effect = locator_side_effect
-        mock_page.mouse = MagicMock()
-        mock_page.mouse.click = AsyncMock()
-        mock_page.wait_for_selector = AsyncMock()
-        mock_page.wait_for_function = AsyncMock()
         mock_page.content = AsyncMock(return_value=mock_html_content)
 
         # Should complete successfully despite evaluate exception
@@ -364,36 +233,25 @@ class TestMitra10LocationScraper(unittest.TestCase):
         </div>
         """
 
-        # Set up basic mocks
-        mock_client._ensure_browser = AsyncMock()
-        mock_page.goto = AsyncMock()
-        mock_page.evaluate = AsyncMock()
-        mock_page.wait_for_load_state = AsyncMock()
-        mock_page.wait_for_timeout = AsyncMock()
+        # Use helper method for basic setup
+        _, _, mock_store_button = self._setup_basic_mocks(mock_client, mock_page, popup_count=0)
         
-        # Mock popup locator that throws exception when counting
+        # Override popup locator to throw exception when counting
         mock_popup_locator = MagicMock()
         mock_popup_locator.count = AsyncMock(side_effect=Exception("Popup count failed"))
         
-        # Mock store button
-        mock_store_locator = MagicMock()
-        mock_store_button = MagicMock()
-        mock_store_locator.first = mock_store_button
-        mock_store_button.scroll_into_view_if_needed = AsyncMock()
-        mock_store_button.click = AsyncMock()
-        
+        # Override the locator side effect to return the failing popup locator
         def locator_side_effect(selector):
             if "MuiDialog-root" in selector or "popup-promo" in selector:
                 return mock_popup_locator
             elif "button.MuiButtonBase-root.jss368" in selector:
+                # Return a properly configured store locator
+                mock_store_locator = MagicMock()
+                mock_store_locator.first = mock_store_button
                 return mock_store_locator
             return MagicMock()
             
         mock_page.locator.side_effect = locator_side_effect
-        mock_page.mouse = MagicMock()
-        mock_page.mouse.click = AsyncMock()
-        mock_page.wait_for_selector = AsyncMock()
-        mock_page.wait_for_function = AsyncMock()
         mock_page.content = AsyncMock(return_value=mock_html_content)
 
         # Should complete successfully despite popup exception
