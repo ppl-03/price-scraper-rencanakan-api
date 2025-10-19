@@ -139,7 +139,7 @@ class TestTokopediaPriceScraper(TestCase):
             # Check that warning was logged
             mock_logger.warning.assert_called_once()
             warning_call = mock_logger.warning.call_args[0][0]
-            self.assertIn("Unknown location 'unknown_city'", warning_call)
+            self.assertIn("Unknown location provided", warning_call)
             
             # Check that warning was issued
             mock_warnings.warn.assert_called_once()
@@ -249,7 +249,7 @@ class TestTokopediaPriceScraper(TestCase):
             # Should log error message for failed keyword
             mock_logger.error.assert_called_once()
             error_call = mock_logger.error.call_args[0][0]
-            self.assertIn("Error scraping keyword 'bata merah'", error_call)
+            self.assertIn("Error scraping keyword in batch", error_call)
 
     @patch('api.tokopedia.scraper.BatchPlaywrightClient')
     def test_scrape_batch_override(self, mock_batch_client_class):
