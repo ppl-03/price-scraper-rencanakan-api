@@ -56,6 +56,10 @@ HTML_PARSER = "html.parser"
 CONTEXT_MANAGER_ERROR = "context manager"
 UNKNOWN_ERROR_MSG = "Unknown error"
 
+# CSS selector constants
+PRODUCT_NAME_SELECTOR = ".product-name"
+HREF_SELECTOR = "a[href]"
+
 
 # ---------------- small utilities ----------------
 def _digits_to_int(txt: str) -> int:
@@ -102,7 +106,7 @@ def _fetch_len(url: str) -> int:
 # ---------------- Juragan fallback (HTML-only) ----------------
 def _extract_juragan_product_name(card) -> str | None:
     """Extract product name from Juragan Material card."""
-    for sel in ("a p.product-name", "p.product-name", ".product-name", "[class*=name]"):
+    for sel in ("a p.product-name", "p.product-name", PRODUCT_NAME_SELECTOR, "[class*=name]"):
         el = card.select_one(sel)
         if el and el.get_text(strip=True):
             return _clean_text(el.get_text(" ", strip=True))
@@ -116,7 +120,7 @@ def _extract_juragan_product_name(card) -> str | None:
 
 def _extract_juragan_product_link(card) -> str:
     """Extract product link from Juragan Material card."""
-    link = card.select_one("a:has(p.product-name)") or card.select_one("a[href]")
+    link = card.select_one("a:has(p.product-name)") or card.select_one(HREF_SELECTOR)
     return link.get("href") if link and link.get("href") else "/products/product"
 
 
@@ -314,7 +318,7 @@ def _extract_depo_product_link(card) -> str:
     # Try to find the product name link
     link = card.select_one("strong.product.name.product-item-name a") or \
            card.select_one("strong.product-item-name a") or \
-           card.select_one("a[href]")
+           card.select_one(HREF_SELECTOR)
     
     if link and link.get("href"):
         href = link.get("href")
@@ -329,14 +333,37 @@ def _extract_depo_product_link(card) -> str:
 def _extract_depo_product_price(card) -> int:
     """Extract product price from Depo Bangunan card."""
     # Try data attribute first (most reliable for Depo Bangunan)
+    price = _try_depo_data_attribute_price(card)
+    if price > 0:
+        return price
+    
+    # Try special price
+    price = _try_depo_special_price(card)
+    if price > 0:
+        return price
+    
+    # Try regular price
+    price = _try_depo_regular_price(card)
+    if price > 0:
+        return price
+    
+    # Try currency text fallback
+    return _try_depo_currency_text_price(card)
+
+
+def _try_depo_data_attribute_price(card) -> int:
+    """Try to extract price from data attribute."""
     price_wrapper = card.find('span', {'data-price-type': 'finalPrice'})
     if price_wrapper and price_wrapper.get('data-price-amount'):
         try:
             return int(float(price_wrapper.get('data-price-amount')))
         except (ValueError, TypeError):
             pass
-    
-    # Try special price
+    return 0
+
+
+def _try_depo_special_price(card) -> int:
+    """Try to extract special price."""
     special_price = card.find('span', class_='special-price')
     if special_price:
         price_span = special_price.find('span', class_='price')
@@ -344,8 +371,11 @@ def _extract_depo_product_price(card) -> int:
             price = _digits_to_int(price_span.get_text(" ", strip=True))
             if price > 0:
                 return price
-    
-    # Try regular price
+    return 0
+
+
+def _try_depo_regular_price(card) -> int:
+    """Try to extract regular price."""
     price_box = card.find('div', class_='price-box')
     if price_box:
         price_span = price_box.find('span', class_='price')
@@ -353,13 +383,15 @@ def _extract_depo_product_price(card) -> int:
             price = _digits_to_int(price_span.get_text(" ", strip=True))
             if price > 0:
                 return price
-    
-    # Try currency text fallback
+    return 0
+
+
+def _try_depo_currency_text_price(card) -> int:
+    """Try to extract price from currency text."""
     for t in card.find_all(string=lambda s: s and ("Rp" in s or "IDR" in s)):
         v = _digits_to_int((t or "").strip())
         if v > 0:
             return v
-    
     return 0
 
 
@@ -713,7 +745,7 @@ def _extract_mitra10_product_url(container, request_url: str) -> str:
         "a.gtm_mitra10_cta_product",
         "a[href*=\"/product/\"]",
         "a[href*=\"/catalog/\"]",
-        "a[href]"
+        HREF_SELECTOR
     ]
     
     link = None
@@ -1087,7 +1119,7 @@ def _extract_tokopedia_product_link(card) -> str:
         return link.get("href")
     
     # Try fallback link selectors
-    for sel in ['a[href*="/p/"]', 'a[href*="/product/"]', 'a[href]']:
+    for sel in ['a[href*="/p/"]', 'a[href*="/product/"]', HREF_SELECTOR]:
         link = card.select_one(sel)
         if link and link.get("href"):
             return link.get("href")
