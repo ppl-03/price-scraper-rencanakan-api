@@ -12,21 +12,6 @@ from .price_cleaner import TokopediaPriceCleaner
 logger = logging.getLogger(__name__)
 
 
-def _sanitize_for_logging(user_input: str) -> str:
-    """
-    Sanitize user input for safe logging to prevent log injection attacks.
-    
-    Args:
-        user_input: Raw user input string
-        
-    Returns:
-        Sanitized string safe for logging
-    """
-    if not user_input:
-        return user_input
-    return user_input.replace('\n', '\\n').replace('\r', '\\r')
-
-
 class TokopediaLocationError(ValueError):
     """Raised when an invalid location is specified for Tokopedia scraping."""
     pass
@@ -67,9 +52,8 @@ class TokopediaPriceScraper(BasePriceScraper):
         location_ids = get_location_ids(location)
         if not location_ids:
             available_locations = list(TOKOPEDIA_LOCATION_IDS.keys())
-            # Sanitize user input for logging to prevent log injection attacks
-            sanitized_location = _sanitize_for_logging(location)
-            warning_msg = f"Unknown location '{sanitized_location}'. Available locations: {available_locations}"
+            # Do not log user-controlled data to prevent log injection attacks
+            warning_msg = f"Unknown location provided. Available locations: {available_locations}"
             logger.warning(warning_msg)
             warnings.warn(warning_msg, UserWarning, stacklevel=3)
             
@@ -164,9 +148,8 @@ class TokopediaPriceScraper(BasePriceScraper):
                     all_products.extend(products)
                     
                 except Exception as e:
-                    # Sanitize user input for logging to prevent log injection attacks
-                    sanitized_keyword = _sanitize_for_logging(keyword)
-                    error_msg = f"Error scraping keyword '{sanitized_keyword}': {e}"
+                    # Do not log user-controlled data to prevent log injection attacks
+                    error_msg = f"Error scraping keyword in batch: {e}"
                     logger.error(error_msg)
                     continue
         
