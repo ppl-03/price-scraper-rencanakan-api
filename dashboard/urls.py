@@ -10,11 +10,13 @@ urlpatterns = [
 
     # Curated prices (ItemPriceProvince)
     path("prices/", views.curated_price_list, name="curated_price_list"),
-    path("prices/new/", views.curated_price_create, name="curated_price_create"),
+    # Separate POST endpoint names pointing to POST handlers
     path("prices/new/", views.curated_price_create_post, name="curated_price_create_post"),
-    path("prices/<int:pk>/edit/", views.curated_price_update, name="curated_price_update"),
     path("prices/<int:pk>/edit/", views.curated_price_update_post, name="curated_price_update_post"),
-    path("prices/<int:pk>/delete/", views.curated_price_delete, name="curated_price_delete"),
     path("prices/<int:pk>/delete/", views.curated_price_delete_post, name="curated_price_delete_post"),
+    # GET endpoints for forms (if needed separately, use different paths)
+    path("prices/new/form/", views.curated_price_create, name="curated_price_create"),
+    path("prices/<int:pk>/edit/form/", views.curated_price_update, name="curated_price_update"),
+    path("prices/<int:pk>/delete/confirm/", views.curated_price_delete, name="curated_price_delete"),
     path("prices/new/from-scrape/", views.curated_price_from_scrape, name="curated_price_from_scrape"),
 ]
