@@ -335,7 +335,8 @@ class TestGemilangLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            url="https://gemilang-store.com/pusat/store-locations"
+            error_message=None,
+            attempts_made=1
         )
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
