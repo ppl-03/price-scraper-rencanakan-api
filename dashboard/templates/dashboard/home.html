@@ -293,25 +293,23 @@
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
                 <td class="c-price">{{ r.value }}</td>
-                <td class="c-unit">{{ r.unit|default:'' }}</td>
+                <td class="c-unit">{{ r.unit|default:"—" }}</td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
                 <td class="c-location">
                   {% if r.location %}
                     <div class="d-flex align-items-center">
                       <span class="me-2">{{ r.location }}</span>
                       {% if r.location_count > 1 %}
-                        <span class="badge bg-light text-dark border location-badge" 
-                              role="button"
+                        <button type="button" class="btn badge bg-light text-dark border location-badge" 
                               tabindex="0"
                               data-vendor="{{ r.source }}"
                               data-locations="{{ r.all_locations|join:'|' }}"
                               data-bs-toggle="tooltip"
                               title="Click to see all {{ r.location_count }} locations"
                               aria-label="Show all {{ r.location_count }} locations for {{ r.source }}"
-                              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
-                              style="font-size: 0.7rem; cursor: pointer;">
+                              style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
                           +{{ r.location_count|add:"-1" }}
-                        </span>
+                        </button>
                       {% endif %}
                     </div>
                   {% else %}
@@ -458,25 +456,28 @@
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
-        const unitText = tr.querySelector(".c-unit")?.textContent || "";
+        const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
       const priceNum = toNumber(priceText);
       const locationCell = tr.querySelector(".c-location");
       
-      // Extract modal data from span if present (updated from button)
-      const modalSpan = locationCell?.querySelector("span[data-locations]");
-      const allLocations = modalSpan ? modalSpan.dataset.locations?.split("|") || [] : [];
+      // Extract modal data from button if present (updated from span)
+      const modalButton = locationCell?.querySelector("button[data-locations]");
+      const allLocations = modalButton ? modalButton.dataset.locations?.split("|") || [] : [];
       
-      // Extract location text (excluding span text)
+      // Extract location text (excluding button text)
       let location = "—";
       if (locationCell) {
-        // Clone the cell and remove the span to get clean text
+        // Clone the cell and remove the button to get clean text
         const tempCell = locationCell.cloneNode(true);
-        const tempSpan = tempCell.querySelector("span[data-locations]");
-        if (tempSpan) tempSpan.remove();
+        const tempButton = tempCell.querySelector("button[data-locations]");
+        if (tempButton) tempButton.remove();
         location = tempCell.textContent?.trim() || "—";
       }
       
-      return { item, vendor, price: priceNum, unit: unitText, location, allLocations };
+      // Normalize empty unit to dash
+      const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
+      
+      return { item, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
     });
 
     // Populate vendor dropdown (for…of)
@@ -673,17 +674,15 @@
         if (d.allLocations && d.allLocations.length > 1) {
           const moreCount = d.allLocations.length - 1;
           const locationsStr = d.allLocations.join('|');
-          locationHtml += ` <span class="badge bg-light text-dark border location-badge" 
-                             role="button"
+          locationHtml += ` <button type="button" class="btn badge bg-light text-dark border location-badge" 
                              tabindex="0"
                              data-vendor="${d.vendor}"
                              data-locations="${locationsStr}"
                              title="Click to see all ${d.allLocations.length} locations"
                              aria-label="Show all ${d.allLocations.length} locations for ${d.vendor}"
-                             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
-                             style="font-size: 0.7rem; cursor: pointer;">
+                             style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
                              +${moreCount}
-                           </span>`;
+                           </button>`;
         }
         locationHtml += `</div>`;
         
@@ -691,13 +690,13 @@
           <td>${start + idx + 1}</td>
           <td class="c-item">${d.item}</td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
-          <td class="c-unit">${d.unit || ''}</td>
+          <td class="c-unit">${d.unit || '—'}</td>
           <td class="c-vendor">${d.vendor}</td>
           <td class="c-location">${locationHtml}</td>`;
         tbody.appendChild(tr);
         
         // Add click event listener to the location badge if it exists
-        const modalBadge = tr.querySelector('span[data-locations]');
+        const modalBadge = tr.querySelector('button[data-locations]');
         if (modalBadge) {
           const handleLocationModal = function(e) {
             e.preventDefault(); // Prevent any default behavior
@@ -780,11 +779,11 @@
       render();
     });
 
-    // Add click listeners to initially loaded spans (updated from buttons)
-    function addLocationSpanListeners() {
-      const initialSpans = document.querySelectorAll('span[data-locations]');
-      for (const span of initialSpans) {
-        if (!span.dataset.listenerAdded) {
+    // Add click listeners to initially loaded buttons (updated from spans)
+    function addLocationButtonListeners() {
+      const initialButtons = document.querySelectorAll('button[data-locations]');
+      for (const button of initialButtons) {
+        if (!button.dataset.listenerAdded) {
           const handleLocationModal = function(e) {
             e.preventDefault(); // Prevent any default behavior
             e.stopPropagation(); // Stop event bubbling
@@ -793,20 +792,20 @@
             const locationsStr = this.dataset.locations;
             const locations = locationsStr ? locationsStr.split('|') : [];
             
-            console.log('DEBUG: Initial span clicked');
+            console.log('DEBUG: Initial button clicked');
             console.log('DEBUG: Vendor:', vendor);
             console.log('DEBUG: Locations:', locations);
             
             showLocationModal(vendor, locations);
           };
           
-          span.addEventListener('click', handleLocationModal);
-          span.addEventListener('keydown', function(e) {
+          button.addEventListener('click', handleLocationModal);
+          button.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') {
               handleLocationModal.call(this, e);
             }
           });
-          span.dataset.listenerAdded = 'true';
+          button.dataset.listenerAdded = 'true';
         }
       }
     }
@@ -814,8 +813,8 @@
     // Initial render
     render();
     
-    // Add listeners to any pre-existing spans (updated from buttons)
-    addLocationSpanListeners();
+    // Add listeners to any pre-existing buttons (updated from spans)
+    addLocationButtonListeners();
     
     // Global cleanup function to reset modal state
     function cleanupModalState() {

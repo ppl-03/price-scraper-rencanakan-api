@@ -971,7 +971,7 @@ def _try_simple_tokopedia_url(keyword: str, sort_by_price: bool = True, page: in
     """Try simple Tokopedia URL without complex parameters."""
     url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price, page)
     html = _human_get(url)
-    prods = _parse_tokopedia_html(html, url)
+    prods = _parse_tokopedia_html(html)
     return prods, url, len(html)
 
 
@@ -984,7 +984,7 @@ def _try_playwright_tokopedia(keyword: str, fallback_url: str):
     html_js = _fetch_with_playwright(url, wait_selector='div[data-testid="divProductWrapper"]', timeout_ms=15000)
     
     if html_js and len(html_js) > len(_human_get(url)):  # Got more content with JS
-        prods_js = _parse_tokopedia_html(html_js, url)
+        prods_js = _parse_tokopedia_html(html_js)
         if prods_js:
             return prods_js, url, len(html_js)
     
@@ -1001,7 +1001,7 @@ def _try_alternative_tokopedia_urls(keyword: str):
     for alt_url in alt_urls:
         try:
             html_alt = _human_get(alt_url)
-            prods_alt = _parse_tokopedia_html(html_alt, alt_url)
+            prods_alt = _parse_tokopedia_html(html_alt)
             if prods_alt:
                 return prods_alt, alt_url, len(html_alt)
         except Exception:
@@ -1010,7 +1010,7 @@ def _try_alternative_tokopedia_urls(keyword: str):
     return [], "", 0
 
 
-def _parse_tokopedia_html(html: str, request_url: str) -> list[dict]:
+def _parse_tokopedia_html(html: str) -> list[dict]:
     """
     Parse Tokopedia HTML and extract product data.
     """
