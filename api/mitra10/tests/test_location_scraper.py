@@ -15,7 +15,7 @@ class TestMitra10LocationScraper(TestCase):
         mock_instance = mock_batch.return_value.__enter__.return_value
         mock_instance.client = MagicMock()
 
-        def fake_extract(client, url):
+        async def fake_extract(client, url):
             return ["MITRA10 TEST 1", "MITRA10 TEST 2"]
 
         self.scraper._extract_locations = fake_extract
