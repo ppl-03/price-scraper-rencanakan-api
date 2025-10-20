@@ -10,15 +10,31 @@ logger = logging.getLogger(__name__)
 
 
 class TokopediaHtmlParser(IHtmlParser):
+    """
+    Optimized HTML parser for Tokopedia product pages.
+    
+    Optimizations:
+    - Pre-compiled regex patterns for slug generation
+    - Efficient CSS selectors with minimal traversals
+    - Early validation to skip invalid products
+    - lxml parser as primary (fastest BeautifulSoup backend)
+    """
+    
+    # Pre-compile regex patterns for better performance (class-level)
+    _SLUG_PATTERN = re.compile(r'[^a-z0-9\-]')
+    _PRICE_PREFIX_PATTERN = re.compile(r'^(Rp|IDR|rp|idr)')
     
     def __init__(self, price_cleaner: TokopediaPriceCleaner = None):
         self.price_cleaner = price_cleaner or TokopediaPriceCleaner()
+        # Cache selectors as instance variables to avoid repeated string operations
         self._product_selector = 'a[data-testid="lnkProductContainer"]'
         self._name_selector = 'span.css-20kt3o'
         self._link_selector = 'a[data-testid="lnkProductContainer"]'
         self._price_selector = 'span.css-o5uqv'
         self._image_selector = 'img'
         self._description_selector = 'div[data-testid="divProductWrapper"]'
+        # Cache base URL for URL construction
+        self._base_url = "https://www.tokopedia.com"
     
     def parse_products(self, html_content: str) -> List[Product]:
         if not html_content:
@@ -61,19 +77,23 @@ class TokopediaHtmlParser(IHtmlParser):
             return None
     
     def _extract_product_from_item(self, item) -> Optional[Product]:
+        """
+        Extract product from item with optimized validation.
+        Returns None early if product is invalid to avoid unnecessary processing.
+        """
+        # Extract name first (cheapest operation)
         name = self._extract_product_name(item)
         if not name:
             return None
         
-        # Generate URL from product name slug when name exists
-        # But check if the name looks like a price (starts with 'Rp' or 'IDR')
-        # If so, use 'unknown' as fallback since it's not a valid product name
-        if name.startswith(('Rp', 'IDR', 'rp', 'idr')):
-            url = "https://www.tokopedia.com/product/unknown"
+        # Early validation: check if name looks like a price (optimization)
+        if self._PRICE_PREFIX_PATTERN.match(name):
+            url = f"{self._base_url}/product/unknown"
         else:
             slug = self._generate_slug(name)
-            url = f"https://www.tokopedia.com/product/{slug}"
+            url = f"{self._base_url}/product/{slug}"
         
+        # Extract and validate price (more expensive operation, do after name check)
         price = self._extract_product_price(item)
         if not self.price_cleaner.validate_price(price):
             return None
@@ -117,29 +137,39 @@ class TokopediaHtmlParser(IHtmlParser):
         return None
     
     def _extract_product_url(self, item) -> str:
+        """
+        Extract product URL with optimized string operations.
+        Uses cached base_url to avoid repeated string concatenation.
+        """
         link = item.select_one(self._link_selector)
         if link and link.get('href'):
             href = link.get('href', '')
-            # Make sure it's a full URL
+            # Efficient URL construction based on href format
             if href.startswith('/'):
-                return f"https://www.tokopedia.com{href}"
+                return f"{self._base_url}{href}"
             elif href.startswith('http'):
                 return href
             else:
-                return f"https://www.tokopedia.com/{href}"
+                return f"{self._base_url}/{href}"
         
+        # Fallback: generate URL from product name
         name_element = item.select_one(self._name_selector)
         if name_element:
             name = name_element.get_text(strip=True)
             if name:
                 slug = self._generate_slug(name)
-                return f"https://www.tokopedia.com/product/{slug}"
+                return f"{self._base_url}/product/{slug}"
         
-        return "https://www.tokopedia.com/product/unknown"
+        return f"{self._base_url}/product/unknown"
     
     def _generate_slug(self, name: str) -> str:
+        """
+        Generate URL-safe slug from product name.
+        Uses pre-compiled regex pattern for better performance.
+        """
+        # Efficient slug generation with minimal operations
         slug = name.lower().replace(' ', '-').replace('(', '').replace(')', '')
-        slug = re.sub(r'[^a-z0-9\-]', '', slug)
+        slug = self._SLUG_PATTERN.sub('', slug)
         return slug
     
     def _extract_product_price(self, item) -> int:

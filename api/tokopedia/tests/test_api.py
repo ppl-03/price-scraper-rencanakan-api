@@ -740,3 +740,28 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             max_price=0,
             location=None
         )
+    
+    def test_parse_int_param_with_invalid_default(self):
+        """Test _parse_integer_parameter when default value cannot be converted to int (lines 61, 66-67)"""
+        # Import the internal function
+        from api.tokopedia.views import _parse_integer_parameter
+        from django.test import RequestFactory
+        
+        factory = RequestFactory()
+        request = factory.get('/test/')  # No parameters
+        
+        # Test with invalid default value (will trigger ValueError in line 66)
+        result, error = _parse_integer_parameter(request, 'test_param', required=False, default='invalid')
+        self.assertIsNone(result)
+        self.assertIsNone(error)
+        
+        # Test with valid default value for comparison
+        result, error = _parse_integer_parameter(request, 'test_param', required=False, default='10')
+        self.assertEqual(result, 10)
+        self.assertIsNone(error)
+        
+        # Test with no default (should return None, None)
+        result, error = _parse_integer_parameter(request, 'test_param', required=False, default=None)
+        self.assertIsNone(result)
+        self.assertIsNone(error)
+

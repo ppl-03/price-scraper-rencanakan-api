@@ -808,6 +808,85 @@ class TestTokopediaHtmlParserIntegration(TestCase):
             
             # Verify BeautifulSoup was called with lxml parser
             mock_bs.assert_called_once_with(html, 'lxml')
+    
+    def test_try_text_selector_deprecated_method(self):
+        """Test deprecated _try_text_selector method (line 131)"""
+        html = self._create_product_html(name="Test Product", price="Rp50.000", url="/product/test")
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        # Test the deprecated method still works
+        result = self.parser._try_text_selector(item, 'span.css-20kt3o')
+        self.assertEqual(result, "Test Product")
+    
+    def test_extract_product_name_from_image_alt_fallback(self):
+        """Test product name extraction from image alt when other selectors fail (lines 146-153)"""
+        # Create HTML with NO name in usual selectors and NO span elements, only image alt
+        # Price is completely outside divProductWrapper
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <div data-testid="divProductWrapper">
+                <img alt="Product Name from Alt" src="/image.jpg">
+            </div>
+            <div class="price-container">
+                <span class="css-o5uqv">Rp50.000</span>
+            </div>
+        </a>
+        '''
+        
+        # Mock price cleaner to avoid price parsing issues
+        with patch.object(self.parser.price_cleaner, 'clean_price', return_value=50000), \
+             patch.object(self.parser.price_cleaner, 'validate_price', return_value=True):
+            
+            products = self.parser.parse_products(html)
+            
+            # Should extract name from image alt attribute
+            self.assertEqual(len(products), 1)
+            self.assertEqual(products[0].name, "Product Name from Alt")
+            self.assertEqual(products[0].price, 50000)
+    
+    def test_try_image_alt_selector_with_alt_text(self):
+        """Test _try_image_alt_selector when image has alt text (lines 146-153)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <img alt="Product Image Alt Text" src="/image.jpg">
+            <span class="css-20kt3o">Test Product</span>
+            <span class="css-o5uqv">Rp50.000</span>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        result = self.parser._try_image_alt_selector(item)
+        self.assertEqual(result, "Product Image Alt Text")
+    
+    def test_try_image_alt_selector_no_image(self):
+        """Test _try_image_alt_selector when no image exists (lines 146-153)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <span class="css-20kt3o">Test Product</span>
+            <span class="css-o5uqv">Rp50.000</span>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        result = self.parser._try_image_alt_selector(item)
+        self.assertIsNone(result)
+    
+    def test_try_image_alt_selector_image_without_alt(self):
+        """Test _try_image_alt_selector when image has no alt attribute (lines 146-153)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <img src="/image.jpg">
+            <span class="css-20kt3o">Test Product</span>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        result = self.parser._try_image_alt_selector(item)
+        self.assertIsNone(result)
 
 
 if __name__ == '__main__':
