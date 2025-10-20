@@ -118,6 +118,10 @@ else:
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
             },
+            # Use same database for tests (user doesn't have CREATE DATABASE permission)
+            "TEST": {
+                "NAME": env("MYSQL_NAME"),  # Use same database for tests
+            },
         }
     }
 
