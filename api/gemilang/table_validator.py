@@ -15,7 +15,7 @@ class GemilangTableValidator:
                 query = "SHOW TABLES LIKE '{}'".format(table_name)
                 cursor.execute(query)
             else:
-                raise Exception(f"Unsupported database engine: {db_engine}")
+                raise NotImplementedError(f"Unsupported database engine: {db_engine}")
             
             result = cursor.fetchone()
             return result is not None
@@ -55,7 +55,7 @@ class GemilangTableValidator:
                     for col in columns
                 }
             else:
-                raise Exception(f"Unsupported database engine: {db_engine}")
+                raise NotImplementedError(f"Unsupported database engine: {db_engine}")
     
     def get_record_count(self):
         with connection.cursor() as cursor:
@@ -96,7 +96,7 @@ class GemilangTableValidator:
                 query = "SHOW TABLES"
                 cursor.execute(query)
             else:
-                raise Exception(f"Unsupported database engine: {db_engine}")
+                raise NotImplementedError(f"Unsupported database engine: {db_engine}")
             
             tables = cursor.fetchall()
             return [table[0] for table in tables]

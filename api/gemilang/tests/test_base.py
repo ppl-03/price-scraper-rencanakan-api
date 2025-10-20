@@ -11,10 +11,14 @@ def _validate_table_name(table_name):
 
 
 class MySQLTestCase(TestCase):
+    """Base test case class for MySQL database tests. Inherits from Django's TestCase."""
+    
     def setUp(self):
+        """Set up test fixtures. Currently no setup required as Django handles test database."""
         pass
     
     def tearDown(self):
+        """Clean up after tests. Currently no cleanup required as Django handles test database."""
         pass
 
 
@@ -37,6 +41,7 @@ def get_table_columns_sqlite(table_name):
 
 
 def get_table_columns(table_name):
+    """Get table column names for the current database engine."""
     db_engine = settings.DATABASES['default']['ENGINE']
     
     if 'mysql' in db_engine:
@@ -44,10 +49,11 @@ def get_table_columns(table_name):
     elif 'sqlite' in db_engine:
         return get_table_columns_sqlite(table_name)
     else:
-        raise Exception(f"Unsupported database engine: {db_engine}")
+        raise NotImplementedError(f"Unsupported database engine: {db_engine}")
 
 
 def table_exists(table_name):
+    """Check if a table exists in the database."""
     table_name = _validate_table_name(table_name)
     db_engine = settings.DATABASES['default']['ENGINE']
     
@@ -57,7 +63,7 @@ def table_exists(table_name):
         elif 'sqlite' in db_engine:
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=%s", (table_name,))
         else:
-            raise Exception(f"Unsupported database engine: {db_engine}")
+            raise NotImplementedError(f"Unsupported database engine: {db_engine}")
         
         result = cursor.fetchone()
         return result is not None

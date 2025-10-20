@@ -25,7 +25,7 @@ class GemilangDatabaseService:
         elif 'mysql' in db_engine:
             datetime_now = "NOW()"
         else:
-            raise Exception(f"Unsupported database engine: {db_engine}")
+            raise NotImplementedError(f"Unsupported database engine: {db_engine}")
         
         with connection.cursor() as cursor:
             for item in data:
