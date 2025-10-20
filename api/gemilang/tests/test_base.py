@@ -25,19 +25,23 @@ class MySQLTestCase(TestCase):
 def get_table_columns_mysql(table_name):
     table_name = _validate_table_name(table_name)
     with connection.cursor() as cursor:
-        query = "DESCRIBE {}".format(table_name)
-        cursor.execute(query)
-        columns = cursor.fetchall()
-        return [col[0] for col in columns]
+        cursor.execute(
+            """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION
+            """,
+            [table_name],
+        )
+        return [row[0] for row in cursor.fetchall()]
 
 
 def get_table_columns_sqlite(table_name):
     table_name = _validate_table_name(table_name)
     with connection.cursor() as cursor:
-        query = "PRAGMA table_info({})".format(table_name)
-        cursor.execute(query)
-        columns = cursor.fetchall()
-        return [col[1] for col in columns]
+        cursor.execute("SELECT name FROM pragma_table_info(?)", [table_name])
+        return [row[0] for row in cursor.fetchall()]
 
 
 def get_table_columns(table_name):
