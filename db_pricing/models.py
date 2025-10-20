@@ -46,5 +46,24 @@ class ItemPrice(models.Model):
             ),
         ]
 
-    def __str__(self):  # Keep representation, heavy validation handled by service layer
+    def __str__(self):
         return f"{self.item.code} @ {self.province.code} ({self.unit.code}) — {self.value}"
+
+
+class GemilangProduct(models.Model):
+    name = models.CharField(max_length=500)
+    price = models.IntegerField(validators=[MinValueValidator(0)])
+    url = models.URLField(max_length=1000)
+    unit = models.CharField(max_length=50, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'gemilang_products'
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} - Rp{self.price}"

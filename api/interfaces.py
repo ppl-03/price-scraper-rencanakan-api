@@ -32,6 +32,10 @@ class ScrapingResult:
     success: bool
     error_message: Optional[str] = None
     url: Optional[str] = None
+    
+    def __len__(self):
+        """Return the number of products in the result"""
+        return len(self.products)
 
 
 class IHttpClient(ABC):

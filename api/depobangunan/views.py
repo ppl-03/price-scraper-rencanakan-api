@@ -74,8 +74,8 @@ def depobangunan_locations_view(request):
         
         locations_data = [
             {
-                'store_name': location.store_name,
-                'address': location.address
+                'name': location.name,
+                'code': location.code
             }
             for location in result.locations
         ]
@@ -83,8 +83,7 @@ def depobangunan_locations_view(request):
         response_data = {
             'success': result.success,
             'locations': locations_data,
-            'error_message': result.error_message,
-            'url': result.url
+            'error_message': result.error_message
         }
         
         return JsonResponse(response_data)

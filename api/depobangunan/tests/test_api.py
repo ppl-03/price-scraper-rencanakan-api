@@ -467,20 +467,19 @@ class TestDepoBangunanLocationAPI(TestCase):
         
         mock_locations = [
             Location(
-                store_name="Depo Bangunan - Kalimalang",
-                address="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
+                name="Depo Bangunan - Kalimalang",
+                code="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
             ),
             Location(
-                store_name="Depo Bangunan - Tangerang Selatan",
-                address="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
+                name="Depo Bangunan - Tangerang Selatan",
+                code="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
             )
         ]
         
         mock_result = LocationScrapingResult(
             locations=mock_locations,
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -495,15 +494,14 @@ class TestDepoBangunanLocationAPI(TestCase):
         self.assertEqual(len(response_data['locations']), 2)
         
         # Check first location
-        self.assertEqual(response_data['locations'][0]['store_name'], "Depo Bangunan - Kalimalang")
-        self.assertIn("Jl. Raya Kalimalang", response_data['locations'][0]['address'])
+        self.assertEqual(response_data['locations'][0]['name'], "Depo Bangunan - Kalimalang")
+        self.assertIn("Jl. Raya Kalimalang", response_data['locations'][0]['code'])
         
         # Check second location
-        self.assertEqual(response_data['locations'][1]['store_name'], "Depo Bangunan - Tangerang Selatan")
-        self.assertIn("Jl. Raya Serpong", response_data['locations'][1]['address'])
+        self.assertEqual(response_data['locations'][1]['name'], "Depo Bangunan - Tangerang Selatan")
+        self.assertIn("Jl. Raya Serpong", response_data['locations'][1]['code'])
         
         self.assertIsNone(response_data['error_message'])
-        self.assertEqual(response_data['url'], "https://www.depobangunan.co.id/gerai-depo-bangunan")
         
         mock_scraper.scrape_locations.assert_called_once_with(timeout=30)
         
@@ -517,8 +515,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=False,
-            error_message="Failed to fetch location data",
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message="Failed to fetch location data"
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -543,8 +540,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -594,8 +590,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -619,8 +614,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result
@@ -641,8 +635,7 @@ class TestDepoBangunanLocationAPI(TestCase):
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
-            error_message=None,
-            url="https://www.depobangunan.co.id/gerai-depo-bangunan"
+            error_message=None
         )
         
         mock_scraper.scrape_locations.return_value = mock_result

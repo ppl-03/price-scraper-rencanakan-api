@@ -21,12 +21,12 @@ class TestDepoBangunanLocationScraper(TestCase):
         
         expected_locations = [
             Location(
-                store_name="Depo Bangunan - Kalimalang",
-                address="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
+                name="Depo Bangunan - Kalimalang",
+                code="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
             ),
             Location(
-                store_name="Depo Bangunan - Tangerang Selatan", 
-                address="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
+                name="Depo Bangunan - Tangerang Selatan", 
+                code="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
             )
         ]
         self.mock_location_parser.parse_locations.return_value = expected_locations
@@ -35,8 +35,8 @@ class TestDepoBangunanLocationScraper(TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(len(result.locations), 2)
-        self.assertEqual(result.locations[0].store_name, "Depo Bangunan - Kalimalang")
-        self.assertEqual(result.locations[1].store_name, "Depo Bangunan - Tangerang Selatan")
+        self.assertEqual(result.locations[0].name, "Depo Bangunan - Kalimalang")
+        self.assertEqual(result.locations[1].name, "Depo Bangunan - Tangerang Selatan")
         self.assertIsNone(result.error_message)
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
@@ -175,15 +175,17 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.assertTrue(result.success)
         self.mock_location_parser.parse_locations.assert_called_once_with(large_html)
 
-    def test_scrape_locations_url_in_result(self):
-        """Test that result contains the correct URL"""
+    def test_scrape_locations_correct_http_call(self):
+        """Test that HTTP client is called with correct URL"""
         mock_html = "<html>mock html</html>"
         self.mock_http_client.get.return_value = mock_html
         self.mock_location_parser.parse_locations.return_value = []
 
         result = self.scraper.scrape_locations()
 
-        self.assertEqual(result.url, "https://www.depobangunan.co.id/gerai-depo-bangunan")
+        expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.assertTrue(result.success)
 
     def test_scrape_locations_duplicate_locations(self):
         """Test scraping with duplicate locations"""
