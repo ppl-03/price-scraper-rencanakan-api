@@ -127,7 +127,7 @@ else:
             # Use same database for tests (user doesn't have CREATE DATABASE permission in production)
             # In CI, the test database will be created automatically
             "TEST": {
-                "NAME": db_name if env("MYSQL_NAME", default=None) else None,  # Only set for production
+                "NAME": db_name,  # Always use the same database for tests (no CREATE DATABASE needed)
             },
         }
     }
