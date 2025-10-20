@@ -25,4 +25,6 @@ urlpatterns = [
     path('api/depobangunan/', include('api.depobangunan.urls')),
     path('api/mitra10/', include('api.mitra10.urls')),
     path("", include("dashboard.urls")),
+    
+    path('api/government_wage/', include('api.government_wage.urls')),
 ]
