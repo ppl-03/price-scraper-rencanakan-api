@@ -67,7 +67,8 @@ def scrape_products(request):
             {
                 'name': product.name,
                 'price': product.price,
-                'url': product.url
+                'url': product.url,
+                'unit': product.unit
             }
             for product in result.products
         ]
@@ -82,11 +83,8 @@ def scrape_products(request):
         logger.info(f"Mitra10 scraping successful for query '{query}': {len(result.products)} products found")
         return JsonResponse(response_data)
         
-    except Exception as e:
-        logger.error(f"Unexpected error in Mitra10 API: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'error': 'Internal server error occurred'
-        }, status=500)
+    except Exception:
+        return _create_error_response("Internal server error occurred", 500)
 
 @require_http_methods(["GET"])
 def scrape_locations(request):
@@ -110,10 +108,6 @@ def scrape_locations(request):
             "error_message": result.error_message
         })
 
-    except Exception as e:
-        logger.error(f"Unexpected error in Mitra10 location scraper: {str(e)}")
-        return JsonResponse({
-            "success": False,
-            "locations": [],
-            "error_message": "Internal server error occurred"
-        }, status=500)
+    except Exception:
+        return _create_error_response("Internal server error occurred", 500)
+    
