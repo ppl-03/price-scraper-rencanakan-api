@@ -174,3 +174,51 @@ class TestGemilangDatabaseService(MySQLTestCase):
         product = GemilangProduct.objects.first()
         self.assertIsNotNone(product.created_at)
         self.assertIsNotNone(product.updated_at)
+
+
+from unittest.mock import patch, MagicMock
+
+class TestDatabaseServiceCoverage(MySQLTestCase):
+    
+    @patch('api.gemilang.database_service.settings')
+    @patch('api.gemilang.database_service.connection')
+    def test_save_with_sqlite_engine(self, mock_connection, mock_settings):
+        mock_settings.DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3'
+            }
+        }
+        
+        mock_cursor = MagicMock()
+        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+        
+        service = GemilangDatabaseService()
+        data = [
+            {"name": "SQLite Test Product", "price": 10000, "url": "https://test.com", "unit": "PCS"}
+        ]
+        
+        result = service.save(data)
+        self.assertTrue(result)
+        
+        mock_cursor.execute.assert_called()
+        call_args = mock_cursor.execute.call_args[0][0]
+        self.assertIn("datetime('now')", call_args)
+    
+    @patch('api.gemilang.database_service.settings')
+    def test_save_with_unsupported_database_engine(self, mock_settings):
+        mock_settings.DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql'
+            }
+        }
+        
+        service = GemilangDatabaseService()
+        data = [
+            {"name": "Test Product", "price": 10000, "url": "https://test.com", "unit": "PCS"}
+        ]
+        
+        with self.assertRaises(Exception) as context:
+            service.save(data)
+        
+        self.assertIn("Unsupported database engine", str(context.exception))
+        self.assertIn("postgresql", str(context.exception))
