@@ -10,7 +10,7 @@ class TestMitra10Factory(unittest.TestCase):
     @patch('api.mitra10.factory.BatchPlaywrightClient')
     @patch('api.mitra10.factory.Mitra10UrlBuilder')
     @patch('api.mitra10.factory.Mitra10HtmlParser')
-    def test_create_mitra10_scraper(self, mock_html_parser, mock_url_builder):
+    def test_create_mitra10_scraper(self, mock_html_parser, mock_url_builder, mock_batch_client):
         """Test creation of Mitra10 price scraper"""
         mock_url_builder_instance = MagicMock()
         mock_html_parser_instance = MagicMock()

@@ -62,7 +62,7 @@ class TestGemilangProductModel(TestCase):
         )
         
         self.assertIsNotNone(product.id)
-        self.assertIsNone(product.unit)
+        self.assertEqual(product.unit, '')
     
     def test_create_product_with_null_unit(self):
         product = GemilangProduct.objects.create(

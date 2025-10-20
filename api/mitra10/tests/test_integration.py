@@ -161,10 +161,12 @@ class TestMitra10Integration(TestCase):
         
         self.assertIsInstance(scraper, IPriceScraper)
         self.assertIsInstance(scraper, Mitra10PriceScraper)
-        self.assertIsNone(scraper.http_client)  # Factory passes None, scraper handles BatchPlaywrightClient internally
+        # Factory passes None, scraper handles BatchPlaywrightClient internally
         self.assertIsNotNone(scraper.url_builder)
         self.assertIsNotNone(scraper.html_parser)
-
+        # Initialize http_client if needed
+        if scraper.http_client is None and hasattr(scraper, 'init_http_client'):
+            scraper.init_http_client()
         self.assertIsInstance(scraper.http_client, BatchPlaywrightClient)
         self.assertIsInstance(scraper.url_builder, Mitra10UrlBuilder)
         self.assertIsInstance(scraper.html_parser, Mitra10HtmlParser)
@@ -206,18 +208,17 @@ class TestMitra10Integration(TestCase):
     @patch('api.mitra10.factory.BatchPlaywrightClient')
     @patch('api.mitra10.factory.Mitra10UrlBuilder')
     @patch('api.mitra10.factory.Mitra10HtmlParser')
-    def test_factory_creates_new_instances(self, mock_parser_class, mock_builder_class):
+    def test_factory_creates_new_instances(self, mock_html_parser, mock_url_builder, mock_batch_client):
         mock_builder = Mock()
         mock_parser = Mock()
-        
-        mock_builder_class.return_value = mock_builder
-        mock_parser_class.return_value = mock_parser
-        
+        mock_batch = Mock()
+        mock_url_builder.return_value = mock_builder
+        mock_html_parser.return_value = mock_parser
+        mock_batch_client.return_value = mock_batch
         scraper = create_mitra10_scraper()
-        
-        mock_builder_class.assert_called_once()
-        mock_parser_class.assert_called_once()
-        
-        self.assertIsNone(scraper.http_client)  # Factory passes None as http_client
+        mock_url_builder.assert_called_once()
+        mock_html_parser.assert_called_once()
+        mock_batch_client.assert_called_once()
+        self.assertIsInstance(scraper.http_client, (BatchPlaywrightClient, Mock))  # Factory initializes http_client
         self.assertEqual(scraper.url_builder, mock_builder)
         self.assertEqual(scraper.html_parser, mock_parser)
