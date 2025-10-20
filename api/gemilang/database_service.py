@@ -29,8 +29,9 @@ class GemilangDatabaseService:
         
         with connection.cursor() as cursor:
             for item in data:
+                sql = "INSERT INTO gemilang_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, {}, {})".format(datetime_now, datetime_now)
                 cursor.execute(
-                    f"INSERT INTO gemilang_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, {datetime_now}, {datetime_now})",
+                    sql,
                     [item["name"], item["price"], item["url"], item["unit"]]
                 )
         return True
