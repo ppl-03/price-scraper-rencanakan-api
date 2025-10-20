@@ -207,7 +207,7 @@ class TestJuraganMaterialViewsDirect(TestCase):
         
         # Make the request
         request = self.factory.get('/api/juragan_material/scrape/', {'keyword': 'cement', 'sort_by_price': 'false', 'page': '5'})
-        response = views.scrape_products(request)
+        views.scrape_products(request)
         
         # Verify scraper was called with correct parameters
         mock_scraper.scrape_products.assert_called_once_with(
