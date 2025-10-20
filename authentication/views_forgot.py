@@ -57,6 +57,10 @@ def request_password_reset(request):
 @require_GET
 def verify_reset_token(request, token: str):
     """Verify a reset token exists (used by frontend to check validity)."""
+    # Basic validation of token format
+    if not token or not isinstance(token, str):
+        return JsonResponse({'error': 'Invalid token'}, status=404)
+
     lookup = f"reset:{token}"
     user = User.objects.filter(verification_token=lookup).first()
     if not user:
@@ -76,7 +80,8 @@ def perform_password_reset(request):
     except Exception:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-    token = payload.get('token')
+    # Accept both 'token' and 'reset_password_token' for compatibility
+    token = payload.get('token') or payload.get('reset_password_token')
     password = payload.get('password')
     if not token or not password:
         return JsonResponse({'error': 'Missing token or password'}, status=400)

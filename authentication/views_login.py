@@ -6,6 +6,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 
 from .models import User
 from .services import TokenService
@@ -25,8 +27,14 @@ def login(request):
     email = payload.get('email')
     password = payload.get('password')
 
+    # Basic validation: required fields and email format
     if not email or not password:
         return JsonResponse({'error': 'Missing credentials'}, status=400)
+    try:
+        validate_email(email)
+    except ValidationError:
+        # Keep error generic to avoid leaking account existence
+        return JsonResponse({'error': 'Invalid credentials'}, status=401)
 
     user = authenticate(request, email=email, password=password)
     if user is None:

@@ -6,6 +6,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import redirect
 from django.conf import settings
 from django.contrib.auth.models import Group
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 
 from .models import User, Company
 
@@ -33,10 +35,33 @@ def register(request):
     password = payload.get('password')
     first_name = payload.get('first_name')
     last_name = payload.get('last_name')
+    phone = payload.get('phone')
+    job = payload.get('job')
     company_slug = payload.get('company_slug')
 
-    if not all([email, password, first_name, last_name]):
+    # Validate required fields
+    if not all([email, password, first_name, last_name, phone, job]):
         return JsonResponse({'error': 'Missing required fields'}, status=400)
+
+    # Email format
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({'error': 'Invalid email'}, status=400)
+
+    # Password strength (minimal)
+    if not isinstance(password, str) or len(password) < 8:
+        return JsonResponse({'error': 'Invalid password'}, status=400)
+
+    # Unique constraints: email and phone
+    if User.objects.filter(email__iexact=email).exists():
+        existing = User.objects.filter(email__iexact=email).first()
+        if existing.is_email_verified:
+            return JsonResponse({'error': 'Email already registered'}, status=400)
+        # otherwise unverified: allow re-registration (existing delete handled below)
+
+    if User.objects.filter(phone=phone).exists():
+        return JsonResponse({'error': 'Phone already registered'}, status=400)
 
     existing = User.objects.filter(email=email).first()
     if existing:
