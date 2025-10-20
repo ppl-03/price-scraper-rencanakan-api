@@ -1,10 +1,10 @@
-from django.test import TestCase
 from unittest.mock import Mock, MagicMock, patch
 from db_pricing.models import GemilangProduct
 from api.gemilang.factory import create_gemilang_scraper
 from api.gemilang.database_service import GemilangDatabaseService
+from .test_base import MySQLTestCase
 
-class TestGemilangEndToEnd(TestCase):
+class TestGemilangEndToEnd(MySQLTestCase):
     def test_scrape_and_save_full_flow(self):
         scraper = create_gemilang_scraper()
         

@@ -1,8 +1,8 @@
-from django.test import TestCase
 from db_pricing.models import GemilangProduct
 from api.gemilang.database_service import GemilangDatabaseService
+from .test_base import MySQLTestCase
 
-class TestGemilangDatabaseService(TestCase):
+class TestGemilangDatabaseService(MySQLTestCase):
     def test_save_valid_data(self):
         data = [
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs"},

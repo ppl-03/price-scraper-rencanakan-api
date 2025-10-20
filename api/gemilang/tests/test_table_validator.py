@@ -1,7 +1,7 @@
-from django.test import TestCase
 from api.gemilang.table_validator import GemilangTableValidator
+from .test_base import MySQLTestCase
 
-class TestGemilangTableValidator(TestCase):
+class TestGemilangTableValidator(MySQLTestCase):
     def setUp(self):
         self.validator = GemilangTableValidator()
     
