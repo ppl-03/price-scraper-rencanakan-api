@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 import secrets
 
-from .models import User, Company, UserManager
+from ..models import User, Company, UserManager
 
 # Use ephemeral test-only passwords generated at runtime to avoid hard-coded
 # credential literals in source. These are deterministic for a single test
