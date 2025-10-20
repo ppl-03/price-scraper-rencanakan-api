@@ -5,7 +5,7 @@ import re
 
 
 def _validate_table_name(table_name):
-    if not re.match(r'^[a-zA-Z0-9_]+$', table_name):
+    if not re.fullmatch(r"\w+", table_name):
         raise ValueError(f"Invalid table name: {table_name}")
     return table_name
 
