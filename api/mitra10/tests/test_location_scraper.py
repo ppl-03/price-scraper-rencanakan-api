@@ -70,9 +70,6 @@ class TestMitra10LocationScraper(unittest.TestCase):
         mock_client = MagicMock()
         mock_instance.client = mock_client
 
-        async def fake_extract(client, url):
-            raise RuntimeError("Simulated failure")
-
         # Simulate error in _extract_locations
         mock_client._ensure_browser = AsyncMock(side_effect=RuntimeError("Browser failed"))
 
