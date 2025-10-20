@@ -140,7 +140,7 @@ class TestTokopediaProfiler(unittest.TestCase):
         # Mock the scraper to avoid actual network calls
         from unittest.mock import Mock, patch
         mock_result = Mock()
-        mock_result.products = [Mock(name="Test", price=1000, url="http://test.com")]
+        mock_result.products = [Mock(name="Test", price=1000, url="https://test.com")]
         
         with patch.object(self.profiler, 'real_scraper') as mock_scraper:
             mock_scraper.scrape_products_with_filters.return_value = mock_result
