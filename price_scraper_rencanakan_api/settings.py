@@ -90,11 +90,11 @@ WSGI_APPLICATION = 'price_scraper_rencanakan_api.wsgi.application'
 # Database configuration with fallback to SQLite
 # Use SQLite for testing or when MySQL env vars aren't available
 if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
-    env("MYSQL_NAME", default=None),
-    env("MYSQL_USER", default=None), 
-    env("MYSQL_PASSWORD", default=None),
-    env("MYSQL_HOST", default=None),
-    env("MYSQL_PORT", default=None)
+    env("MYSQL_NAME", default=None) or env("DB_NAME", default=None),
+    env("MYSQL_USER", default=None) or env("DB_USER", default=None), 
+    env("MYSQL_PASSWORD", default=None) or env("DB_PASSWORD", default=None),
+    env("MYSQL_HOST", default=None) or env("DB_HOST", default=None),
+    env("MYSQL_PORT", default=None) or env("DB_PORT", default=None)
 ]):
     # SQLite configuration (for CI/tests or fallback)
     DATABASES = {
@@ -104,23 +104,30 @@ if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
         }
     }
 else:
-    # Production/Development MySQL configuration
+    # MySQL configuration - supports both production (.env) and CI (DB_*) variables
+    db_name = env("MYSQL_NAME", default=None) or env("DB_NAME")
+    db_user = env("MYSQL_USER", default=None) or env("DB_USER")
+    db_password = env("MYSQL_PASSWORD", default=None) or env("DB_PASSWORD")
+    db_host = env("MYSQL_HOST", default=None) or env("DB_HOST")
+    db_port = env("MYSQL_PORT", default=None) or env("DB_PORT")
+    
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': env("MYSQL_NAME"),
-            "USER": env("MYSQL_USER"),
-            "PASSWORD": env("MYSQL_PASSWORD"),
-            "HOST": env("MYSQL_HOST"),
-            "PORT": env("MYSQL_PORT"),
+            'NAME': db_name,
+            "USER": db_user,
+            "PASSWORD": db_password,
+            "HOST": db_host,
+            "PORT": db_port,
             # good defaults for emoji / wide characters & stable time behavior
             "OPTIONS": {
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
             },
-            # Use same database for tests (user doesn't have CREATE DATABASE permission)
+            # Use same database for tests (user doesn't have CREATE DATABASE permission in production)
+            # In CI, the test database will be created automatically
             "TEST": {
-                "NAME": env("MYSQL_NAME"),  # Use same database for tests
+                "NAME": db_name if env("MYSQL_NAME", default=None) else None,  # Only set for production
             },
         }
     }
