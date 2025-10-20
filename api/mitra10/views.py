@@ -1,10 +1,19 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-from .factory import create_mitra10_scraper
+from .factory import create_mitra10_scraper, create_mitra10_location_scraper
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _create_error_response(message: str, status_code: int = 400) -> JsonResponse:
+    """Helper function to create standardized error responses"""
+    return JsonResponse({
+        'success': False,
+        'locations': [],
+        'count': 0,
+        'error_message': message
+    }, status=status_code)
 
 
 @require_http_methods(["GET"])
@@ -58,7 +67,8 @@ def scrape_products(request):
             {
                 'name': product.name,
                 'price': product.price,
-                'url': product.url
+                'url': product.url,
+                'unit': product.unit
             }
             for product in result.products
         ]
@@ -73,8 +83,31 @@ def scrape_products(request):
         logger.info(f"Mitra10 scraping successful for query '{query}': {len(result.products)} products found")
         return JsonResponse(response_data)
         
-    except Exception as e:
-        logger.error(f"Unexpected error in Mitra10 API: {str(e)}", exc_info=True)
+    except Exception:
+        return _create_error_response("Internal server error occurred", 500)
+
+@require_http_methods(["GET"])
+def scrape_locations(request):
+    """Django view to scrape Mitra10 store locations."""
+    try:
+        scraper = create_mitra10_location_scraper()
+        result = scraper.scrape_locations()
+
+        # Format locations data
+        locations_data = [
+            {
+                'name': location.name,
+                'code': location.code
+            }
+            for location in result.locations
+        ]
+
         return JsonResponse({
-            'error': 'Internal server error occurred'
-        }, status=500)
+            "success": result.success,
+            "locations": locations_data,
+            "error_message": result.error_message
+        })
+
+    except Exception:
+        return _create_error_response("Internal server error occurred", 500)
+    

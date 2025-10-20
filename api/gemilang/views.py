@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from .factory import create_gemilang_scraper
+from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 import json
 import logging
 
@@ -41,7 +41,8 @@ def scrape_products(request):
             {
                 'name': product.name,
                 'price': product.price,
-                'url': product.url
+                'url': product.url,
+                'unit': product.unit
             }
             for product in result.products
         ]
@@ -60,3 +61,63 @@ def scrape_products(request):
         return JsonResponse({
             'error': 'Internal server error occurred'
         }, status=500)
+
+
+class LocationRequestHandler:
+    
+    DEFAULT_TIMEOUT = 30
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+    
+    def parse_timeout(self, request) -> int:
+        timeout_param = request.GET.get('timeout', str(self.DEFAULT_TIMEOUT))
+        try:
+            timeout = int(timeout_param)
+            return max(0, timeout)
+        except (ValueError, TypeError):
+            self.logger.warning(f"Invalid timeout parameter: {timeout_param}, using default")
+            return self.DEFAULT_TIMEOUT
+    
+    def format_locations_response(self, result) -> dict:
+        locations_data = [
+            {
+                'name': location.name,
+                'code': location.code
+            }
+            for location in result.locations
+        ]
+        
+        return {
+            'success': result.success,
+            'locations': locations_data,
+            'error_message': result.error_message
+        }
+    
+    def create_error_response(self, error_message: str) -> dict:
+        return {
+            'success': False,
+            'locations': [],
+            'error_message': error_message
+        }
+
+
+@require_http_methods(["GET"])
+def gemilang_locations_view(request):
+    handler = LocationRequestHandler()
+    
+    try:
+        timeout = handler.parse_timeout(request)
+        
+        scraper = create_gemilang_location_scraper()
+        result = scraper.scrape_locations(timeout=timeout)
+        
+        response_data = handler.format_locations_response(result)
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        error_message = f"Unexpected error: {str(e)}"
+        handler.logger.error(f"Unexpected error in Gemilang location scraper: {str(e)}")
+        
+        response_data = handler.create_error_response(error_message)
+        return JsonResponse(response_data, status=500)

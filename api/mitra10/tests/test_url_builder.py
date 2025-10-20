@@ -1,10 +1,67 @@
 import urllib.parse
 from django.test import TestCase
+from unittest.mock import patch
+from api.mitra10.url_builder import Mitra10UrlBuilder
 
 class TestMitra10UrlBuilder(TestCase):
     
     def setUp(self):
         self.base_url = "https://www.mitra10.com/catalogsearch/result"
+        
+    @patch('api.mitra10.url_builder.config')
+    def test_mitra10_url_builder_initialization(self, mock_config):
+        """Test Mitra10UrlBuilder initialization with default config"""
+        mock_config.mitra10_base_url = "https://www.mitra10.com/"
+        mock_config.mitra10_search_path = "catalogsearch/result"
+        
+        builder = Mitra10UrlBuilder()
+        
+        # Test that the builder was initialized with config values
+        self.assertEqual(builder.base_url, "https://www.mitra10.com/")
+        self.assertEqual(builder.search_path, "catalogsearch/result")
+        
+    def test_mitra10_url_builder_custom_initialization(self):
+        """Test Mitra10UrlBuilder initialization with custom values"""
+        custom_base = "https://custom.mitra10.com/"
+        custom_path = "custom/search"
+        
+        builder = Mitra10UrlBuilder(base_url=custom_base, search_path=custom_path)
+        
+        self.assertEqual(builder.base_url, custom_base)
+        self.assertEqual(builder.search_path, custom_path)
+    
+    @patch('api.mitra10.url_builder.config')
+    def test_build_params_without_sort(self, mock_config):
+        """Test _build_params without sorting"""
+        mock_config.mitra10_base_url = "https://www.mitra10.com/"
+        mock_config.mitra10_search_path = "catalogsearch/result"
+        
+        builder = Mitra10UrlBuilder()
+        params = builder._build_params(keyword="semen", sort_by_price=False, page=0)
+        
+        expected_params = {
+            'q': 'semen',
+            'page': 1  # 0-based to 1-based conversion
+        }
+        
+        self.assertEqual(params, expected_params)
+        
+    @patch('api.mitra10.url_builder.config')
+    def test_build_params_with_sort(self, mock_config):
+        """Test _build_params with sorting"""
+        mock_config.mitra10_base_url = "https://www.mitra10.com/"
+        mock_config.mitra10_search_path = "catalogsearch/result"
+        
+        builder = Mitra10UrlBuilder()
+        params = builder._build_params(keyword="semen", sort_by_price=True, page=2)
+        
+        expected_params = {
+            'q': 'semen',
+            'sort': '{"key":"price","value":"ASC"}',
+            'page': 3  # 2-based to 1-based conversion
+        }
+        
+        self.assertEqual(params, expected_params)
         
     def test_mitra10_url_building_with_semen_search(self):
         """Test URL building for Mitra10 search with semen as search term"""

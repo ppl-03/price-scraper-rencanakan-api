@@ -23,11 +23,13 @@ class DepoBangunanAPITest(TestCase):
         mock_product1.name = "Test Product 1"
         mock_product1.price = 5000
         mock_product1.url = "https://www.depobangunan.co.id/test-product-1"
+        mock_product1.unit = "PCS"
         
         mock_product2 = MagicMock()
         mock_product2.name = "Test Product 2"
         mock_product2.price = 7500
         mock_product2.url = "https://www.depobangunan.co.id/test-product-2"
+        mock_product2.unit = "KG"
         
         # Mock the scraping result
         mock_result = MagicMock()
@@ -410,6 +412,7 @@ class DepoBangunanAPITest(TestCase):
         mock_product.name = "Test Product"
         mock_product.price = 1000
         mock_product.url = "https://example.com/product"
+        mock_product.unit = "KG"  # Add proper unit attribute
         
         mock_result = MagicMock()
         mock_result.success = True
@@ -442,3 +445,204 @@ class DepoBangunanAPITest(TestCase):
         self.assertEqual(product['name'], "Test Product")
         self.assertEqual(product['price'], 1000)
         self.assertEqual(product['url'], "https://example.com/product")
+
+
+class TestDepoBangunanLocationAPI(TestCase):
+    """Test cases for Depo Bangunan location API endpoint"""
+    
+    def setUp(self):
+        self.client = Client()
+        
+    def test_depobangunan_locations_endpoint_exists(self):
+        """Test that the locations endpoint exists"""
+        response = self.client.get('/api/depobangunan/locations/')
+        self.assertNotEqual(response.status_code, 404)
+        
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_success(self, mock_create_scraper):
+        """Test successful location scraping"""
+        from api.interfaces import LocationScrapingResult, Location
+        
+        mock_scraper = MagicMock()
+        
+        mock_locations = [
+            Location(
+                name="Depo Bangunan - Kalimalang",
+                code="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
+            ),
+            Location(
+                name="Depo Bangunan - Tangerang Selatan",
+                code="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
+            )
+        ]
+        
+        mock_result = LocationScrapingResult(
+            locations=mock_locations,
+            success=True,
+            error_message=None
+        )
+        
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/locations/')
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.content)
+        
+        self.assertTrue(response_data['success'])
+        self.assertEqual(len(response_data['locations']), 2)
+        
+        # Check first location
+        self.assertEqual(response_data['locations'][0]['name'], "Depo Bangunan - Kalimalang")
+        self.assertIn("Jl. Raya Kalimalang", response_data['locations'][0]['code'])
+        
+        # Check second location
+        self.assertEqual(response_data['locations'][1]['name'], "Depo Bangunan - Tangerang Selatan")
+        self.assertIn("Jl. Raya Serpong", response_data['locations'][1]['code'])
+        
+        self.assertIsNone(response_data['error_message'])
+        
+        mock_scraper.scrape_locations.assert_called_once_with(timeout=30)
+        
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_scraper_error(self, mock_create_scraper):
+        """Test handling of scraper errors"""
+        from api.interfaces import LocationScrapingResult
+        
+        mock_scraper = MagicMock()
+        
+        mock_result = LocationScrapingResult(
+            locations=[],
+            success=False,
+            error_message="Failed to fetch location data"
+        )
+        
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/locations/')
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.content)
+        
+        self.assertFalse(response_data['success'])
+        self.assertEqual(response_data['locations'], [])
+        self.assertEqual(response_data['error_message'], "Failed to fetch location data")
+        
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_with_custom_timeout(self, mock_create_scraper):
+        """Test location scraping with custom timeout"""
+        from api.interfaces import LocationScrapingResult
+        
+        mock_scraper = MagicMock()
+        
+        mock_result = LocationScrapingResult(
+            locations=[],
+            success=True,
+            error_message=None
+        )
+        
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/locations/', {'timeout': '60'})
+        
+        self.assertEqual(response.status_code, 200)
+        mock_scraper.scrape_locations.assert_called_once_with(timeout=60)
+        
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_invalid_timeout(self, mock_create_scraper):
+        """Test handling of invalid timeout parameter"""
+        response = self.client.get('/api/depobangunan/locations/', {'timeout': 'invalid'})
+        
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+        self.assertEqual(response_data['error'], 'Timeout parameter must be a valid integer')
+        
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_exception_handling(self, mock_create_scraper):
+        """Test handling of unexpected exceptions"""
+        mock_scraper = MagicMock()
+        mock_scraper.scrape_locations.side_effect = Exception("Unexpected error")
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/locations/')
+        
+        self.assertEqual(response.status_code, 500)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+        self.assertEqual(response_data['error'], 'Internal server error occurred')
+
+    def test_depobangunan_locations_post_method_not_allowed(self):
+        """Test that POST method is not allowed"""
+        response = self.client.post('/api/depobangunan/locations/')
+        self.assertEqual(response.status_code, 405)
+
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_empty_response(self, mock_create_scraper):
+        """Test handling of empty location list"""
+        from api.interfaces import LocationScrapingResult
+        
+        mock_scraper = MagicMock()
+        
+        mock_result = LocationScrapingResult(
+            locations=[],
+            success=True,
+            error_message=None
+        )
+        
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/locations/')
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.content)
+        
+        self.assertTrue(response_data['success'])
+        self.assertEqual(len(response_data['locations']), 0)
+
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_large_timeout_value(self, mock_create_scraper):
+        """Test handling of large timeout values"""
+        from api.interfaces import LocationScrapingResult
+        
+        mock_scraper = MagicMock()
+        
+        mock_result = LocationScrapingResult(
+            locations=[],
+            success=True,
+            error_message=None
+        )
+        
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/locations/', {'timeout': '9999'})
+        
+        self.assertEqual(response.status_code, 200)
+        mock_scraper.scrape_locations.assert_called_once_with(timeout=9999)
+
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_depobangunan_locations_negative_timeout(self, mock_create_scraper):
+        """Test handling of negative timeout values"""
+        from api.interfaces import LocationScrapingResult
+        
+        mock_scraper = MagicMock()
+        
+        mock_result = LocationScrapingResult(
+            locations=[],
+            success=True,
+            error_message=None
+        )
+        
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/locations/', {'timeout': '-10'})
+        
+        self.assertEqual(response.status_code, 200)
+        # Negative timeout should be passed as-is; scraper will validate it
+        mock_scraper.scrape_locations.assert_called_once_with(timeout=-10)

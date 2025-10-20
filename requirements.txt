@@ -10,3 +10,6 @@ beautifulsoup4
 django-environ
 pymysql
 playwright
+pytest
+pytest-cov
+pytest-django

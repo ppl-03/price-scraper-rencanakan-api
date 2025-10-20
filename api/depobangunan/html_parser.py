@@ -5,14 +5,16 @@ from bs4 import BeautifulSoup
 
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import DepoPriceCleaner
+from .unit_parser import DepoBangunanUnitParser
 
 logger = logging.getLogger(__name__)
 
 
 class DepoHtmlParser(IHtmlParser):
     
-    def __init__(self, price_cleaner: DepoPriceCleaner = None):
+    def __init__(self, price_cleaner: DepoPriceCleaner = None, unit_parser: DepoBangunanUnitParser = None):
         self.price_cleaner = price_cleaner or DepoPriceCleaner()
+        self.unit_parser = unit_parser or DepoBangunanUnitParser()
     
     def parse_products(self, html_content: str) -> List[Product]:
         try:
@@ -52,7 +54,10 @@ class DepoHtmlParser(IHtmlParser):
         if not self.price_cleaner.is_valid_price(price):
             return None
         
-        return Product(name=name, price=price, url=url)
+        # Extract unit from product name
+        unit = self.unit_parser.parse_unit_from_product_name(name)
+        
+        return Product(name=name, price=price, url=url, unit=unit)
     
     def _extract_product_name(self, item) -> Optional[str]:
         # Try to find the product name in the product-item-name element
@@ -85,15 +90,15 @@ class DepoHtmlParser(IHtmlParser):
     def _extract_product_price(self, item) -> int:
         # Try different price extraction methods in order of preference
         price = self._extract_price_from_data_attribute(item)
-        if price > 0:
+        if price and price > 0:
             return price
         
         price = self._extract_price_from_special_price(item)
-        if price > 0:
+        if price and price > 0:
             return price
         
         price = self._extract_price_from_regular_price(item)
-        if price > 0:
+        if price and price > 0:
             return price
         
         return self._extract_price_from_text_search(item)

@@ -5,4 +5,5 @@ app_name = 'depobangunan'
 
 urlpatterns = [
     path('scrape/', views.scrape_products, name='scrape_products'),
+    path('locations/', views.depobangunan_locations_view, name='depobangunan_locations'),
 ]

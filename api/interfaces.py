@@ -4,10 +4,26 @@ from dataclasses import dataclass
 
 
 @dataclass
+class Location:
+    name: str
+    code: Optional[str] = None
+
+
+@dataclass
+class LocationScrapingResult:
+    locations: List[Location]
+    success: bool
+    error_message: Optional[str] = None
+    attempts_made: int = 1
+
+
+@dataclass
 class Product:
     name: str
     price: int
     url: str
+    unit: Optional[str] = None
+    location: Optional[str] = None
 
 
 @dataclass
@@ -16,6 +32,10 @@ class ScrapingResult:
     success: bool
     error_message: Optional[str] = None
     url: Optional[str] = None
+    
+    def __len__(self):
+        """Return the number of products in the result"""
+        return len(self.products)
 
 
 class IHttpClient(ABC):
@@ -42,6 +62,28 @@ class IPriceScraper(ABC):
         pass
 
 
+class ILocationParser(ABC):
+    @abstractmethod
+    def parse_locations(self, html_content: str) -> List[str]:
+        pass
+
+
+class ILocationScraper(ABC):
+    @abstractmethod
+    def scrape_locations_batch(self, timeout: Optional[int] = None) -> LocationScrapingResult:
+        pass
+
+
+class ILocationValidator(ABC):
+    @abstractmethod
+    def validate_html_content(self, html_content: str) -> bool:
+        pass
+    
+    @abstractmethod
+    def validate_locations(self, locations: List[str]) -> bool:
+        pass
+
+
 class HttpClientError(Exception):
     pass
 
@@ -55,4 +97,16 @@ class HtmlParserError(Exception):
 
 
 class ScraperError(Exception):
+    pass
+
+
+class LocationParserError(Exception):
+    pass
+
+
+class LocationScraperError(Exception):
+    pass
+
+
+class LocationValidatorError(Exception):
     pass

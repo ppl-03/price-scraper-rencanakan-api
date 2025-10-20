@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get purge -y --auto-remove build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Playwright browsers
+RUN playwright install
+
 COPY . /app/
 
 EXPOSE 8000
