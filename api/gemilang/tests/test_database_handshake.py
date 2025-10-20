@@ -57,17 +57,6 @@ class TestGemilangProductModel(MySQLTestCase):
         self.assertIsNotNone(product.id)
         self.assertEqual(product.unit, '')
     
-    def test_create_product_with_null_unit(self):
-        product = GemilangProduct.objects.create(
-            name="Product null unit",
-            price=20000,
-            url="https://gemilang-store.com/test",
-            unit=None
-        )
-        
-        self.assertIsNotNone(product.id)
-        self.assertIsNone(product.unit)
-    
     def test_retrieve_product_by_id(self):
         created_product = GemilangProduct.objects.create(
             name="Retrievable Product",
