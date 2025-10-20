@@ -16,7 +16,7 @@ class TestMitra10LocationParser(TestCase):
         """
         self.empty_html = "<div role='presentation'><ul></ul></div>"
         self.malformed_html = "<div role='presentation'><li><span>MITRA10 DEPOK"
-
+    
     def test_parse_valid_html(self):
         result = Mitra10LocationParser.parse(self.valid_html)
         self.assertEqual(result, ["JAKARTA", "BANDUNG", "BALI"])

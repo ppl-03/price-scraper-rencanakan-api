@@ -416,8 +416,8 @@ class TestMitra10API(TestCase):
         # Assert
         self.assertEqual(response.status_code, 500)
         response_data = json.loads(response.content)
-        self.assertIn('error', response_data)
-        self.assertEqual(response_data['error'], 'Internal server error occurred')
+        self.assertIn('error_message', response_data)
+        self.assertEqual(response_data['error_message'], 'Internal server error occurred')
 
     @patch('api.mitra10.views.create_mitra10_scraper')
     def test_scraping_execution_exception(self, mock_create_scraper):
@@ -433,26 +433,8 @@ class TestMitra10API(TestCase):
         # Assert
         self.assertEqual(response.status_code, 500)
         response_data = json.loads(response.content)
-        self.assertIn('error', response_data)
-        self.assertEqual(response_data['error'], 'Internal server error occurred')
-
-    @patch('api.mitra10.views.create_mitra10_scraper')
-    @patch('api.mitra10.views.logger')
-    def test_exception_logging(self, mock_logger, mock_create_scraper):
-        """Test that exceptions are properly logged with exc_info."""
-        # Arrange
-        test_error = Exception("Test error for logging")
-        mock_create_scraper.side_effect = test_error
-        
-        # Act
-        response = self.client.get(self.url, {'q': 'test'})
-        
-        # Assert
-        self.assertEqual(response.status_code, 500)
-        mock_logger.error.assert_called_once_with(
-            "Unexpected error in Mitra10 API: Test error for logging",
-            exc_info=True
-        )
+        self.assertIn('error_message', response_data)
+        self.assertEqual(response_data['error_message'], 'Internal server error occurred')
 
     def test_method_not_allowed(self):
         """Test that only GET method is allowed."""

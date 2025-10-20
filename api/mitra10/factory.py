@@ -6,7 +6,8 @@ from .location_scraper import Mitra10LocationScraper
 from .location_parser import Mitra10LocationParser
 
 def create_mitra10_scraper():
-    http_client = BatchPlaywrightClient()
+    # Pass None as http_client since we handle BatchPlaywrightClient directly in scraper
+    http_client = None
     url_builder = Mitra10UrlBuilder()
     html_parser = Mitra10HtmlParser()
     
