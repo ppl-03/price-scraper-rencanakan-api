@@ -4,6 +4,9 @@ from unittest.mock import patch
 
 from api.config import ScraperConfig, config
 
+# Expected Chrome version in User-Agent for compatibility testing
+EXPECTED_CHROME_VERSION = '120.0.0.0'
+
 
 class TestScraperConfig(unittest.TestCase):
     def test_default_configuration(self):
@@ -23,7 +26,7 @@ class TestScraperConfig(unittest.TestCase):
         
         # Updated to Chrome 120 for better compatibility
         self.assertIn('Mozilla', config_obj.user_agent)
-        self.assertIn('Chrome/120.0.0.0', config_obj.user_agent)
+        self.assertIn(f'Chrome/{EXPECTED_CHROME_VERSION}', config_obj.user_agent)
         self.assertIn('Safari', config_obj.user_agent)
 
     def test_custom_configuration(self):
