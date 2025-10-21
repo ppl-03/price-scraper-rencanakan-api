@@ -123,7 +123,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper.scrape_products.assert_called_once_with(
             keyword='semen',
             sort_by_price=True,
-            page=0
+            page=0,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -191,7 +192,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
             mock_scraper.scrape_products.assert_called_with(
                 keyword='semen',
                 sort_by_price=True,
-                page=0
+                page=0,
+                limit=20
             )
         
         # Test various falsy values
@@ -205,7 +207,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
             mock_scraper.scrape_products.assert_called_with(
                 keyword='semen',
                 sort_by_price=False,
-                page=0
+                page=0,
+                limit=20
             )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -222,7 +225,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper.scrape_products.assert_called_with(
             keyword='semen',
             sort_by_price=True,
-            page=0
+            page=0,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -287,7 +291,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper.scrape_products.assert_called_with(
             keyword='semen & tablet',
             sort_by_price=True,
-            page=0
+            page=0,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -305,7 +310,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper.scrape_products.assert_called_with(
             keyword='semen',
             sort_by_price=True,
-            page=999
+            page=999,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -323,7 +329,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper.scrape_products.assert_called_with(
             keyword='semen',
             sort_by_price=True,
-            page=-1
+            page=-1,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -341,7 +348,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper.scrape_products.assert_called_with(
             keyword='semen',
             sort_by_price=True,
-            page=0
+            page=0,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -399,7 +407,8 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper.scrape_products.assert_called_with(
             keyword='semen',
             sort_by_price=True,
-            page=0
+            page=0,
+            limit=20
         )
 
 
@@ -444,7 +453,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=40000,
             max_price=70000,
-            location='Jakarta'
+            location='Jakarta',
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -464,7 +474,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=50000,
             max_price=None,
-            location=None
+            location=None,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -484,7 +495,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=None,
             max_price=100000,
-            location=None
+            location=None,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -504,7 +516,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=None,
             max_price=None,
-            location='Bandung'
+            location='Bandung',
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -521,7 +534,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=None,
             max_price=None,
-            location=None
+            location=None,
+            limit=20
         )
     
     def test_filters_missing_query_parameter(self):
@@ -581,7 +595,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=None,
             max_price=None,
-            location=None
+            location=None,
+            limit=20
         )
         
         # Test falsy value
@@ -596,7 +611,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=None,
             max_price=None,
-            location=None
+            location=None,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -665,7 +681,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=2,
             min_price=5000000,
             max_price=10000000,
-            location='Surabaya'
+            location='Surabaya',
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -716,7 +733,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=50000,
             max_price=None,
-            location=None
+            location=None,
+            limit=20
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -738,7 +756,8 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
             page=0,
             min_price=0,
             max_price=0,
-            location=None
+            location=None,
+            limit=20
         )
     
     def test_parse_int_param_with_invalid_default(self):
@@ -764,4 +783,83 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result, error = _parse_integer_parameter(request, 'test_param', required=False, default=None)
         self.assertIsNone(result)
         self.assertIsNone(error)
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_scrape_products_exception_handling(self, mock_create_scraper):
+        """Test exception handling in scrape_products endpoint (line 115)"""
+        # Setup mock to raise exception during scraping
+        mock_scraper = MagicMock()
+        mock_create_scraper.return_value = mock_scraper
+        mock_scraper.scrape_products.side_effect = Exception("Unexpected error occurred")
+        
+        response = self.client.get(self.scrape_url, {'q': 'semen'})
+        
+        self._assert_error_response(response, 500, "Tokopedia scraper error: Unexpected error occurred")
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_scrape_products_generic_exception(self, mock_create_scraper):
+        """Test generic exception handling in scrape_products (line 115)"""
+        mock_create_scraper.side_effect = RuntimeError("Factory initialization failed")
+        
+        response = self.client.get(self.scrape_url, {'q': 'semen'})
+        
+        # Should catch and wrap the exception
+        self.assertEqual(response.status_code, 500)
+        response_data = json.loads(response.content)
+        self.assertFalse(response_data['success'])
+        self.assertIn("Factory initialization failed", response_data['error_message'])
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_scrape_with_filters_exception_handling(self, mock_create_scraper):
+        """Test exception handling in scrape_products_with_filters endpoint (line 165)"""
+        # Setup mock to raise exception during scraping
+        mock_scraper = MagicMock()
+        mock_create_scraper.return_value = mock_scraper
+        mock_scraper.scrape_products_with_filters.side_effect = Exception("Network timeout")
+        
+        response = self.client.get(self.scrape_with_filters_url, {'q': 'semen'})
+        
+        self._assert_error_response(response, 500, "Tokopedia scraper with filters error: Network timeout")
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_scrape_with_filters_generic_exception(self, mock_create_scraper):
+        """Test generic exception in scrape_products_with_filters (line 165)"""
+        mock_create_scraper.side_effect = ValueError("Invalid configuration")
+        
+        response = self.client.get(self.scrape_with_filters_url, {'q': 'semen'})
+        
+        # Should catch and wrap the exception
+        self.assertEqual(response.status_code, 500)
+        response_data = json.loads(response.content)
+        self.assertFalse(response_data['success'])
+        self.assertIn("Invalid configuration", response_data['error_message'])
+    
+    def test_parse_integer_with_none_default_and_no_param(self):
+        """Test _parse_integer_parameter returning None when no param and no default (line 61)"""
+        from api.tokopedia.views import _parse_integer_parameter
+        from django.test import RequestFactory
+        
+        factory = RequestFactory()
+        request = factory.get('/test/')  # No parameters
+        
+        # When default is None and param is missing, should return (None, None)
+        result, error = _parse_integer_parameter(request, 'missing_param', default=None, required=False)
+        
+        self.assertIsNone(result)
+        self.assertIsNone(error)
+    
+    def test_parse_integer_with_invalid_default_value(self):
+        """Test _parse_integer_parameter with invalid default that causes ValueError (line 61)"""
+        from api.tokopedia.views import _parse_integer_parameter
+        from django.test import RequestFactory
+        
+        factory = RequestFactory()
+        request = factory.get('/test/')  # No parameters
+        
+        # When default conversion fails with ValueError, should return (None, None)
+        result, error = _parse_integer_parameter(request, 'missing_param', default='invalid', required=False)
+        
+        self.assertIsNone(result)
+        self.assertIsNone(error)
+
 
