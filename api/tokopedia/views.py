@@ -94,7 +94,7 @@ def _format_scrape_result(result) -> dict:
 
 @require_http_methods(["GET"])
 def scrape_products(request):
-    """Scrape products with basic parameters (query, sort, page)"""
+    """Scrape products with basic parameters (query, sort, page, limit)"""
     try:
         # Validate query parameter
         query, error = _validate_query_parameter(request)
@@ -109,12 +109,18 @@ def scrape_products(request):
         if error:
             return error
         
+        # Parse optional limit parameter (default to 20 products)
+        limit, error = _parse_integer_parameter(request, 'limit', default='20', required=False)
+        if error:
+            return error
+        
         # Perform scraping
         scraper = create_tokopedia_scraper()
         result = scraper.scrape_products(
             keyword=query,
             sort_by_price=sort_by_price,
-            page=page
+            page=page,
+            limit=limit
         )
         
         # Format and return response
@@ -129,7 +135,7 @@ def scrape_products(request):
 
 @require_http_methods(["GET"])
 def scrape_products_with_filters(request):
-    """Scrape products with advanced filters (price range, location)"""
+    """Scrape products with advanced filters (price range, location, limit)"""
     try:
         # Validate query parameter
         query, error = _validate_query_parameter(request)
@@ -153,6 +159,11 @@ def scrape_products_with_filters(request):
         if error:
             return error
         
+        # Parse optional limit parameter (default to 20 products)
+        limit, error = _parse_integer_parameter(request, 'limit', default='20', required=False)
+        if error:
+            return error
+        
         # Get location parameter (string, no validation needed)
         location = request.GET.get('location')
         
@@ -164,7 +175,8 @@ def scrape_products_with_filters(request):
             page=page,
             min_price=min_price,
             max_price=max_price,
-            location=location
+            location=location,
+            limit=limit
         )
         
         # Format and return response
