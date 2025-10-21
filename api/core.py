@@ -62,13 +62,21 @@ class BaseHttpClient(IHttpClient):
         try:
             if config.log_requests:
                 logger.info(f"Fetching URL (attempt {attempt + 1}/{self.max_retries}): {url}")
-                logger.debug(f"Request headers: {dict(self.session.headers)}")
+                try:
+                    logger.debug(f"Request headers: {dict(self.session.headers)}")
+                except (TypeError, AttributeError):
+                    # Skip header logging if conversion fails (e.g., in tests with mocks)
+                    pass
             
             response = self.session.get(url, timeout=timeout)
             
             if config.log_requests:
                 logger.info(f"Response status: {response.status_code}")
-                logger.debug(f"Response headers: {dict(response.headers)}")
+                try:
+                    logger.debug(f"Response headers: {dict(response.headers)}")
+                except (TypeError, AttributeError):
+                    # Skip header logging if conversion fails (e.g., in tests with mocks)
+                    pass
             
             response.raise_for_status()
             
