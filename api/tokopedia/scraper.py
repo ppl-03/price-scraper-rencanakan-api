@@ -167,14 +167,19 @@ class TokopediaPriceScraper(BasePriceScraper):
             ScrapingResult with collected products
         """
         all_products = []
-        current_page = start_page
+        # Validate and cap start_page to prevent using user-controlled data in loop bounds
+        MAX_START_PAGE = 100
+        safe_start_page = max(0, min(start_page, MAX_START_PAGE))
+        current_page = safe_start_page
         max_pages = 10  # Safety limit to avoid infinite loops
         # Cap the limit to prevent resource exhaustion from user-controlled data
         MAX_ALLOWED_LIMIT = 1000
         safe_limit = min(limit, MAX_ALLOWED_LIMIT)
+        # Calculate end page using validated start_page
+        end_page = safe_start_page + max_pages
         last_url = None
         
-        while len(all_products) < safe_limit and current_page < (start_page + max_pages):
+        while len(all_products) < safe_limit and current_page < end_page:
             try:
                 url = self.url_builder.build_search_url_with_filters(
                     keyword=keyword,
