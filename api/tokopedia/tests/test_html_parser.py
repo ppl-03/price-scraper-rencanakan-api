@@ -887,9 +887,50 @@ class TestTokopediaHtmlParserIntegration(TestCase):
         
         result = self.parser._try_image_alt_selector(item)
         self.assertIsNone(result)
+    
+    def test_extract_product_url_with_relative_path(self):
+        """Test _extract_product_url with relative path starting with / (line 148)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/semen-gresik">
+            <div data-testid="divProductWrapper"></div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        url = self.parser._extract_product_url(item)
+        self.assertEqual(url, "https://www.tokopedia.com/product/semen-gresik")
+    
+    def test_extract_product_url_with_full_url(self):
+        """Test _extract_product_url with full URL starting with http (line 150)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="https://www.tokopedia.com/product/semen-gresik">
+            <div data-testid="divProductWrapper"></div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        url = self.parser._extract_product_url(item)
+        self.assertEqual(url, "https://www.tokopedia.com/product/semen-gresik")
+    
+    def test_extract_product_url_with_relative_without_slash(self):
+        """Test _extract_product_url with relative path without leading slash (line 152)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="product/semen-gresik">
+            <div data-testid="divProductWrapper"></div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        url = self.parser._extract_product_url(item)
+        self.assertEqual(url, "https://www.tokopedia.com/product/semen-gresik")
 
 
 if __name__ == '__main__':
     unittest.main()
+
+
 
 

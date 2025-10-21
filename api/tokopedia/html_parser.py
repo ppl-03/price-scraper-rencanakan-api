@@ -141,7 +141,8 @@ class TokopediaHtmlParser(IHtmlParser):
         Extract product URL with optimized string operations.
         Uses cached base_url to avoid repeated string concatenation.
         """
-        link = item.select_one(self._link_selector)
+        # Check if item itself is the link, or find link inside
+        link = item if item.get('href') else item.select_one(self._link_selector)
         if link and link.get('href'):
             href = link.get('href', '')
             # Efficient URL construction based on href format
