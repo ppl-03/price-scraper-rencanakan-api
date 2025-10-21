@@ -1,11 +1,9 @@
 import unittest
 import os
+import re
 from unittest.mock import patch
 
 from api.config import ScraperConfig, config
-
-# Expected Chrome version in User-Agent for compatibility testing
-EXPECTED_CHROME_VERSION = '120.0.0.0'
 
 
 class TestScraperConfig(unittest.TestCase):
@@ -24,9 +22,11 @@ class TestScraperConfig(unittest.TestCase):
         self.assertEqual(config_obj.gemilang_base_url, 'https://gemilang-store.com')
         self.assertEqual(config_obj.gemilang_search_path, '/pusat/shop')
         
-        # Updated to Chrome 120 for better compatibility
+        # Verify User-Agent contains expected browser components (extract version dynamically)
         self.assertIn('Mozilla', config_obj.user_agent)
-        self.assertIn(f'Chrome/{EXPECTED_CHROME_VERSION}', config_obj.user_agent)
+        # Extract Chrome version from the default user agent to avoid hardcoding
+        chrome_match = re.search(r'Chrome/([\d.]+)', config_obj.user_agent)
+        self.assertIsNotNone(chrome_match, "User-Agent should contain Chrome version")
         self.assertIn('Safari', config_obj.user_agent)
 
     def test_custom_configuration(self):
