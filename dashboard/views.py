@@ -110,11 +110,11 @@ def _extract_juragan_product_name(card) -> str | None:
         el = card.select_one(sel)
         if el and el.get_text(strip=True):
             return _clean_text(el.get_text(" ", strip=True))
-    
+
     img = card.find("img")
     if img and img.get("alt"):
         return _clean_text(img["alt"])
-    
+
     return None
 
 
@@ -130,12 +130,12 @@ def _extract_juragan_product_price(card) -> int:
     price = _try_primary_juragan_price(card)
     if price > 0:
         return price
-    
+
     # Try secondary price selectors
     price = _try_secondary_juragan_price(card)
     if price > 0:
         return price
-    
+
     # Try currency text fallback
     return _try_currency_text_juragan_price(card)
 
@@ -175,20 +175,20 @@ def _extract_juragan_product_unit(url: str) -> str:
     try:
         if not url:
             return ""
-        
+
         # Handle relative URLs
         if url.startswith('/'):
             url = f"https://juraganmaterial.id{url}"
-        
+
         # Fetch product detail page
         html = _human_get(url)
         soup = BeautifulSoup(html, HTML_PARSER)
-        
+
         # Extract unit using the same CSS selector as the main parser
         unit_element = soup.select_one('html > body > div:nth-of-type(1) > div > main > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1) > p:nth-of-type(2)')
         if unit_element:
             return unit_element.get_text(strip=True)
-        
+
         return ""
     except Exception:
         return ""
@@ -199,24 +199,24 @@ def _extract_depo_product_unit(url: str) -> str:
     try:
         if not url:
             return ""
-        
+
         # Handle relative URLs
         if url.startswith('/'):
             url = f"https://www.depobangunan.com{url}"
-        
+
         # Fetch product detail page
         html = _human_get(url)
         if not html:
             return ""
-        
+
         # Use Depo Bangunan's unit parser to extract unit from detail page
         from api.depobangunan.unit_parser import DepoBangunanUnitParser
         unit_parser = DepoBangunanUnitParser()
-        
+
         # Try to extract unit from the detail page HTML
         unit = unit_parser.parse_unit_from_detail_page(html)
         return unit or ""
-        
+
     except Exception:
         return ""
 
@@ -226,13 +226,58 @@ def _extract_depo_product_unit_from_name(name: str) -> str:
     try:
         if not name:
             return ""
-        
+
         # Use Depo Bangunan's unit parser to extract unit from product name
         from api.depobangunan.unit_parser import DepoBangunanUnitParser
         unit_parser = DepoBangunanUnitParser()
-        
+
         # Try to extract unit from the product name
         unit = unit_parser.parse_unit_from_product_name(name)
+        return unit or ""
+
+    except Exception:
+        return ""
+
+
+def _extract_mitra10_product_unit(url: str) -> str:
+    """Extract product unit from Mitra10 product detail page."""
+    try:
+        if not url:
+            return ""
+        
+        # Handle relative URLs
+        if url.startswith('/'):
+            url = f"https://www.mitra10.com{url}"
+        
+        # Fetch product detail page
+        html = _human_get(url)
+        if not html:
+            return ""
+        
+        # Use Mitra10's unit parser to extract unit from detail page
+        from api.mitra10.unit_parser import Mitra10UnitParser
+        unit_parser = Mitra10UnitParser()
+        
+        # Try to extract unit from the detail page HTML
+        unit = unit_parser.parse_unit(html)
+        return unit or ""
+        
+    except Exception:
+        return ""
+
+
+def _extract_mitra10_product_unit_from_name(name: str) -> str:
+    """Extract product unit from Mitra10 product name."""
+    try:
+        if not name:
+            return ""
+        
+        # Use Mitra10's unit parser to extract unit from product name
+        from api.mitra10.unit_parser import Mitra10UnitExtractor
+        unit_extractor = Mitra10UnitExtractor()
+        
+        # Try to extract unit from the product name
+        unit = unit_extractor.extract_unit(name)
         return unit or ""
         
     except Exception:
@@ -244,20 +289,20 @@ def _extract_juragan_product_location(url: str) -> str:
     try:
         if not url:
             return ""
-        
+
         # Handle relative URLs
         if url.startswith('/'):
             url = f"https://juraganmaterial.id{url}"
-        
+
         # Fetch product detail page
         html = _human_get(url)
         soup = BeautifulSoup(html, HTML_PARSER)
-        
+
         # Extract location using the same CSS selector as the groupmate's parser
         location_element = soup.select_one('#footer-address-link > span:nth-child(2)')
         if location_element:
             return location_element.get_text(strip=True)
-        
+
         return ""
     except Exception:
         return ""
@@ -281,7 +326,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
 
             href = _extract_juragan_product_link(card)
             price = _extract_juragan_product_price(card)
-            
+
             if price <= 0:
                 continue
 
@@ -290,7 +335,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             location = _extract_juragan_product_location(href) if href else ""
 
             out.append({"item": name, "value": price, "unit": unit, "location": location, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
-        
+
         return out, url, len(html)
     except Exception:
         return [], "", 0
@@ -304,12 +349,12 @@ def _extract_depo_product_name(card) -> str | None:
         el = card.select_one(sel)
         if el and el.get_text(strip=True):
             return _clean_text(el.get_text(" ", strip=True))
-    
+
     # Try image alt text fallback
     img = card.find("img")
     if img and img.get("alt"):
         return _clean_text(img["alt"])
-    
+
     return None
 
 
@@ -319,14 +364,14 @@ def _extract_depo_product_link(card) -> str:
     link = card.select_one("strong.product.name.product-item-name a") or \
            card.select_one("strong.product-item-name a") or \
            card.select_one(HREF_SELECTOR)
-    
+
     if link and link.get("href"):
         href = link.get("href")
         # Handle relative URLs
         if href.startswith('/'):
             return f"https://www.depobangunan.com{href}"
         return href
-    
+
     return "https://www.depobangunan.com/"
 
 
@@ -336,17 +381,17 @@ def _extract_depo_product_price(card) -> int:
     price = _try_depo_data_attribute_price(card)
     if price > 0:
         return price
-    
+
     # Try special price
     price = _try_depo_special_price(card)
     if price > 0:
         return price
-    
+
     # Try regular price
     price = _try_depo_regular_price(card)
     if price > 0:
         return price
-    
+
     # Try currency text fallback
     return _try_depo_currency_text_price(card)
 
@@ -414,19 +459,19 @@ def _depo_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
 
             href = _extract_depo_product_link(card)
             price = _extract_depo_product_price(card)
-            
+
             if price <= 0:
                 continue
 
             # Extract unit from product name first (faster)
             unit = _extract_depo_product_unit_from_name(name)
-            
+
             # If no unit found from name, try extracting from detail page
             if not unit and href:
                 unit = _extract_depo_product_unit(href)
 
             out.append({"item": name, "value": price, "unit": unit, "source": DEPO_BANGUNAN_SOURCE, "url": href})
-        
+
         return out, url, len(html)
     except Exception:
         return [], "", 0
@@ -476,22 +521,22 @@ def _extract_price_from_node(node) -> int:
     price = _try_data_attributes_price(node)
     if price > 0:
         return price
-    
+
     # Try specific price classes
     price = _try_specific_price_classes(node)
     if price > 0:
         return price
-    
+
     # Try generic class-based search
     price = _try_generic_price_classes(node)
     if price > 0:
         return price
-    
+
     # Try currency text search
     price = _try_currency_text_price(node)
     if price > 0:
         return price
-    
+
     # Last resort: all text containing numbers
     return _try_numeric_text_price(node)
 
@@ -515,7 +560,7 @@ def _try_specific_price_classes(node) -> int:
         "span.price__final", "p.price__final", 
         ".price-box .price", "span.price", ".price"
     ]
-    
+
     for selector in price_selectors:
         try:
             el = node.select_one(selector)
@@ -588,7 +633,7 @@ def _parse_jsonld_itemlist(data: dict, emit_func):
     """Parse JSON-LD ItemList or SearchResultsPage."""
     if not isinstance(data, dict) or data.get(JSON_LD_TYPE_KEY) not in ("ItemList", "SearchResultsPage"):
         return
-    
+
     elems = data.get("itemListElement") or []
     for e in elems:
         prod = e.get("item") if isinstance(e, dict) else None
@@ -611,7 +656,7 @@ def _parse_jsonld_products(data: dict | list, emit_func):
 def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
     """Parse Mitra10 JSON-LD structured data."""
     out = []
-    
+
     def _emit(name: str | None, price_val: int, href: str | None):
         if not name or price_val <= 0:
             return
@@ -620,7 +665,15 @@ def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
         if key in seen:
             return
         seen.add(key)
-        out.append({"item": _clean_text(name), "value": price_val, "source": MITRA10_SOURCE, "url": full_url})
+        
+        # Extract unit from product name first (faster)
+        unit = _extract_mitra10_product_unit_from_name(name)
+        
+        # If no unit found from name, try extracting from detail page
+        if not unit and full_url:
+            unit = _extract_mitra10_product_unit(full_url)
+        
+        out.append({"item": _clean_text(name), "value": price_val, "unit": unit, "source": MITRA10_SOURCE, "url": full_url})
 
     jsonld_scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
     for script in jsonld_scripts:
@@ -634,7 +687,7 @@ def _process_jsonld_script(script, emit_func):
     raw = (script.string or script.text or "").strip()
     if not raw:
         return
-    
+
     try:
         data = json.loads(raw)
     except Exception:
@@ -681,7 +734,7 @@ def _try_specific_mitra10_selectors(container) -> str | None:
         ".product-name",
         "h3", "h2", "h1"
     ]
-    
+
     for sel in specific_selectors:
         try:
             el = container.select_one(sel)
@@ -711,7 +764,7 @@ def _try_mitra10_link_text(container) -> str | None:
             title = _clean_text(link["title"])
             if len(title) > 3:
                 return title
-        
+
         # Try link text
         link_text = _clean_text(link.get_text())
         if 10 <= len(link_text) <= 200:  # Reasonable product name length
@@ -724,16 +777,16 @@ def _try_mitra10_generic_text(container) -> str | None:
     text_elements = container.find_all(["span", "div", "p"], string=True)
     candidates = []
     skip_terms = ["rp", "price", "buy", "cart"]
-    
+
     for elem in text_elements:
         text = _clean_text(elem.get_text())
         if 10 <= len(text) <= 200 and not any(skip in text.lower() for skip in skip_terms):
             candidates.append(text)
-    
+
     if candidates:
         # Return the longest candidate as it's likely the product name
         return max(candidates, key=len)
-    
+
     return None
 
 
@@ -747,7 +800,7 @@ def _extract_mitra10_product_url(container, request_url: str) -> str:
         "a[href*=\"/catalog/\"]",
         HREF_SELECTOR
     ]
-    
+
     link = None
     for selector in link_selectors:
         try:
@@ -756,7 +809,7 @@ def _extract_mitra10_product_url(container, request_url: str) -> str:
                 break
         except Exception:
             continue
-    
+
     href = link.get("href") if link and link.get("href") else ""
     return urljoin(request_url, href)
 
@@ -773,7 +826,7 @@ def _find_mitra10_containers(soup):
     containers = _try_specific_mitra10_containers(soup)
     if containers:
         return containers
-    
+
     # If no specific containers found, try generic approach
     return _try_generic_mitra10_containers(soup)
 
@@ -787,7 +840,7 @@ def _try_specific_mitra10_containers(soup):
         "[data-product-id]",
         "[data-product-sku]"
     ]
-    
+
     for selector in specific_selectors:
         try:
             test_containers = soup.select(selector)
@@ -802,29 +855,29 @@ def _try_generic_mitra10_containers(soup):
     """Try to find containers using generic approach."""
     containers = []
     all_elements = soup.find_all(["div", "li", "article", "section"])
-    
+
     for elem in all_elements:
         if _is_valid_mitra10_container(elem):
             containers.append(elem)
             # Limit to avoid too many false positives
             if len(containers) >= 50:
                 break
-    
+
     return containers
 
 
 def _is_valid_mitra10_container(elem) -> bool:
     """Check if element is a valid product container."""
     elem_text = elem.get_text(strip=True)
-    
+
     # Skip if too small or too large
     if len(elem_text) < 10 or len(elem_text) > 1000:
         return False
-        
+
     # Must have a link
     if not elem.find_all("a", href=True):
         return False
-        
+
     # Must have price-like content
     price_indicators = ["rp", "idr", "price", "harga"]
     return any(indicator in elem_text.lower() for indicator in price_indicators)
@@ -833,19 +886,19 @@ def _is_valid_mitra10_container(elem) -> bool:
 def _process_mitra10_containers(containers, request_url: str, seen: set) -> list[dict]:
     """Process found containers and extract product data."""
     out = []
-    
+
     for container in containers:
         product_data = _extract_mitra10_product_data(container, request_url)
         if not product_data:
             continue
-            
+
         key = product_data["url"] or (product_data["item"], product_data["value"])
         if key in seen:
             continue
         seen.add(key)
-        
+
         out.append(product_data)
-    
+
     return out
 
 
@@ -857,11 +910,18 @@ def _extract_mitra10_product_data(container, request_url: str) -> dict | None:
 
     full_url = _extract_mitra10_product_url(container, request_url)
     price = _extract_price_from_node(container)
-    
+
     if price <= 0:
         return None
 
-    return {"item": name, "value": price, "source": MITRA10_SOURCE, "url": full_url}
+    # Extract unit from product name first (faster)
+    unit = _extract_mitra10_product_unit_from_name(name)
+    
+    # If no unit found from name, try extracting from detail page
+    if not unit and full_url:
+        unit = _extract_mitra10_product_unit(full_url)
+
+    return {"item": name, "value": price, "unit": unit, "source": MITRA10_SOURCE, "url": full_url}
 
 
 def _parse_mitra10_html(html: str, request_url: str) -> list[dict]:
@@ -931,15 +991,15 @@ def _try_playwright_mitra10(keyword: str, fallback_url: str):
     """Try Mitra10 with Playwright for JavaScript rendering."""
     if not HAS_PLAYWRIGHT:
         return [], fallback_url, 0
-    
+
     simple_url = f"https://www.mitra10.com/catalogsearch/result?q={keyword}"
     html_js = _fetch_with_playwright(simple_url, wait_selector="div", timeout_ms=15000)
-    
+
     if html_js and len(html_js) > len(_human_get(simple_url)):  # Got more content with JS
         prods_js = _parse_mitra10_html(html_js, simple_url)
         if prods_js:
             return prods_js, simple_url, len(html_js)
-    
+
     return [], fallback_url, 0
 
 
@@ -948,13 +1008,13 @@ def _try_complex_mitra10_url(keyword: str, sort_by_price: bool, page: int, fallb
     urlb = Mitra10UrlBuilder()
     url1 = _build_url_defensively(urlb, keyword, sort_by_price, page)
     simple_url = f"https://www.mitra10.com/catalogsearch/result?q={keyword}"
-    
+
     if url1 != simple_url:  # Only if different from simple URL
         html2 = _human_get(url1)
         prods2 = _parse_mitra10_html(html2, url1)
         if prods2:
             return prods2, url1, len(html2)
-    
+
     return [], fallback_url, 0
 
 
@@ -964,7 +1024,7 @@ def _try_alternative_mitra10_urls(keyword: str):
         f"https://www.mitra10.com/search?q={keyword}",
         f"https://www.mitra10.com/catalog/search/?q={keyword}",
     ]
-    
+
     for alt_url in alt_urls:
         try:
             html_alt = _human_get(alt_url)
@@ -973,7 +1033,7 @@ def _try_alternative_mitra10_urls(keyword: str):
                 return prods_alt, alt_url, len(html_alt)
         except Exception:
             continue
-    
+
     return [], "", 0
 
 
@@ -984,12 +1044,12 @@ def _extract_tokopedia_product_name(card) -> str | None:
     name = _try_primary_tokopedia_name(card)
     if name:
         return name
-    
+
     # Try fallback selectors
     name = _try_fallback_tokopedia_name(card)
     if name:
         return name
-    
+
     # Try image alt text
     return _try_tokopedia_image_alt(card)
 
@@ -1031,12 +1091,12 @@ def _extract_tokopedia_product_price(card) -> int:
     price = _try_primary_tokopedia_price(card)
     if price > 0:
         return price
-    
+
     # Try secondary price selectors
     price = _try_secondary_tokopedia_price(card)
     if price > 0:
         return price
-    
+
     # Try currency text fallback
     return _try_currency_text_tokopedia_price(card)
 
@@ -1080,16 +1140,16 @@ def _clean_tokopedia_price(price_text: str) -> int:
     """Clean Tokopedia price string and convert to integer."""
     if not price_text:
         return 0
-    
+
     try:
         # Remove whitespace and normalize
         price_text = price_text.strip()
-        
+
         # Extract price using regex (Tokopedia format: Rp62.500)
         import re
         price_pattern = re.compile(r'Rp\s*([\d,\.]+)', re.IGNORECASE)
         match = price_pattern.search(price_text)
-        
+
         if not match:
             # Fallback: try to extract just numbers
             number_pattern = re.compile(r'[\d,\.]+')
@@ -1099,14 +1159,14 @@ def _clean_tokopedia_price(price_text: str) -> int:
             price_text = number_match.group()
         else:
             price_text = match.group(1)
-        
+
         # Remove separators and convert to integer
         # Tokopedia uses dots as thousand separators
         clean_price = price_text.replace(',', '').replace('.', '')
-        
+
         # Convert to integer
         return int(clean_price)
-        
+
     except (ValueError, AttributeError):
         return 0
 
@@ -1117,22 +1177,21 @@ def _extract_tokopedia_product_link(card) -> str:
     link = card.select_one('a[data-testid="lnkProductContainer"]')
     if link and link.get("href"):
         return link.get("href")
-    
+
     # Try fallback link selectors
     for sel in ['a[href*="/p/"]', 'a[href*="/product/"]', HREF_SELECTOR]:
         link = card.select_one(sel)
         if link and link.get("href"):
             return link.get("href")
-    
+
     return "https://www.tokopedia.com/p/pertukangan/material-bangunan"
 
 
 def _tokopedia_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
     """
-    Enhanced Tokopedia fallback with better handling for JavaScript-heavy sites:
+    Tokopedia fallback: Only use HTTP-based scraping, do not use Playwright.
     1) Try simple GET request first
-    2) If no products found, try Playwright with JavaScript rendering
-    3) Try alternative URL patterns
+    2) Try alternative URL patterns if no products found
     """
     try:
         # First attempt: Simple URL
@@ -1140,17 +1199,12 @@ def _tokopedia_fallback(keyword: str, sort_by_price: bool = True, page: int = 0)
         if prods:
             return prods, url, html_len
 
-        # Second attempt: Try with Playwright if available
-        prods, url, html_len = _try_playwright_tokopedia(keyword, url)
-        if prods:
-            return prods, url, html_len
-
-        # Third attempt: Try alternative URLs
+        # Second attempt: Try alternative URLs
         prods, url, html_len = _try_alternative_tokopedia_urls(keyword)
         if prods:
             return prods, url, html_len
 
-        # Return the best attempt we made
+        # Return empty if nothing found
         return [], url, html_len
     except Exception:
         return [], "", 0
@@ -1164,20 +1218,6 @@ def _try_simple_tokopedia_url(keyword: str, sort_by_price: bool = True, page: in
     return prods, url, len(html)
 
 
-def _try_playwright_tokopedia(keyword: str, fallback_url: str):
-    """Try Tokopedia with Playwright for JavaScript rendering."""
-    if not HAS_PLAYWRIGHT:
-        return [], fallback_url, 0
-    
-    url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price=True, page=0)
-    html_js = _fetch_with_playwright(url, wait_selector='div[data-testid="divProductWrapper"]', timeout_ms=15000)
-    
-    if html_js and len(html_js) > len(_human_get(url)):  # Got more content with JS
-        prods_js = _parse_tokopedia_html(html_js)
-        if prods_js:
-            return prods_js, url, len(html_js)
-    
-    return [], fallback_url, 0
 
 
 def _try_alternative_tokopedia_urls(keyword: str):
@@ -1186,7 +1226,7 @@ def _try_alternative_tokopedia_urls(keyword: str):
         f"https://www.tokopedia.com/search?st=product&q={keyword}",
         f"https://www.tokopedia.com/p/pertukangan/material-bangunan?q={keyword}",
     ]
-    
+
     for alt_url in alt_urls:
         try:
             html_alt = _human_get(alt_url)
@@ -1195,7 +1235,7 @@ def _try_alternative_tokopedia_urls(keyword: str):
                 return prods_alt, alt_url, len(html_alt)
         except Exception:
             continue
-    
+
     return [], "", 0
 
 
@@ -1225,9 +1265,9 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
             continue
 
         href = _extract_tokopedia_product_link(card)
-        
+
         out.append({"item": name, "value": price, "source": TOKOPEDIA_SOURCE, "url": href})
-    
+
     return out
 
 
@@ -1239,7 +1279,7 @@ def _handle_successful_scrape(request, res, label: str, url: str, html_len: int)
         # Include unit and location when available
         unit = getattr(p, "unit", None)
         location = getattr(p, "location", None)
-        
+
         product_data = {
             "item": p.name,
             "value": p.price,
@@ -1247,11 +1287,11 @@ def _handle_successful_scrape(request, res, label: str, url: str, html_len: int)
             "source": label,
             "url": getattr(p, "url", "")
         }
-        
+
         # Add location if available
         if location:
             product_data["location"] = location
-            
+
         rows.append(product_data)
     messages.info(request, f"[{label}] URL: {url} | HTML: {html_len} bytes | parsed={len(rows)}")
     return rows
@@ -1296,13 +1336,13 @@ def _execute_vendor_scraping(request, keyword: str, maker, label: str, fallback)
     scraper, urlb = maker()
     url = _build_url_defensively(urlb, keyword, sort_by_price=True, page=0)
     html_len = _fetch_len(url)
-    
+
     # Handle BatchPlaywrightClient context manager issue
     res = _safe_scrape_products(scraper, keyword, sort_by_price=True, page=0)
 
     if getattr(res, "success", False) and getattr(res, "products", None):
         return _handle_successful_scrape(request, res, label, url, html_len)
-    
+
     if fallback:
         return _handle_fallback_scrape(request, keyword, label, fallback, url, html_len)
     else:
@@ -1328,7 +1368,7 @@ def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, pag
     Safely handle scraping with proper context manager usage for BatchPlaywrightClient-based scrapers.
     """
     from api.playwright_client import BatchPlaywrightClient
-    
+
     # Check if this scraper uses BatchPlaywrightClient
     if hasattr(scraper, 'http_client') and isinstance(scraper.http_client, BatchPlaywrightClient):
         return _handle_playwright_scraper(scraper, keyword, sort_by_price, page)
@@ -1341,7 +1381,7 @@ def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page:
     """Handle scraping for BatchPlaywrightClient-based scrapers."""
     from api.playwright_client import BatchPlaywrightClient
     from api.interfaces import ScrapingResult
-    
+
     try:
         # Try to use scrape_batch method if available (like Mitra10)
         if hasattr(scraper, 'scrape_batch'):
@@ -1356,7 +1396,7 @@ def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page:
 def _handle_playwright_scraper_fallback(scraper, keyword: str, sort_by_price: bool, page: int):
     """Fallback handling for Playwright scrapers without scrape_batch."""
     from api.playwright_client import BatchPlaywrightClient
-    
+
     # Fallback: recreate scraper with context manager
     with BatchPlaywrightClient() as batch_client:
         # Temporarily replace the http_client
@@ -1400,7 +1440,7 @@ def _run_location_scraper(request, scraper_func, label: str) -> list[dict]:
 def _execute_location_scraping(request, scraper_func, label: str) -> list[dict]:
     """Execute the main location scraping logic."""
     scraper = scraper_func()
-    
+
     # Try the expected interface method first
     if hasattr(scraper, 'scrape_locations_batch'):
         result = scraper.scrape_locations_batch()
@@ -1410,7 +1450,7 @@ def _execute_location_scraping(request, scraper_func, label: str) -> list[dict]:
     else:
         messages.error(request, f"[{label}] No valid scrape method found")
         return []
-    
+
     if getattr(result, "success", False) and getattr(result, "locations", None):
         return _format_location_results(result.locations, label)
     else:
@@ -1465,7 +1505,7 @@ def _get_gemilang_fallback_locations() -> list[dict]:
         {"name": "Gemilang Store Depok", "address": "Depok, Jawa Barat"},
         {"name": "Gemilang Store Tangerang", "address": "Tangerang, Banten"},
     ]
-    
+
     locations = []
     for loc_data in fallback_locations:
         locations.append({
@@ -1487,7 +1527,7 @@ def _get_depo_fallback_locations() -> list[dict]:
         {"name": "Depo Bangunan Makassar", "address": "Makassar, Sulawesi Selatan"},
         {"name": "Depo Bangunan Denpasar", "address": "Denpasar, Bali"},
     ]
-    
+
     locations = []
     for loc_data in fallback_locations:
         locations.append({
@@ -1510,7 +1550,7 @@ def _execute_mitra10_location_scraping(request) -> list[dict]:
     """Execute Mitra10 location scraping logic."""
     scraper = create_mitra10_location_scraper()
     result = scraper.scrape_locations()
-    
+
     # Handle dictionary response (Mitra10 returns a dict, not an object)
     if isinstance(result, dict) and result.get("success", False) and result.get("locations"):
         return _format_mitra10_locations(result["locations"])
@@ -1535,7 +1575,7 @@ def _format_mitra10_locations(location_names: list) -> list[dict]:
 def _handle_mitra10_scraping_failure(request, result) -> list[dict]:
     """Handle failed Mitra10 scraping with appropriate error messages."""
     error_msg = result.get("error_message", UNKNOWN_ERROR_MSG) if isinstance(result, dict) else UNKNOWN_ERROR_MSG
-    
+
     # Handle specific error types with appropriate fallbacks
     if "timeout" in error_msg.lower() or "exceeded" in error_msg.lower():
         messages.warning(request, f"[{MITRA10_SOURCE}] Website loading slowly, using cached locations")
@@ -1543,7 +1583,7 @@ def _handle_mitra10_scraping_failure(request, result) -> list[dict]:
         messages.warning(request, f"[{MITRA10_SOURCE}] Browser connection issue, using cached locations")
     else:
         messages.warning(request, f"[{MITRA10_SOURCE}] Cannot load live locations, using cached locations")
-    
+
     return _get_mitra10_fallback_locations()
 
 
@@ -1551,13 +1591,13 @@ def _handle_mitra10_scraping_exception(request, error: Exception) -> list[dict]:
     """Handle exceptions during Mitra10 location scraping."""
     error_str = str(error)
     error_keywords = ["timeout", "exceeded", CONTEXT_MANAGER_ERROR, "batchplaywrightclient"]
-    
+
     # Handle specific error types with appropriate fallbacks
     if any(keyword in error_str.lower() for keyword in error_keywords):
         messages.warning(request, f"[{MITRA10_SOURCE}] Connection issue, using cached locations")
     else:
         messages.warning(request, f"[{MITRA10_SOURCE}] Cannot load live locations, using cached locations")
-    
+
     return _get_mitra10_fallback_locations()
 
 
@@ -1577,7 +1617,7 @@ def _get_mitra10_fallback_locations() -> list[dict]:
         "Surabaya",
         "Makassar"
     ]
-    
+
     locations = []
     for location_name in fallback_locations:
         locations.append({
@@ -1603,7 +1643,7 @@ def _scrape_all_vendors(request, keyword: str) -> list[dict]:
 def _collect_vendor_locations(request, prices: list[dict]) -> dict:
     """Collect location data for vendors that have prices."""
     locations_data = {}
-    
+
     # Gemilang locations
     gemilang_has_prices = any(p.get("source") == GEMILANG_SOURCE for p in prices)
     if gemilang_has_prices:
@@ -1660,7 +1700,7 @@ def _get_juragan_material_locations(prices: list[dict]) -> list[dict]:
     """Get Juragan Material location data from product prices."""
     juragan_locations = []
     unique_locations = set()
-    
+
     # Extract unique locations from Juragan Material products
     for price in prices:
         if price.get("source") == JURAGAN_MATERIAL_SOURCE:
@@ -1672,7 +1712,7 @@ def _get_juragan_material_locations(prices: list[dict]) -> list[dict]:
                     "address": location,
                     "source": JURAGAN_MATERIAL_SOURCE
                 })
-    
+
     # If no locations found in products, provide fallback locations
     if not juragan_locations:
         juragan_locations = [
@@ -1692,7 +1732,7 @@ def _get_juragan_material_locations(prices: list[dict]) -> list[dict]:
                 "source": JURAGAN_MATERIAL_SOURCE
             }
         ]
-    
+
     return juragan_locations
 
 
@@ -1717,22 +1757,22 @@ def _clean_and_dedupe_prices(prices: list[dict]) -> list[dict]:
     """Clean unrealistic prices and remove duplicates."""
     # Filter out unrealistic prices
     prices = [p for p in prices if p.get("value") and p["value"] >= 100]
-    
+
     # Deduplicate
     uniq = {}
     for p in prices:
         k = (p.get("source"), p.get("url") or "", p.get("item"), p.get("value"))
         if k not in uniq:
             uniq[k] = p
-    
+
     prices = list(uniq.values())
-    
+
     # Sort by price
     try:
         prices.sort(key=lambda x: (x["value"] is None, x["value"]))
     except Exception:
         pass
-    
+
     return prices
 
 
@@ -1740,16 +1780,16 @@ def _clean_and_dedupe_prices(prices: list[dict]) -> list[dict]:
 @require_GET
 def home(request):
     keyword = request.GET.get("q", "semen")
-    
+
     # Scrape prices from all vendors
     prices = _scrape_all_vendors(request, keyword)
-    
+
     # Collect location data for vendors with prices
     locations_data = _collect_vendor_locations(request, prices)
-    
+
     # Add location info to prices
     prices = _add_location_info_to_prices(prices, locations_data)
-    
+
     # Clean and deduplicate prices
     prices = _clean_and_dedupe_prices(prices)
 
@@ -1852,4 +1892,3 @@ def curated_price_from_scrape(request):
         "url": request.POST.get("url") or "",
     }
     form = ItemPriceProvinceForm(initial=initial)
-    return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Save Price from Scrape", "form": form})
