@@ -3,6 +3,15 @@ from django.views.decorators.http import require_http_methods
 from typing import Optional, Tuple
 from .factory import create_tokopedia_scraper
 
+# Constants
+DEFAULT_LIMIT = '20'
+DEFAULT_PAGE = '0'
+DEFAULT_SORT_BY_PRICE = 'true'
+MAX_LIMIT = 1000
+MIN_LIMIT = 1
+MIN_PAGE = 0
+MIN_PRICE = 0
+
 
 def _create_error_response(error_message: str, status: int = 400) -> JsonResponse:
     """Create a standardized error response"""
@@ -34,20 +43,46 @@ def _validate_query_parameter(request) -> Tuple[Optional[str], Optional[JsonResp
     return query.strip(), None
 
 
-def _parse_boolean_parameter(request, param_name: str, default: str = 'true') -> bool:
+def _parse_boolean_parameter(request, param_name: str, default: str = DEFAULT_SORT_BY_PRICE) -> bool:
     """Parse a boolean parameter from request"""
     param_value = request.GET.get(param_name, default).lower()
     return param_value in ['true', '1', 'yes']
+
+
+def _validate_integer_range(value: int, param_name: str, min_value: Optional[int], 
+                           max_value: Optional[int]) -> Optional[JsonResponse]:
+    """Validate integer is within allowed range"""
+    if min_value is not None and value < min_value:
+        return _create_error_response(f'{param_name} must be at least {min_value}')
+    if max_value is not None and value > max_value:
+        return _create_error_response(f'{param_name} must not exceed {max_value}')
+    return None
+
+
+def _parse_default_value(default: str, min_value: Optional[int], 
+                         max_value: Optional[int]) -> Optional[int]:
+    """Parse and clamp default value"""
+    try:
+        value = int(default)
+        if min_value is not None and value < min_value:
+            value = min_value
+        if max_value is not None and value > max_value:
+            value = max_value
+        return value
+    except ValueError:
+        return None
 
 
 def _parse_integer_parameter(
     request, 
     param_name: str, 
     default: Optional[str] = None, 
-    required: bool = False
+    required: bool = False,
+    min_value: Optional[int] = None,
+    max_value: Optional[int] = None
 ) -> Tuple[Optional[int], Optional[JsonResponse]]:
     """
-    Parse an integer parameter from request
+    Parse an integer parameter from request with optional range validation
     
     Returns:
         Tuple of (integer_value, error_response)
@@ -59,16 +94,17 @@ def _parse_integer_parameter(
     if param_value is None:
         if required:
             return None, _create_error_response(f'{param_name} parameter is required')
-        # Use default if provided, otherwise return None
         if default is not None:
-            try:
-                return int(default), None
-            except ValueError:
-                return None, None
+            value = _parse_default_value(default, min_value, max_value)
+            return value, None
         return None, None
     
     try:
-        return int(param_value), None
+        value = int(param_value)
+        error = _validate_integer_range(value, param_name, min_value, max_value)
+        if error:
+            return None, error
+        return value, None
     except ValueError:
         return None, _create_error_response(
             f'{param_name} parameter must be a valid integer'
@@ -102,15 +138,17 @@ def scrape_products(request):
             return error
         
         # Parse sort_by_price parameter
-        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', 'true')
+        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', DEFAULT_SORT_BY_PRICE)
         
         # Parse page parameter
-        page, error = _parse_integer_parameter(request, 'page', '0')
+        page, error = _parse_integer_parameter(request, 'page', DEFAULT_PAGE, min_value=MIN_PAGE)
         if error:
             return error
         
-        # Parse optional limit parameter (default to 20 products)
-        limit, error = _parse_integer_parameter(request, 'limit', default='20', required=False)
+        # Parse optional limit parameter (default to 20 products, max 1000 for security)
+        limit, error = _parse_integer_parameter(
+            request, 'limit', default=DEFAULT_LIMIT, required=False, min_value=MIN_LIMIT, max_value=MAX_LIMIT
+        )
         if error:
             return error
         
@@ -143,24 +181,26 @@ def scrape_products_with_filters(request):
             return error
         
         # Parse sort_by_price parameter
-        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', 'true')
+        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', DEFAULT_SORT_BY_PRICE)
         
         # Parse page parameter
-        page, error = _parse_integer_parameter(request, 'page', '0')
+        page, error = _parse_integer_parameter(request, 'page', DEFAULT_PAGE, min_value=MIN_PAGE)
         if error:
             return error
         
         # Parse optional price filter parameters
-        min_price, error = _parse_integer_parameter(request, 'min_price', required=False)
+        min_price, error = _parse_integer_parameter(request, 'min_price', required=False, min_value=MIN_PRICE)
         if error:
             return error
         
-        max_price, error = _parse_integer_parameter(request, 'max_price', required=False)
+        max_price, error = _parse_integer_parameter(request, 'max_price', required=False, min_value=MIN_PRICE)
         if error:
             return error
         
-        # Parse optional limit parameter (default to 20 products)
-        limit, error = _parse_integer_parameter(request, 'limit', default='20', required=False)
+        # Parse optional limit parameter (default to 20 products, max 1000 for security)
+        limit, error = _parse_integer_parameter(
+            request, 'limit', default=DEFAULT_LIMIT, required=False, min_value=MIN_LIMIT, max_value=MAX_LIMIT
+        )
         if error:
             return error
         

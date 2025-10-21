@@ -169,9 +169,12 @@ class TokopediaPriceScraper(BasePriceScraper):
         all_products = []
         current_page = start_page
         max_pages = 10  # Safety limit to avoid infinite loops
+        # Cap the limit to prevent resource exhaustion from user-controlled data
+        MAX_ALLOWED_LIMIT = 1000
+        safe_limit = min(limit, MAX_ALLOWED_LIMIT)
         last_url = None
         
-        while len(all_products) < limit and current_page < (start_page + max_pages):
+        while len(all_products) < safe_limit and current_page < (start_page + max_pages):
             try:
                 url = self.url_builder.build_search_url_with_filters(
                     keyword=keyword,
@@ -200,9 +203,9 @@ class TokopediaPriceScraper(BasePriceScraper):
                 logger.error(f"Error fetching page {current_page}: {str(e)}")
                 break
         
-        # Trim to the exact limit
-        if len(all_products) > limit:
-            all_products = all_products[:limit]
+        # Trim to the exact limit requested by user (but not exceeding safe_limit)
+        if len(all_products) > safe_limit:
+            all_products = all_products[:safe_limit]
         
         return ScrapingResult(
             products=all_products,

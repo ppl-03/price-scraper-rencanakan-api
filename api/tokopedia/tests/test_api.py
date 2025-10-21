@@ -316,6 +316,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_negative_page_number(self, mock_create_scraper):
+        """Test that negative page numbers are rejected for security"""
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
@@ -325,13 +326,14 @@ class TokopediaAPITest(BaseTokopediaAPITest):
             'page': '-1'
         })
         
-        self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_products.assert_called_with(
-            keyword='semen',
-            sort_by_price=True,
-            page=-1,
-            limit=20
-        )
+        # Should reject negative page numbers with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must be at least 0', response_data['error_message'])
+        # Scraper should not be called with invalid input
+        mock_scraper.scrape_products.assert_not_called()
+    
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_zero_page_number(self, mock_create_scraper):
@@ -350,6 +352,80 @@ class TokopediaAPITest(BaseTokopediaAPITest):
             sort_by_price=True,
             page=0,
             limit=20
+        )
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_limit_exceeds_maximum(self, mock_create_scraper):
+        """Test that limit values exceeding 1000 are rejected for security"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_url, {
+            'q': 'semen',
+            'limit': '5000'  # Exceeds max of 1000
+        })
+        
+        # Should reject excessive limits with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must not exceed 1000', response_data['error_message'])
+        mock_scraper.scrape_products.assert_not_called()
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_limit_zero_rejected(self, mock_create_scraper):
+        """Test that zero limit is rejected"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_url, {
+            'q': 'semen',
+            'limit': '0'
+        })
+        
+        # Should reject zero limit with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must be at least 1', response_data['error_message'])
+        mock_scraper.scrape_products.assert_not_called()
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_limit_negative_rejected(self, mock_create_scraper):
+        """Test that negative limits are rejected"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_url, {
+            'q': 'semen',
+            'limit': '-10'
+        })
+        
+        # Should reject negative limit with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must be at least 1', response_data['error_message'])
+        mock_scraper.scrape_products.assert_not_called()
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_limit_at_maximum_allowed(self, mock_create_scraper):
+        """Test that limit at exactly 1000 is accepted"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_url, {
+            'q': 'semen',
+            'limit': '1000'  # Exactly at max
+        })
+        
+        # Should accept limit at maximum
+        self.assertEqual(response.status_code, 200)
+        mock_scraper.scrape_products.assert_called_with(
+            keyword='semen',
+            sort_by_price=True,
+            page=0,
+            limit=1000
         )
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -861,5 +937,77 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         
         self.assertIsNone(result)
         self.assertIsNone(error)
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_filters_limit_exceeds_maximum(self, mock_create_scraper):
+        """Test that limit values exceeding 1000 are rejected for security in filters endpoint"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_with_filters_url, {
+            'q': 'semen',
+            'limit': '2000'  # Exceeds max of 1000
+        })
+        
+        # Should reject excessive limits with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must not exceed 1000', response_data['error_message'])
+        mock_scraper.scrape_products_with_filters.assert_not_called()
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_filters_negative_page(self, mock_create_scraper):
+        """Test that negative page numbers are rejected in filters endpoint"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_with_filters_url, {
+            'q': 'semen',
+            'page': '-5'
+        })
+        
+        # Should reject negative page with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must be at least 0', response_data['error_message'])
+        mock_scraper.scrape_products_with_filters.assert_not_called()
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_filters_negative_min_price(self, mock_create_scraper):
+        """Test that negative min_price is rejected"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_with_filters_url, {
+            'q': 'semen',
+            'min_price': '-1000'
+        })
+        
+        # Should reject negative price with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must be at least 0', response_data['error_message'])
+        mock_scraper.scrape_products_with_filters.assert_not_called()
+    
+    @patch('api.tokopedia.views.create_tokopedia_scraper')
+    def test_filters_negative_max_price(self, mock_create_scraper):
+        """Test that negative max_price is rejected"""
+        result = self._create_mock_result()
+        mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
+        
+        response = self.client.get(self.scrape_with_filters_url, {
+            'q': 'semen',
+            'max_price': '-5000'
+        })
+        
+        # Should reject negative price with 400 Bad Request
+        self.assertEqual(response.status_code, 400)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('must be at least 0', response_data['error_message'])
+        mock_scraper.scrape_products_with_filters.assert_not_called()
 
 
