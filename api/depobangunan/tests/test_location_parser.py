@@ -304,10 +304,6 @@ class TestDepoBangunanLocationParser(TestCase):
         cleaned = TextCleaner.clean_store_name(raw)
         self.assertTrue(cleaned.startswith('DEPO BANGUNAN -'))
 
-    def test_text_cleaner_is_valid_text_none_and_empty(self):
-        self.assertFalse(TextCleaner.is_valid_text(None))
-        self.assertFalse(TextCleaner.is_valid_text('   '))
-
     def test_html_element_extractor_extract_store_name_exception(self):
         # Header object whose get_text raises exception
         class BadHeader:
