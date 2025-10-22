@@ -1915,3 +1915,8 @@ def curated_price_from_scrape(request):
         "url": request.POST.get("url") or "",
     }
     form = ItemPriceProvinceForm(initial=initial)
+    return render(request, DASHBOARD_FORM_TEMPLATE, {
+        "title": "Save Price from Scrape", 
+        "form": form,
+        "form_action": reverse("curated_price_create_post")
+    })
