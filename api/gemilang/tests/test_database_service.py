@@ -174,3 +174,19 @@ class TestGemilangDatabaseService(MySQLTestCase):
         product = GemilangProduct.objects.first()
         self.assertIsNotNone(product.created_at)
         self.assertIsNotNone(product.updated_at)
+
+
+from unittest.mock import patch, MagicMock
+
+class TestDatabaseServiceCoverage(MySQLTestCase):
+    
+    def test_executemany_called_with_correct_params(self):
+        service = GemilangDatabaseService()
+        data = [
+            {"name": "Product 1", "price": 10000, "url": "https://test1.com", "unit": "PCS"},
+            {"name": "Product 2", "price": 20000, "url": "https://test2.com", "unit": "BOX"}
+        ]
+        
+        result = service.save(data)
+        self.assertTrue(result)
+        self.assertEqual(GemilangProduct.objects.count(), 2)

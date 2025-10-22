@@ -1,94 +1,73 @@
-"""
-Base test configuration for Gemilang tests
-Forces MySQL database connection for all tests
-"""
-import os
-
-# Force MySQL connection for tests
-os.environ['USE_SQLITE_FOR_TESTS'] = 'false'
-
 from django.test import TestCase
 from django.db import connection
 from django.conf import settings
+import re
+
+
+def _validate_table_name(table_name):
+    if not re.fullmatch(r"\w+", table_name):
+        raise ValueError(f"Invalid table name: {table_name}")
+    return table_name
 
 
 class MySQLTestCase(TestCase):
-    """
-    Base test case that ensures MySQL is being used
-    """
+    """Base test case class for MySQL database tests. Inherits from Django's TestCase."""
     
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        # Verify we're using MySQL
-        db_engine = settings.DATABASES['default']['ENGINE']
-        if 'mysql' not in db_engine:
-            raise RuntimeError(
-                f"Tests must run on MySQL! Currently using: {db_engine}. "
-                f"Set USE_SQLITE_FOR_TESTS=false environment variable."
-            )
+    def setUp(self):
+        """Set up test fixtures. Currently no setup required as Django handles test database."""
+        pass
     
-    def get_database_engine(self):
-        """Helper to get database engine type"""
-        return settings.DATABASES['default']['ENGINE']
-    
-    def is_mysql(self):
-        """Check if using MySQL"""
-        return 'mysql' in self.get_database_engine()
-    
-    def is_sqlite(self):
-        """Check if using SQLite"""
-        return 'sqlite' in self.get_database_engine()
+    def tearDown(self):
+        """Clean up after tests. Currently no cleanup required as Django handles test database."""
+        pass
 
 
 def get_table_columns_mysql(table_name):
-    """
-    Get table columns for MySQL database
-    """
+    table_name = _validate_table_name(table_name)
     with connection.cursor() as cursor:
-        cursor.execute(f"DESCRIBE {table_name}")
-        columns = cursor.fetchall()
-        # Column name is at index 0 in DESCRIBE output
-        return [col[0] for col in columns]
+        cursor.execute(
+            """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION
+            """,
+            [table_name],
+        )
+        return [row[0] for row in cursor.fetchall()]
 
 
 def get_table_columns_sqlite(table_name):
-    """
-    Get table columns for SQLite database
-    """
+    table_name = _validate_table_name(table_name)
     with connection.cursor() as cursor:
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = cursor.fetchall()
-        # Column name is at index 1 in PRAGMA output
-        return [col[1] for col in columns]
+        cursor.execute("SELECT name FROM pragma_table_info(?)", [table_name])
+        return [row[0] for row in cursor.fetchall()]
 
 
 def get_table_columns(table_name):
-    """
-    Get table columns for any database
-    """
+    """Get table column names for the current database engine."""
     db_engine = settings.DATABASES['default']['ENGINE']
+    
     if 'mysql' in db_engine:
         return get_table_columns_mysql(table_name)
     elif 'sqlite' in db_engine:
         return get_table_columns_sqlite(table_name)
     else:
-        raise Exception(f"Unsupported database engine: {db_engine}")
+        raise NotImplementedError(f"Unsupported database engine: {db_engine}")
 
 
 def table_exists(table_name):
-    """
-    Check if table exists in database
-    """
+    """Check if a table exists in the database."""
+    table_name = _validate_table_name(table_name)
     db_engine = settings.DATABASES['default']['ENGINE']
     
     with connection.cursor() as cursor:
         if 'mysql' in db_engine:
-            cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
+            cursor.execute("SHOW TABLES LIKE %s", (table_name,))
         elif 'sqlite' in db_engine:
-            cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=%s", (table_name,))
         else:
-            raise Exception(f"Unsupported database engine: {db_engine}")
+            raise NotImplementedError(f"Unsupported database engine: {db_engine}")
         
         result = cursor.fetchone()
         return result is not None

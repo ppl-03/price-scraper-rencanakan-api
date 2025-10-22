@@ -6,13 +6,16 @@ class GemilangTableValidator:
         
         with connection.cursor() as cursor:
             db_engine = settings.DATABASES['default']['ENGINE']
+            table_name = 'gemilang_products'
             
             if 'sqlite' in db_engine:
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='gemilang_products'")
+                query = "SELECT name FROM sqlite_master WHERE type='table' AND name='{}'".format(table_name)
+                cursor.execute(query)
             elif 'mysql' in db_engine:
-                cursor.execute("SHOW TABLES LIKE 'gemilang_products'")
+                query = "SHOW TABLES LIKE '{}'".format(table_name)
+                cursor.execute(query)
             else:
-                raise Exception(f"Unsupported database engine: {db_engine}")
+                raise NotImplementedError(f"Unsupported database engine: {db_engine}")
             
             result = cursor.fetchone()
             return result is not None
@@ -22,9 +25,11 @@ class GemilangTableValidator:
         
         with connection.cursor() as cursor:
             db_engine = settings.DATABASES['default']['ENGINE']
+            table_name = 'gemilang_products'
             
             if 'sqlite' in db_engine:
-                cursor.execute("PRAGMA table_info(gemilang_products)")
+                query = "PRAGMA table_info({})".format(table_name)
+                cursor.execute(query)
                 columns = cursor.fetchall()
                 return {
                     col[1]: {
@@ -36,7 +41,8 @@ class GemilangTableValidator:
                     for col in columns
                 }
             elif 'mysql' in db_engine:
-                cursor.execute("DESCRIBE gemilang_products")
+                query = "DESCRIBE {}".format(table_name)
+                cursor.execute(query)
                 columns = cursor.fetchall()
                 # MySQL DESCRIBE returns: Field, Type, Null, Key, Default, Extra
                 return {
@@ -49,7 +55,7 @@ class GemilangTableValidator:
                     for col in columns
                 }
             else:
-                raise Exception(f"Unsupported database engine: {db_engine}")
+                raise NotImplementedError(f"Unsupported database engine: {db_engine}")
     
     def get_record_count(self):
         with connection.cursor() as cursor:
@@ -84,13 +90,13 @@ class GemilangTableValidator:
             db_engine = settings.DATABASES['default']['ENGINE']
             
             if 'sqlite' in db_engine:
-                # SQLite syntax
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                query = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                cursor.execute(query)
             elif 'mysql' in db_engine:
-                # MySQL syntax
-                cursor.execute("SHOW TABLES")
+                query = "SHOW TABLES"
+                cursor.execute(query)
             else:
-                raise Exception(f"Unsupported database engine: {db_engine}")
+                raise NotImplementedError(f"Unsupported database engine: {db_engine}")
             
             tables = cursor.fetchall()
             return [table[0] for table in tables]

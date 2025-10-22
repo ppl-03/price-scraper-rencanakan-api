@@ -1,5 +1,5 @@
-from django.db import connection
-from django.conf import settings
+from django.db import connection, transaction
+from django.utils import timezone
 
 class GemilangDatabaseService:
     def _validate_data(self, data):
@@ -15,22 +15,22 @@ class GemilangDatabaseService:
     def save(self, data):
         if not self._validate_data(data):
             return False
-        
-        # Get database engine to use correct datetime syntax
-        db_engine = settings.DATABASES['default']['ENGINE']
-        
-        # Use appropriate datetime function for each database
-        if 'sqlite' in db_engine:
-            datetime_now = "datetime('now')"
-        elif 'mysql' in db_engine:
-            datetime_now = "NOW()"
-        else:
-            raise Exception(f"Unsupported database engine: {db_engine}")
-        
-        with connection.cursor() as cursor:
-            for item in data:
-                cursor.execute(
-                    f"INSERT INTO gemilang_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, {datetime_now}, {datetime_now})",
-                    [item["name"], item["price"], item["url"], item["unit"]]
-                )
+
+        now = timezone.now()
+
+        sql = """
+            INSERT INTO gemilang_products
+                (name, price, url, unit, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+
+        params_list = [
+            (it["name"], it["price"], it["url"], it["unit"], now, now)
+            for it in data
+        ]
+
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.executemany(sql, params_list)
+
         return True
