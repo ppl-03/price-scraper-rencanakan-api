@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class LocationScraperConfiguration:
     """Configuration class for location scraper"""
     
-    def __init__(self, base_url: str, default_timeout: int = 30):
+    def __init__(self, base_url: str, default_timeout: int = 60):
         self.base_url = base_url
         self.default_timeout = default_timeout
     
@@ -86,7 +86,7 @@ class LocationDataValidator:
     
     @staticmethod
     def validate_timeout(timeout: Optional[int]) -> int:
-        return max(0, timeout) if timeout is not None else 30
+        return max(0, timeout) if timeout is not None else 60
 
 
 class DepoBangunanLocationScraper(ILocationScraper):
@@ -108,9 +108,9 @@ class DepoBangunanLocationScraper(ILocationScraper):
     
     def scrape_locations_batch(self, timeout: Optional[int] = None) -> LocationScrapingResult:
         """Scrape location data from the Depo Bangunan website (implements ILocationScraper interface)"""
-        return self.scrape_locations(timeout if timeout is not None else 30)
+        return self.scrape_locations(timeout if timeout is not None else 60)
     
-    def scrape_locations(self, timeout: int = 30) -> LocationScrapingResult:
+    def scrape_locations(self, timeout: int = 60) -> LocationScrapingResult:
         """Scrape location data from the Depo Bangunan website"""
         timeout = self._validator.validate_timeout(timeout)
         url = self._config.get_base_url()

@@ -10,7 +10,7 @@ class TestScraperConfig(unittest.TestCase):
     def test_default_configuration(self):
         config_obj = ScraperConfig()
         
-        self.assertEqual(config_obj.request_timeout, 30)
+        self.assertEqual(config_obj.request_timeout, 300)
         self.assertEqual(config_obj.max_retries, 3)
         self.assertEqual(config_obj.retry_delay, 1.0)
         self.assertEqual(config_obj.requests_per_minute, 60)
@@ -62,7 +62,7 @@ class TestScraperConfig(unittest.TestCase):
     def test_from_environment_defaults(self):
         config_obj = ScraperConfig.from_environment()
         
-        self.assertEqual(config_obj.request_timeout, 30)
+        self.assertEqual(config_obj.request_timeout, 300)
         self.assertEqual(config_obj.max_retries, 3)
         self.assertEqual(config_obj.retry_delay, 1.0)
         self.assertEqual(config_obj.requests_per_minute, 60)
@@ -124,7 +124,7 @@ class TestScraperConfig(unittest.TestCase):
         
         self.assertTrue(config_obj.cache_enabled)
         self.assertTrue(config_obj.log_requests)
-        self.assertEqual(config_obj.request_timeout, 30)
+        self.assertEqual(config_obj.request_timeout, 300)
 
     @patch.dict(os.environ, {
         'SCRAPER_CACHE_ENABLED': 'false',
