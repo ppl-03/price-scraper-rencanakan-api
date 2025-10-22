@@ -1,6 +1,7 @@
 from django.db import connection
 from typing import Dict, List, Any, Protocol
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -8,6 +9,12 @@ logger = logging.getLogger(__name__)
 class DatabaseConnection(Protocol):
     def cursor(self): ...
     settings_dict: Dict[str, Any]
+
+
+def _validate_table_name(table_name: str) -> str:
+    if not re.match(r'^\w+$', table_name):
+        raise ValueError(f"Invalid table name: {table_name}")
+    return table_name
 
 
 class Mitra10TableChecker:
@@ -36,20 +43,21 @@ class Mitra10TableChecker:
         return cursor.fetchone() is not None
     
     def _fetch_columns(self, cursor) -> List[Dict[str, Any]]:
-            cursor.execute(f"DESCRIBE {self.TABLE_NAME}")
-            columns_data = cursor.fetchall()
-            
-            return [
-                {
-                    'name': col[0],
-                    'type': col[1],
-                    'null': col[2],
-                    'key': col[3],
-                    'default': col[4],
-                    'extra': col[5]
-                }
-                for col in columns_data
-            ]
+        validated_table = _validate_table_name(self.TABLE_NAME)
+        cursor.execute(f"DESCRIBE `{validated_table}`")
+        columns_data = cursor.fetchall()
+        
+        return [
+            {
+                'name': col[0],
+                'type': col[1],
+                'null': col[2],
+                'key': col[3],
+                'default': col[4],
+                'extra': col[5]
+            }
+            for col in columns_data
+        ]
     
     def _build_not_exists_response(self) -> Dict[str, Any]:
         return {
@@ -105,19 +113,21 @@ def check_database_connection() -> Dict[str, Any]:
 
 
 def check_gemilang_table_exists() -> Dict[str, Any]:
+    table_name = 'gemilang_products'
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SHOW TABLES LIKE 'gemilang_products'")
+            cursor.execute("SHOW TABLES LIKE %s", [table_name])
             result = cursor.fetchone()
             
             if not result:
                 return {
                     'exists': False,
                     'columns': [],
-                    'error': 'Table gemilang_products does not exist'
+                    'error': f'Table {table_name} does not exist'
                 }
             
-            cursor.execute("DESCRIBE gemilang_products")
+            validated_table = _validate_table_name(table_name)
+            cursor.execute(f"DESCRIBE `{validated_table}`")
             columns_data = cursor.fetchall()
             
             columns = []
