@@ -105,3 +105,22 @@ class DepoBangunanProduct(models.Model):
 
     def __str__(self):
         return f"{self.name} - Rp{self.price}"
+
+
+class JuraganMaterialProduct(models.Model):
+    name = models.CharField(max_length=500)
+    price = models.IntegerField(validators=[MinValueValidator(0)])
+    url = models.URLField(max_length=1000)
+    unit = models.CharField(max_length=50, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'juragan_material_products'
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} - Rp{self.price}"
