@@ -18,8 +18,9 @@ class MySQLTestCase(TestCase):
         pass
     
     def tearDown(self):
-        """Clean up after tests. Currently no cleanup required as Django handles test database."""
-        pass
+        """Clean up after tests. Clear GemilangProduct table to ensure test isolation."""
+        from db_pricing.models import GemilangProduct
+        GemilangProduct.objects.all().delete()
 
 
 def get_table_columns_mysql(table_name):

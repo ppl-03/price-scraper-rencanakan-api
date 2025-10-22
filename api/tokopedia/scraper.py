@@ -59,10 +59,36 @@ class TokopediaPriceScraper(BasePriceScraper):
             
         return location_ids
     
+    def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0, 
+                       limit: Optional[int] = None) -> ScrapingResult:
+        """
+        Override base method to add limit support
+        
+        Args:
+            keyword: Search term (e.g., "semen")
+            sort_by_price: Whether to sort by lowest price (default: True)
+            page: Page number (0-based, default: 0)
+            limit: Maximum number of products to return (will fetch multiple pages if needed)
+            
+        Returns:
+            ScrapingResult with products and metadata
+        """
+        # Use scrape_products_with_filters with limit support
+        return self.scrape_products_with_filters(
+            keyword=keyword,
+            sort_by_price=sort_by_price,
+            page=page,
+            min_price=None,
+            max_price=None,
+            location=None,
+            limit=limit
+        )
+    
     def scrape_products_with_filters(self, keyword: str, sort_by_price: bool = True, 
                                    page: int = 0, min_price: Optional[int] = None, 
                                    max_price: Optional[int] = None,
-                                   location: Optional[str] = None) -> ScrapingResult:
+                                   location: Optional[str] = None,
+                                   limit: Optional[int] = None) -> ScrapingResult:
         """
         Scrape Tokopedia products with advanced filters
         
@@ -73,6 +99,7 @@ class TokopediaPriceScraper(BasePriceScraper):
             min_price: Minimum price filter in Rupiah (optional)
             max_price: Maximum price filter in Rupiah (optional)
             location: Location name (e.g., "jakarta", "bandung", "jabodetabek") (optional)
+            limit: Maximum number of products to return (will fetch multiple pages if needed)
             
         Returns:
             ScrapingResult with products and metadata
@@ -80,6 +107,18 @@ class TokopediaPriceScraper(BasePriceScraper):
         try:
             # Get location IDs if location is specified
             location_ids = self._validate_and_get_location_ids(location)
+            
+            # If limit is specified, fetch multiple pages until we have enough products
+            if limit and limit > 0:
+                return self._scrape_with_limit(
+                    keyword=keyword,
+                    sort_by_price=sort_by_price,
+                    start_page=page,
+                    min_price=min_price,
+                    max_price=max_price,
+                    location_ids=location_ids,
+                    limit=limit
+                )
             
             # Build URL with filters using the enhanced URL builder
             url = self.url_builder.build_search_url_with_filters(
@@ -108,6 +147,76 @@ class TokopediaPriceScraper(BasePriceScraper):
                 error_message=str(e),
                 url=None
             )
+    
+    def _scrape_with_limit(self, keyword: str, sort_by_price: bool, start_page: int,
+                          min_price: Optional[int], max_price: Optional[int],
+                          location_ids: Optional[List[int]], limit: int) -> ScrapingResult:
+        """
+        Scrape multiple pages until we have the desired number of products
+        
+        Args:
+            keyword: Search term
+            sort_by_price: Whether to sort by lowest price
+            start_page: Starting page number
+            min_price: Minimum price filter
+            max_price: Maximum price filter
+            location_ids: Location IDs filter
+            limit: Maximum number of products to return
+            
+        Returns:
+            ScrapingResult with collected products
+        """
+        all_products = []
+        # Validate and cap start_page to prevent using user-controlled data in loop bounds
+        MAX_START_PAGE = 100
+        safe_start_page = max(0, min(start_page, MAX_START_PAGE))
+        current_page = safe_start_page
+        max_pages = 10  # Safety limit to avoid infinite loops
+        # Cap the limit to prevent resource exhaustion from user-controlled data
+        MAX_ALLOWED_LIMIT = 1000
+        safe_limit = min(limit, MAX_ALLOWED_LIMIT)
+        # Calculate end page using validated start_page
+        end_page = safe_start_page + max_pages
+        last_url = None
+        
+        while len(all_products) < safe_limit and current_page < end_page:
+            try:
+                url = self.url_builder.build_search_url_with_filters(
+                    keyword=keyword,
+                    sort_by_price=sort_by_price,
+                    page=current_page,
+                    min_price=min_price,
+                    max_price=max_price,
+                    location_ids=location_ids
+                )
+                last_url = url
+                
+                html_content = self.http_client.get(url)
+                products = self.html_parser.parse_products(html_content)
+                
+                # If no products found on this page, stop
+                if not products:
+                    logger.info(f"No more products found at page {current_page}")
+                    break
+                
+                all_products.extend(products)
+                logger.info(f"Fetched {len(products)} products from page {current_page}. Total: {len(all_products)}")
+                
+                current_page += 1
+                
+            except Exception as e:
+                logger.error(f"Error fetching page {current_page}: {str(e)}")
+                break
+        
+        # Trim to the exact limit requested by user (but not exceeding safe_limit)
+        if len(all_products) > safe_limit:
+            all_products = all_products[:safe_limit]
+        
+        return ScrapingResult(
+            products=all_products,
+            success=True,
+            url=last_url
+        )
     
     def scrape_batch_with_filters(self, keywords: List[str], sort_by_price: bool = True,
                                 min_price: Optional[int] = None, 
