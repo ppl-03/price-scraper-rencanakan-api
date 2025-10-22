@@ -1,21 +1,48 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
 from .factory import create_mitra10_scraper, create_mitra10_location_scraper
 from .database_service import Mitra10DatabaseService
 import logging
 
 logger = logging.getLogger(__name__)
 
+API_TOKENS = {
+    'dev-token-12345': {
+        'name': 'Development Token',
+        'allowed_ips': [],
+        'created': '2024-01-01',
+        'expires': None
+    },
+    'legacy-api-token-67890': {
+        'name': 'Legacy Client Token',
+        'allowed_ips': [],
+        'created': '2024-01-01',
+        'expires': None
+    }
+}
 
-def _create_error_response(message: str, status_code: int = 400) -> JsonResponse:
-    """Helper function to create standardized error responses"""
-    return JsonResponse({
-        'success': False,
-        'locations': [],
-        'count': 0,
-        'error_message': message
-    }, status=status_code)
+def _validate_api_token(request) -> tuple[bool, str]:
+    """Validate API token from request headers"""
+    token = request.headers.get('X-API-Token') or request.headers.get('Authorization', '').replace('Bearer ', '')
+
+    if not token:
+        return False, 'API token required'
+
+    if token not in API_TOKENS:
+        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        logger.warning(f"Invalid API token attempt from {client_ip}")
+        return False, 'Invalid API token'
+
+    token_info = API_TOKENS[token]
+    client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+    allowed_ips = token_info.get('allowed_ips', [])
+
+    if allowed_ips and client_ip not in allowed_ips:
+        logger.warning(f"IP {client_ip} not allowed for token {token_info['name']}")
+        return False, 'IP not authorized'
+
+    logger.info(f"Valid API token used from {client_ip}: {token_info['name']}")
+    return True, ''
 
 
 @require_http_methods(["GET"])
@@ -137,9 +164,19 @@ def scrape_locations(request):
             'error_message': f'Internal server error: {str(e)}'
         }, status=500)
 
-@csrf_exempt
 @require_http_methods(["POST"])
 def scrape_and_save_products(request):
+    # Validate API token
+    is_valid, error_message = _validate_api_token(request)
+    if not is_valid:
+        return JsonResponse({
+            'success': False,
+            'inserted': 0,
+            'updated': 0,
+            'anomalies': [],
+            'error_message': error_message
+        }, status=401)
+    
     try:
         query = request.GET.get('q')
         if query is None:
