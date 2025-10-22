@@ -348,12 +348,12 @@ class TestProfilerEdgeCases(TestCase):
                 type('Product', (), {
                     'name': 'Test Product With A Very Long Name That Needs Truncation',
                     'price': 150000,
-                    'url': 'http://test.com/product'
+                    'url': 'https://test.com/product'
                 })(),
                 type('Product', (), {
                     'name': 'Another Product',
                     'price': 75000,
-                    'url': 'http://test.com/product2'
+                    'url': 'https://test.com/product2'
                 })()
             ]
             
@@ -609,12 +609,12 @@ class TestProfilerEdgeCases(TestCase):
             mock_product = SimpleNamespace(
                 name='Test Product Name Here Long Name',
                 price=150000,
-                url='http://test.com/product'
+                url='https://test.com/product'
             )
             
             # Mock scraper components
             mock_scraper = MagicMock()
-            mock_scraper.url_builder.build_search_url.return_value = 'http://test.com/search'
+            mock_scraper.url_builder.build_search_url.return_value = 'https://test.com/search'
             mock_scraper.http_client.get.return_value = '<html>test</html>'
             mock_scraper.html_parser.parse_products.return_value = [mock_product, mock_product]
             mock_scraper.html_parser.price_cleaner.clean_price.return_value = 150000
