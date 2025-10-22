@@ -23,8 +23,23 @@ class BaseHttpClient(IHttpClient):
         self.retry_delay = retry_delay or config.retry_delay
         self.last_request_time = 0
         
+        # Enhanced headers for better compatibility with modern websites (especially Tokopedia)
         self.session.headers.update({
-            'User-Agent': user_agent or config.user_agent
+            'User-Agent': user_agent or config.user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
         })
     
     def get(self, url: str, timeout: int = None) -> str:
@@ -47,8 +62,22 @@ class BaseHttpClient(IHttpClient):
         try:
             if config.log_requests:
                 logger.info(f"Fetching URL (attempt {attempt + 1}/{self.max_retries}): {url}")
+                try:
+                    logger.debug(f"Request headers: {dict(self.session.headers)}")
+                except (TypeError, AttributeError):
+                    # Skip header logging if conversion fails (e.g., in tests with mocks)
+                    pass
             
             response = self.session.get(url, timeout=timeout)
+            
+            if config.log_requests:
+                logger.info(f"Response status: {response.status_code}")
+                try:
+                    logger.debug(f"Response headers: {dict(response.headers)}")
+                except (TypeError, AttributeError):
+                    # Skip header logging if conversion fails (e.g., in tests with mocks)
+                    pass
+            
             response.raise_for_status()
             
             if not response.content:
@@ -59,9 +88,12 @@ class BaseHttpClient(IHttpClient):
             
             if config.log_requests:
                 logger.info(f"Successfully fetched {len(html_content)} characters from {url}")
+                # Log first 500 characters for debugging (helps identify if we got the right page)
+                logger.debug(f"First 500 chars of response: {html_content[:500]}")
             return html_content
             
         except requests.exceptions.Timeout:
+            logger.error(f"Request timeout after {timeout} seconds for {url}")
             raise HttpClientError(f"Request timeout after {timeout} seconds for {url}")
         except requests.exceptions.ConnectionError as e:
             raise HttpClientError(f"Connection error for {url}: {str(e)}")

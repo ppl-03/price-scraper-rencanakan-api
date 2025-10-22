@@ -1,4 +1,4 @@
-from api.core import BaseUrlBuilder
+from api.tokopedia_core import BaseUrlBuilder
 from urllib.parse import urlencode, urljoin
 from typing import List, Union
 
