@@ -36,23 +36,20 @@ class Mitra10TableChecker:
         return cursor.fetchone() is not None
     
     def _fetch_columns(self, cursor) -> List[Dict[str, Any]]:
-        table_name = self.TABLE_NAME
-        if not table_name.replace('_', '').isalnum():
-            raise ValueError(f"Invalid table name: {table_name}")
-        cursor.execute(f"DESCRIBE `{table_name}`")
-        columns_data = cursor.fetchall()
-        
-        return [
-            {
-                'name': col[0],
-                'type': col[1],
-                'null': col[2],
-                'key': col[3],
-                'default': col[4],
-                'extra': col[5]
-            }
-            for col in columns_data
-        ]
+            cursor.execute(f"DESCRIBE {self.TABLE_NAME}")
+            columns_data = cursor.fetchall()
+            
+            return [
+                {
+                    'name': col[0],
+                    'type': col[1],
+                    'null': col[2],
+                    'key': col[3],
+                    'default': col[4],
+                    'extra': col[5]
+                }
+                for col in columns_data
+            ]
     
     def _build_not_exists_response(self) -> Dict[str, Any]:
         return {
@@ -108,22 +105,19 @@ def check_database_connection() -> Dict[str, Any]:
 
 
 def check_gemilang_table_exists() -> Dict[str, Any]:
-    table_name = 'gemilang_products'
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SHOW TABLES LIKE %s", [table_name])
+            cursor.execute("SHOW TABLES LIKE 'gemilang_products'")
             result = cursor.fetchone()
             
             if not result:
                 return {
                     'exists': False,
                     'columns': [],
-                    'error': f'Table {table_name} does not exist'
+                    'error': 'Table gemilang_products does not exist'
                 }
             
-            if not table_name.replace('_', '').isalnum():
-                raise ValueError(f"Invalid table name: {table_name}")
-            cursor.execute(f"DESCRIBE `{table_name}`")
+            cursor.execute("DESCRIBE gemilang_products")
             columns_data = cursor.fetchall()
             
             columns = []
@@ -149,7 +143,6 @@ def check_gemilang_table_exists() -> Dict[str, Any]:
             'columns': [],
             'error': str(e)
         }
-
 
 def check_mitra10_table_exists() -> Dict[str, Any]:
     checker = Mitra10TableChecker(connection)
