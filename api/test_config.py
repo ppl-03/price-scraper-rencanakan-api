@@ -1,5 +1,6 @@
 import unittest
 import os
+import re
 from unittest.mock import patch
 
 from api.config import ScraperConfig, config
@@ -21,8 +22,11 @@ class TestScraperConfig(unittest.TestCase):
         self.assertEqual(config_obj.gemilang_base_url, 'https://gemilang-store.com')
         self.assertEqual(config_obj.gemilang_search_path, '/pusat/shop')
         
+        # Verify User-Agent contains expected browser components (extract version dynamically)
         self.assertIn('Mozilla', config_obj.user_agent)
-        self.assertIn('Chrome', config_obj.user_agent)
+        # Extract Chrome version from the default user agent to avoid hardcoding
+        chrome_match = re.search(r'Chrome/([\d.]+)', config_obj.user_agent)
+        self.assertIsNotNone(chrome_match, "User-Agent should contain Chrome version")
         self.assertIn('Safari', config_obj.user_agent)
 
     def test_custom_configuration(self):
@@ -169,10 +173,10 @@ class TestScraperConfig(unittest.TestCase):
         self.assertEqual(result_dict['user_agent'], 'Test Agent')
         self.assertEqual(result_dict['requests_per_minute'], 30)
         self.assertEqual(result_dict['min_request_interval'], 2.0)
-        self.assertEqual(result_dict['cache_enabled'], False)
+        self.assertFalse(result_dict['cache_enabled'])
         self.assertEqual(result_dict['cache_ttl'], 600)
         self.assertEqual(result_dict['log_level'], 'DEBUG')
-        self.assertEqual(result_dict['log_requests'], False)
+        self.assertFalse(result_dict['log_requests'])
         self.assertEqual(result_dict['gemilang_base_url'], 'https://test.com')
         self.assertEqual(result_dict['gemilang_search_path'], '/test')
         

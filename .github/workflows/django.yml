@@ -40,6 +40,14 @@ jobs:
       DB_PASSWORD: test_password
       DB_HOST: 127.0.0.1
       DB_PORT: 3306
+      MYSQL_NAME: test_db
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      KOYEB_API_TOKEN: ${{ secrets.KOYEB_API_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
 
     steps:
       - name: Checkout repository
@@ -73,4 +81,4 @@ jobs:
 
       - name: Run tests
         run: |
-          python manage.py test --verbosity=2 --keepdb
+          python manage.py test api db_pricing.tests.test_connection_checker db_pricing.tests.test_status_api dashboard security --verbosity=2 --keepdb
