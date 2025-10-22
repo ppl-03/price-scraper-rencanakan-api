@@ -50,9 +50,14 @@ def get_table_columns_sqlite(table_name):
         return [row[0] for row in cursor.fetchall()]
 
 
+def _get_database_engine():
+    """Get the current database engine type."""
+    return settings.DATABASES['default']['ENGINE']
+
+
 def get_table_columns(table_name):
     """Get table column names for the current database engine."""
-    db_engine = settings.DATABASES['default']['ENGINE']
+    db_engine = _get_database_engine()
     
     if 'mysql' in db_engine:
         return get_table_columns_mysql(table_name)
@@ -62,18 +67,22 @@ def get_table_columns(table_name):
         raise NotImplementedError(f"Unsupported database engine: {db_engine}")
 
 
+def _execute_table_exists_query(cursor, table_name, db_engine):
+    """Execute the appropriate table existence query based on database engine."""
+    if 'mysql' in db_engine:
+        cursor.execute("SHOW TABLES LIKE %s", (table_name,))
+    elif 'sqlite' in db_engine:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=%s", (table_name,))
+    else:
+        raise NotImplementedError(f"Unsupported database engine: {db_engine}")
+
+
 def table_exists(table_name):
     """Check if a table exists in the database."""
     table_name = _validate_table_name(table_name)
-    db_engine = settings.DATABASES['default']['ENGINE']
+    db_engine = _get_database_engine()
     
     with connection.cursor() as cursor:
-        if 'mysql' in db_engine:
-            cursor.execute("SHOW TABLES LIKE %s", (table_name,))
-        elif 'sqlite' in db_engine:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=%s", (table_name,))
-        else:
-            raise NotImplementedError(f"Unsupported database engine: {db_engine}")
-        
+        _execute_table_exists_query(cursor, table_name, db_engine)
         result = cursor.fetchone()
         return result is not None
