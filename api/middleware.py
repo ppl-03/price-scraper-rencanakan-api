@@ -9,7 +9,7 @@ class DisableCSRFForAPIMiddleware:
     def __call__(self, request):
         return self.get_response(request)
 
-    def process_view(self, request, view_func, view_args, view_kwargs):
+    def process_view(self, request):
         if request.path.startswith('/api/'):
             setattr(request, '_dont_enforce_csrf_checks', True)
         return None
