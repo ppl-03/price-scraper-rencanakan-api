@@ -123,7 +123,7 @@ else:
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
             },
             'TEST': {
-                'NAME': db_name,
+                'NAME': f'test_{db_name}',  # Use separate test database
                 'CHARSET': 'utf8mb4',
                 'COLLATION': 'utf8mb4_unicode_ci',
             },
