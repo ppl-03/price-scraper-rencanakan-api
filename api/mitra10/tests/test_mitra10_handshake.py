@@ -4,7 +4,7 @@ from db_pricing.utils import check_mitra10_table_exists
 from db_pricing.models import Mitra10Product
 
 
-class Mitra10HandshakeTest(TestCase):
+class TestMitra10HandshakeTest(TestCase):
     
     def test_check_mitra10_table_exists_returns_true_when_table_exists(self):
         Mitra10Product.objects.create(
