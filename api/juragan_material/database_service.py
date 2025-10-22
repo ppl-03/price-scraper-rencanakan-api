@@ -39,19 +39,34 @@ class JuraganMaterialDatabaseService:
         """Helper method to create product parameters for database insertion."""
         return (item["name"], item["price"], item["url"], item["unit"], now, now)
     
-    def _check_anomaly(self, item, existing_price, new_price):
+    def _extract_product_identifiers(self, item):
+        """Helper method to extract product identifiers (name, url, unit) from item."""
+        return (item["name"], item["url"], item["unit"])
+    
+    def _calculate_price_change_percentage(self, existing_price, new_price):
+        """Helper method to calculate price change percentage."""
         if existing_price == 0:
             return None
-        price_diff_pct = ((new_price - existing_price) / existing_price) * 100
+        return ((new_price - existing_price) / existing_price) * 100
+    
+    def _create_anomaly_object(self, item, existing_price, new_price, price_diff_pct):
+        """Helper method to create anomaly object."""
+        return {
+            "name": item["name"],
+            "url": item["url"],
+            "unit": item["unit"],
+            "old_price": existing_price,
+            "new_price": new_price,
+            "change_percent": round(price_diff_pct, 2)
+        }
+    
+    def _check_anomaly(self, item, existing_price, new_price):
+        price_diff_pct = self._calculate_price_change_percentage(existing_price, new_price)
+        if price_diff_pct is None:
+            return None
+        
         if abs(price_diff_pct) >= 15:
-            return {
-                "name": item["name"],
-                "url": item["url"],
-                "unit": item["unit"],
-                "old_price": existing_price,
-                "new_price": new_price,
-                "change_percent": round(price_diff_pct, 2)
-            }
+            return self._create_anomaly_object(item, existing_price, new_price, price_diff_pct)
         return None
 
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
@@ -78,7 +93,7 @@ class JuraganMaterialDatabaseService:
         """Helper method to get existing product by name, url, and unit."""
         cursor.execute(
             "SELECT id, price FROM juragan_material_products WHERE name = %s AND url = %s AND unit = %s",
-            (item["name"], item["url"], item["unit"])
+            self._extract_product_identifiers(item)
         )
         return cursor.fetchone()
 
