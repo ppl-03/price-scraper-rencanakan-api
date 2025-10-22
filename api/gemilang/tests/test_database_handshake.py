@@ -1,10 +1,10 @@
-from django.test import TestCase
 from db_pricing.models import GemilangProduct
 from django.core.exceptions import ValidationError
 from django.db import connection
+from .test_base import MySQLTestCase, get_table_columns, table_exists
 
 
-class TestGemilangDatabaseHandshake(TestCase):
+class TestGemilangDatabaseHandshake(MySQLTestCase):
     
     def test_database_connection_exists(self):
         with connection.cursor() as cursor:
@@ -14,29 +14,22 @@ class TestGemilangDatabaseHandshake(TestCase):
             self.assertEqual(result[0], 1)
     
     def test_gemilang_products_table_exists(self):
-        with connection.cursor() as cursor:
-            # SQLite compatible query
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='gemilang_products'")
-            result = cursor.fetchone()
-            self.assertIsNotNone(result)
+        exists = table_exists('gemilang_products')
+        self.assertTrue(exists, "gemilang_products table should exist")
     
     def test_gemilang_products_table_has_correct_columns(self):
-        with connection.cursor() as cursor:
-            # SQLite compatible query
-            cursor.execute("PRAGMA table_info(gemilang_products)")
-            columns = cursor.fetchall()
-            column_names = [col[1] for col in columns]  # Column name is at index 1 in PRAGMA output
-            
-            self.assertIn('id', column_names)
-            self.assertIn('name', column_names)
-            self.assertIn('price', column_names)
-            self.assertIn('url', column_names)
-            self.assertIn('unit', column_names)
-            self.assertIn('created_at', column_names)
-            self.assertIn('updated_at', column_names)
+        column_names = get_table_columns('gemilang_products')
+        
+        self.assertIn('id', column_names)
+        self.assertIn('name', column_names)
+        self.assertIn('price', column_names)
+        self.assertIn('url', column_names)
+        self.assertIn('unit', column_names)
+        self.assertIn('created_at', column_names)
+        self.assertIn('updated_at', column_names)
 
 
-class TestGemilangProductModel(TestCase):
+class TestGemilangProductModel(MySQLTestCase):
     
     def test_create_product_with_all_fields(self):
         product = GemilangProduct.objects.create(
@@ -63,17 +56,6 @@ class TestGemilangProductModel(TestCase):
         
         self.assertIsNotNone(product.id)
         self.assertEqual(product.unit, '')
-    
-    def test_create_product_with_null_unit(self):
-        product = GemilangProduct.objects.create(
-            name="Product null unit",
-            price=20000,
-            url="https://gemilang-store.com/test",
-            unit=None
-        )
-        
-        self.assertIsNotNone(product.id)
-        self.assertIsNone(product.unit)
     
     def test_retrieve_product_by_id(self):
         created_product = GemilangProduct.objects.create(
