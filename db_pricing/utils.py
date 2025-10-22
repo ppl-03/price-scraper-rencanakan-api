@@ -32,11 +32,14 @@ class Mitra10TableChecker:
             return self._build_success_response(columns)
     
     def _table_exists(self, cursor) -> bool:
-        cursor.execute(f"SHOW TABLES LIKE '{self.TABLE_NAME}'")
+        cursor.execute("SHOW TABLES LIKE %s", [self.TABLE_NAME])
         return cursor.fetchone() is not None
     
     def _fetch_columns(self, cursor) -> List[Dict[str, Any]]:
-        cursor.execute(f"DESCRIBE {self.TABLE_NAME}")
+        table_name = self.TABLE_NAME
+        if not table_name.replace('_', '').isalnum():
+            raise ValueError(f"Invalid table name: {table_name}")
+        cursor.execute(f"DESCRIBE `{table_name}`")
         columns_data = cursor.fetchall()
         
         return [
@@ -105,19 +108,22 @@ def check_database_connection() -> Dict[str, Any]:
 
 
 def check_gemilang_table_exists() -> Dict[str, Any]:
+    table_name = 'gemilang_products'
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SHOW TABLES LIKE 'gemilang_products'")
+            cursor.execute("SHOW TABLES LIKE %s", [table_name])
             result = cursor.fetchone()
             
             if not result:
                 return {
                     'exists': False,
                     'columns': [],
-                    'error': 'Table gemilang_products does not exist'
+                    'error': f'Table {table_name} does not exist'
                 }
             
-            cursor.execute("DESCRIBE gemilang_products")
+            if not table_name.replace('_', '').isalnum():
+                raise ValueError(f"Invalid table name: {table_name}")
+            cursor.execute(f"DESCRIBE `{table_name}`")
             columns_data = cursor.fetchall()
             
             columns = []
