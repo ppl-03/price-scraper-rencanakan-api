@@ -123,7 +123,7 @@ else:
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
             },
             'TEST': {
-                'NAME': env("MYSQL_NAME"),
+                'NAME': db_name,
                 'CHARSET': 'utf8mb4',
                 'COLLATION': 'utf8mb4_unicode_ci',
             },
