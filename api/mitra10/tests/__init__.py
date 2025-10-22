@@ -16,6 +16,8 @@ from .test_urls import TestMitra10URLs
 from .test_views import TestMitra10Views
 from .test_mitra10_handshake import TestMitra10HandshakeTest
 from .test_unit_parser import TestMitra10UnitPatternRepository, TestMitra10AreaPatternStrategy, TestMitra10UnitExtractor, TestMitra10AdjacentPatternStrategy, TestMitra10UnitParser, TestMitra10UnitParserConfiguration, TestMitra10SpecificationFinder
+from .test_database_service import TestMitra10DatabaseService
+from .test_table_validator import TestMitra10TableValidator
 
 __all__ = [
     "TestMitra10PriceCleaner",
@@ -41,4 +43,6 @@ __all__ = [
     "TestMitra10UnitParserConfiguration",
     "TestMitra10SpecificationFinder",
     "TestProfilerEdgeCases",
+    "TestMitra10DatabaseService",
+    "TestMitra10TableValidator",
 ]
