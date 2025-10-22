@@ -68,9 +68,11 @@ jobs:
           done
 
       - name: Run migrations
+        working-directory: ./price-scraper-rencanakan-api
         run: |
           python manage.py migrate --noinput
 
       - name: Run tests
+        working-directory: ./price-scraper-rencanakan-api
         run: |
-          python manage.py test --verbosity=2 --keepdb
+          python manage.py test db_pricing --verbosity=2 --keepdb
