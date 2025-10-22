@@ -44,9 +44,17 @@ class Mitra10TableChecker:
     
     def _fetch_columns(self, cursor) -> List[Dict[str, Any]]:
         validated_table = _validate_table_name(self.TABLE_NAME)
-        cursor.execute(f"DESCRIBE `{validated_table}`")
+        cursor.execute(
+            """
+            SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION
+            """,
+            [self._connection.settings_dict.get('NAME'), validated_table],
+        )
         columns_data = cursor.fetchall()
-        
+
         return [
             {
                 'name': col[0],
@@ -127,7 +135,15 @@ def check_gemilang_table_exists() -> Dict[str, Any]:
                 }
             
             validated_table = _validate_table_name(table_name)
-            cursor.execute(f"DESCRIBE `{validated_table}`")
+            cursor.execute(
+                """
+                SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+                ORDER BY ORDINAL_POSITION
+                """,
+                [connection.settings_dict.get('NAME'), validated_table],
+            )
             columns_data = cursor.fetchall()
             
             columns = []
