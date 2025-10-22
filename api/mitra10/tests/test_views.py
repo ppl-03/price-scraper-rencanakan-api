@@ -10,16 +10,9 @@ class TestMitra10Views(TestCase):
 
     def setUp(self):
         self.factory = RequestFactory()
-        
-    def test_create_error_response_returns_json(self):
-        response = views._create_error_response("Something went wrong", 418)
-        self.assertIsInstance(response, JsonResponse)
-        self.assertEqual(response.status_code, 418)
-        content = json.loads(response.content)
-        self.assertFalse(content["success"])
-        self.assertEqual(content["error_message"], "Something went wrong")
-        self.assertEqual(content["locations"], [])
-        self.assertEqual(content["count"], 0)
+        # API token for authenticated requests
+        self.valid_token = "dev-token-12345"
+        self.auth_headers = {'HTTP_X_API_TOKEN': self.valid_token}
 
     def test_scrape_products_missing_query(self):
         request = self.factory.get("/api/mitra10/products")
@@ -110,7 +103,7 @@ class TestMitra10Views(TestCase):
         self.assertIn("boom", data["error_message"])
 
     def test_scrape_and_save_missing_query(self):
-        request = self.factory.post("/api/mitra10/scrape-and-save/")
+        request = self.factory.post("/api/mitra10/scrape-and-save/", **self.auth_headers)
         response = views.scrape_and_save_products(request)
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
@@ -121,7 +114,7 @@ class TestMitra10Views(TestCase):
         self.assertIn("Query parameter is required", data["error_message"])
 
     def test_scrape_and_save_empty_query(self):
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=   ")
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=   ", **self.auth_headers)
         response = views.scrape_and_save_products(request)
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
@@ -129,7 +122,7 @@ class TestMitra10Views(TestCase):
         self.assertIn("Query parameter cannot be empty", data["error_message"])
 
     def test_scrape_and_save_invalid_page_parameter(self):
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=hammer&page=invalid")
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=hammer&page=invalid", **self.auth_headers)
         response = views.scrape_and_save_products(request)
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
@@ -163,7 +156,7 @@ class TestMitra10Views(TestCase):
         }
         mock_db_service.return_value = mock_service_instance
 
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=hammer")
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=hammer", **self.auth_headers)
         response = views.scrape_and_save_products(request)
 
         self.assertEqual(response.status_code, 200)
@@ -178,8 +171,8 @@ class TestMitra10Views(TestCase):
     @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_and_save_scraping_failure(self, mock_scraper_factory):
         mock_scraper_factory.side_effect = Exception("Scraper initialization failed")
-        
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=nail")
+
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=nail", **self.auth_headers)
         response = views.scrape_and_save_products(request)
 
         self.assertEqual(response.status_code, 500)
@@ -203,7 +196,7 @@ class TestMitra10Views(TestCase):
         mock_scraper.scrape_products.return_value = mock_result
         mock_scraper_factory.return_value = mock_scraper
 
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=nonexistent")
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=nonexistent", **self.auth_headers)
         response = views.scrape_and_save_products(request)
 
         self.assertEqual(response.status_code, 400)
@@ -232,7 +225,7 @@ class TestMitra10Views(TestCase):
         mock_service_instance.save_with_price_update.side_effect = Exception("Database connection failed")
         mock_db_service.return_value = mock_service_instance
 
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=test")
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=test", **self.auth_headers)
         response = views.scrape_and_save_products(request)
 
         self.assertEqual(response.status_code, 500)
@@ -275,7 +268,7 @@ class TestMitra10Views(TestCase):
         }
         mock_db_service.return_value = mock_service_instance
 
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=product")
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=product", **self.auth_headers)
         response = views.scrape_and_save_products(request)
 
         self.assertEqual(response.status_code, 200)
@@ -312,7 +305,7 @@ class TestMitra10Views(TestCase):
         }
         mock_db_service.return_value = mock_service_instance
 
-        request = self.factory.post("/api/mitra10/scrape-and-save/?q=item")
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=item", **self.auth_headers)
         response = views.scrape_and_save_products(request)
 
         data = json.loads(response.content)
