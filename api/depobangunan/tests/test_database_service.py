@@ -9,6 +9,7 @@ from api.depobangunan.database_service import (
     BulkProductService,
     DatabaseHandshakeService
 )
+from unittest.mock import patch, MagicMock
 
 
 class ProductDataTest(TestCase):
@@ -521,3 +522,125 @@ class DatabaseHandshakeServiceTest(TestCase):
         
         self.assertEqual(stats['total_products'], 0)
         self.assertEqual(stats['avg_price'], 0)
+
+
+class DatabaseServiceExtraTests(TestCase):
+
+    def test_repository_create_raises_validation_error(self):
+        repo = DepoBangunanProductRepository()
+        invalid = ProductData(name='', price=100, url='https://x')
+
+        with self.assertRaises(ValidationError):
+            repo.create(invalid)
+
+    def test_repository_create_handles_unexpected_exception(self):
+        repo = DepoBangunanProductRepository()
+        valid = ProductData(name='OK', price=100, url='https://x')
+
+        # Force the underlying ORM create to raise an exception
+        with patch('db_pricing.models.DepoBangunanProduct.objects.create', side_effect=Exception('db error')):
+            with self.assertRaises(Exception) as cm:
+                repo.create(valid)
+
+            self.assertIn('db error', str(cm.exception))
+
+    def test_verify_connection_failure_returns_error(self):
+        service = DatabaseHandshakeService()
+
+        # Make cursor.__enter__ raise so the try block goes to except
+        with patch('django.db.connection') as mock_conn:
+            mock_cursor = MagicMock()
+            mock_cursor.__enter__.side_effect = Exception('conn fail')
+            mock_conn.cursor.return_value = mock_cursor
+
+            result = service.verify_connection()
+
+            self.assertEqual(result['status'], 'error')
+            self.assertFalse(result['connected'])
+
+    def test_get_statistics_handles_exception(self):
+        service = DatabaseHandshakeService()
+
+        # Force the count() call to raise
+        with patch('db_pricing.models.DepoBangunanProduct.objects.count', side_effect=Exception('count fail')):
+            result = service.get_statistics()
+
+            # Should return a safe error structure
+            self.assertEqual(result.get('total_products'), 0)
+            self.assertIn('error', result)
+
+    def test_show_all_tables_success_and_check_table_exists(self):
+        service = DatabaseHandshakeService()
+
+        with patch('django.db.connection') as mock_conn:
+            mock_cursor = MagicMock()
+            # show_all_tables -> fetchall
+            mock_cursor.__enter__.return_value.fetchall.return_value = [('tab1',), ('tab2',)]
+            # check_table_exists -> fetchone
+            mock_cursor.__enter__.return_value.fetchone.return_value = ('tab1',)
+
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn.settings_dict = {'NAME': 'testdb'}
+
+            show_res = service.show_all_tables()
+            self.assertEqual(show_res['status'], 'success')
+            self.assertEqual(show_res['total_tables'], 2)
+            self.assertIn('tab1', show_res['tables'])
+
+            exists_res = service.check_table_exists('tab1')
+            self.assertEqual(exists_res['status'], 'success')
+            self.assertTrue(exists_res['exists'])
+
+    def test_check_table_exists_handles_no_table(self):
+        service = DatabaseHandshakeService()
+
+        with patch('django.db.connection') as mock_conn:
+            mock_cursor = MagicMock()
+            mock_cursor.__enter__.return_value.fetchone.return_value = None
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn.settings_dict = {'NAME': 'testdb'}
+
+            res = service.check_table_exists('notable')
+            self.assertEqual(res['status'], 'success')
+            self.assertFalse(res['exists'])
+
+    def test_productdata_validation_messages(self):
+        # Exact message for empty name
+        pd_empty = ProductData(name='', price=10, url='https://x')
+        with self.assertRaises(ValidationError) as cm:
+            pd_empty.validate()
+        self.assertIn('Product name cannot be empty', str(cm.exception))
+
+        # Exact message for negative price
+        pd_negative = ProductData(name='A', price=-1, url='https://x')
+        with self.assertRaises(ValidationError) as cm2:
+            pd_negative.validate()
+        self.assertIn('Product price cannot be negative', str(cm2.exception))
+
+    def test_show_all_tables_exception_path(self):
+        service = DatabaseHandshakeService()
+
+        with patch('django.db.connection') as mock_conn:
+            mock_cursor = MagicMock()
+            mock_cursor.__enter__.side_effect = Exception('show fail')
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn.settings_dict = {'NAME': 'testdb'}
+
+            res = service.show_all_tables()
+            self.assertEqual(res['status'], 'error')
+            self.assertEqual(res['total_tables'], 0)
+            self.assertIn('show fail', res['error'])
+
+    def test_check_table_exists_exception_path(self):
+        service = DatabaseHandshakeService()
+
+        with patch('django.db.connection') as mock_conn:
+            mock_cursor = MagicMock()
+            mock_cursor.__enter__.side_effect = Exception('check fail')
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn.settings_dict = {'NAME': 'testdb'}
+
+            res = service.check_table_exists('any')
+            self.assertEqual(res['status'], 'error')
+            self.assertFalse(res['exists'])
+            self.assertIn('check fail', res['error'])

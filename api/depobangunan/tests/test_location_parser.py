@@ -2,6 +2,9 @@ from pathlib import Path
 from unittest import TestCase
 from api.interfaces import Location, HtmlParserError
 from api.depobangunan.location_parser import DepoBangunanLocationParser
+from api.depobangunan.location_parser import TextCleaner, HtmlElementExtractor, ParserConfiguration
+from bs4 import BeautifulSoup
+import sys
 
 
 class TestDepoBangunanLocationParser(TestCase):
@@ -294,4 +297,54 @@ class TestDepoBangunanLocationParser(TestCase):
             # Should extract the paragraph with address
             self.assertIn("Jl. Test Street", locations[0].code)
             self.assertNotIn("Jadwal Buka", locations[0].code)
+
+    def test_text_cleaner_clean_store_name_prefix(self):
+        # name without 'depo bangunan' should get prefix
+        raw = 'Super Supplier'
+        cleaned = TextCleaner.clean_store_name(raw)
+        self.assertTrue(cleaned.startswith('DEPO BANGUNAN -'))
+
+    def test_text_cleaner_is_valid_text_none_and_empty(self):
+        self.assertFalse(TextCleaner.is_valid_text(None))
+        self.assertFalse(TextCleaner.is_valid_text('   '))
+
+    def test_html_element_extractor_extract_store_name_exception(self):
+        # Header object whose get_text raises exception
+        class BadHeader:
+            def get_text(self, strip=True):
+                raise ValueError('bad header')
+
+        extractor = HtmlElementExtractor(TextCleaner(), ParserConfiguration())
+        self.assertIsNone(extractor.extract_store_name(BadHeader()))
+
+    def test_html_element_extractor_skips_non_address_pattern(self):
+        # Create HTML where first p contains non-address indicator and second p is address
+        config = ParserConfiguration()
+        # add a custom non-address pattern
+        config.non_address_patterns = ['IGNORE_ME']
+        extractor = HtmlElementExtractor(TextCleaner(), config)
+
+        html = '<h2>Depo Bangunan - T</h2><p>IGNORE_ME: not address</p><p>Jl. Real Address 1</p>'
+        soup = BeautifulSoup(html, 'html.parser')
+        header = soup.find('h2')
+        addr = extractor.extract_address(header)
+        self.assertIsNotNone(addr)
+        self.assertIn('Jl. Real Address', addr)
+
+    def test_parser_configuration_get_parser_when_lxml_missing_and_present(self):
+        # Simulate lxml missing
+        config = ParserConfiguration()
+        saved = sys.modules.pop('lxml', None)
+        try:
+            self.assertEqual(config.get_parser(), config.fallback_parser)
+        finally:
+            if saved is not None:
+                sys.modules['lxml'] = saved
+
+        # Simulate lxml present
+        sys.modules['lxml'] = True
+        try:
+            self.assertEqual(config.get_parser(), config.preferred_parser)
+        finally:
+            sys.modules.pop('lxml', None)
 
