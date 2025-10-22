@@ -96,7 +96,6 @@ if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
     env("MYSQL_HOST", default=None),
     env("MYSQL_PORT", default=None)
 ]):
-    # SQLite configuration (for CI/tests or fallback)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -104,7 +103,6 @@ if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
         }
     }
 else:
-    # Production/Development MySQL configuration
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
@@ -113,10 +111,14 @@ else:
             "PASSWORD": env("MYSQL_PASSWORD"),
             "HOST": env("MYSQL_HOST"),
             "PORT": env("MYSQL_PORT"),
-            # good defaults for emoji / wide characters & stable time behavior
             "OPTIONS": {
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
+            },
+            'TEST': {
+                'NAME': env("MYSQL_NAME"),
+                'CHARSET': 'utf8mb4',
+                'COLLATION': 'utf8mb4_unicode_ci',
             },
         }
     }
