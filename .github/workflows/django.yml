@@ -77,7 +77,8 @@ jobs:
 
       - name: Run migrations
         run: |
-          python manage.py migrate --noinput --fake-initial
+          python manage.py makemigrations --merge
+          python manage.py migrate --noinput
 
       - name: Run tests
         run: |
