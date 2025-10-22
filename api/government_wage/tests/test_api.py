@@ -1,9 +1,3 @@
-"""
-Tests for Government Wage API Views
-
-This module contains unit tests for the government wage scraper API endpoints.
-"""
-
 from django.test import TestCase, Client
 from django.urls import reverse
 from unittest.mock import patch, MagicMock
