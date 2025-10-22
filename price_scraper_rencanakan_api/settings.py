@@ -88,14 +88,23 @@ WSGI_APPLICATION = 'price_scraper_rencanakan_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# Use SQLite for testing when MySQL env vars aren't available
-if all([
+# Database configuration with fallback to SQLite
+# Use SQLite for testing or when MySQL env vars aren't available
+if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
     env("MYSQL_NAME", default=None),
     env("MYSQL_USER", default=None), 
     env("MYSQL_PASSWORD", default=None),
     env("MYSQL_HOST", default=None),
     env("MYSQL_PORT", default=None)
 ]):
+    # SQLite configuration (for CI/tests or fallback)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
     # Production/Development MySQL configuration
     DATABASES = {
         'default': {
@@ -112,14 +121,7 @@ if all([
             },
         }
     }
-else:
-    # Test/CI SQLite configuration
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+
 
 
 # Password validation

@@ -1,3 +1,4 @@
+import json
 from django.test import TestCase, RequestFactory
 from unittest.mock import patch, MagicMock
 from api.mitra10 import views
@@ -40,26 +41,18 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_products_success(self, mock_factory):
+        from api.interfaces import Product, ScrapingResult
+        
         mock_scraper = MagicMock()
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.error_message = None  # This matches the actual ScrapingResult when successful
-        mock_result.url = "https://www.mitra10.com"
-        
-        # Create proper mock products with actual string values, not MagicMock names
-        mock_product1 = MagicMock()
-        mock_product1.name = "Item A"
-        mock_product1.price = 10000
-        mock_product1.url = "a.com"
-        mock_product1.unit = "kg"
-        
-        mock_product2 = MagicMock()
-        mock_product2.name = "Item B"
-        mock_product2.price = 20000
-        mock_product2.url = "b.com"
-        mock_product2.unit = "pcs"
-        
-        mock_result.products = [mock_product1, mock_product2]
+        mock_result = ScrapingResult(
+            success=True,
+            error_message="",
+            url="https://www.mitra10.com",
+            products=[
+                Product(name="Item A", price=10000, url="a.com"),
+                Product(name="Item B", price=20000, url="b.com"),
+            ]
+        )
         mock_scraper.scrape_products.return_value = mock_result
         mock_factory.return_value = mock_scraper
 
@@ -83,12 +76,19 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.create_mitra10_location_scraper")
     def test_scrape_locations_success(self, mock_factory):
+        from api.interfaces import Location, LocationScrapingResult
+        
         mock_scraper = MagicMock()
-        mock_scraper.scrape_locations.return_value = {
-            "success": True,
-            "locations": ["MITRA10 A", "MITRA10 B"],
-            "error_message": ""
-        }
+        mock_result = LocationScrapingResult(
+            locations=[
+                Location(name="MITRA10 A", code="code_a"),
+                Location(name="MITRA10 B", code="code_b")
+            ],
+            success=True,
+            error_message="",
+            attempts_made=1
+        )
+        mock_scraper.scrape_locations.return_value = mock_result
         mock_factory.return_value = mock_scraper
 
         request = self.factory.get("/api/mitra10/locations")
@@ -97,7 +97,7 @@ class TestMitra10Views(TestCase):
         data = json.loads(response.content)
         self.assertTrue(data["success"])
         self.assertEqual(len(data["locations"]), 2)
-        self.assertEqual(data["locations"][1], "MITRA10 B")
+        self.assertEqual(data["locations"][1]["name"], "MITRA10 B")
 
     @patch("api.mitra10.views.create_mitra10_location_scraper")
     def test_scrape_locations_failure(self, mock_factory):
@@ -111,3 +111,5 @@ class TestMitra10Views(TestCase):
         data = json.loads(response.content)
         self.assertFalse(data["success"])
         self.assertEqual(data["error_message"], "Internal server error occurred")
+
+

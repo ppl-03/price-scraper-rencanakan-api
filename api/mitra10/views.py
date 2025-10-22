@@ -93,10 +93,19 @@ def scrape_locations(request):
         scraper = create_mitra10_location_scraper()
         result = scraper.scrape_locations()
 
+        # Format locations data
+        locations_data = [
+            {
+                'name': location.name,
+                'code': location.code
+            }
+            for location in result.locations
+        ]
+
         return JsonResponse({
-            "success": result["success"],
-            "locations": result["locations"],
-            "error_message": result["error_message"]
+            "success": result.success,
+            "locations": locations_data,
+            "error_message": result.error_message
         })
 
     except Exception:
