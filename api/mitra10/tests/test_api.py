@@ -417,7 +417,8 @@ class TestMitra10API(TestCase):
         self.assertEqual(response.status_code, 500)
         response_data = json.loads(response.content)
         self.assertIn('error_message', response_data)
-        self.assertEqual(response_data['error_message'], 'Internal server error occurred')
+        self.assertIn('Internal server error', response_data['error_message'])
+        self.assertIn('Failed to create scraper', response_data['error_message'])
 
     @patch('api.mitra10.views.create_mitra10_scraper')
     def test_scraping_execution_exception(self, mock_create_scraper):
@@ -434,7 +435,8 @@ class TestMitra10API(TestCase):
         self.assertEqual(response.status_code, 500)
         response_data = json.loads(response.content)
         self.assertIn('error_message', response_data)
-        self.assertEqual(response_data['error_message'], 'Internal server error occurred')
+        self.assertIn('Internal server error', response_data['error_message'])
+        self.assertIn('Scraping execution failed', response_data['error_message'])
 
     def test_method_not_allowed(self):
         """Test that only GET method is allowed."""
