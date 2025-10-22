@@ -111,6 +111,9 @@ else:
     db_host = env("MYSQL_HOST", default=None) or env("DB_HOST")
     db_port = env("MYSQL_PORT", default=None) or env("DB_PORT")
     
+    # Determine test database name - don't add prefix if already present
+    test_db_name = db_name if db_name.startswith('test_') else f'test_{db_name}'
+    
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
@@ -124,10 +127,10 @@ else:
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
             },
-            # Use same database for tests (user doesn't have CREATE DATABASE permission in production)
-            # In CI, the test database will be created automatically
-            "TEST": {
-                "NAME": db_name,  # Always use the same database for tests (no CREATE DATABASE needed)
+            'TEST': {
+                'NAME': test_db_name,  # Use test database with proper naming
+                'CHARSET': 'utf8mb4',
+                'COLLATION': 'utf8mb4_unicode_ci',
             },
         }
     }
