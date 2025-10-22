@@ -96,7 +96,6 @@ if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
     env("MYSQL_HOST", default=None) or env("DB_HOST", default=None),
     env("MYSQL_PORT", default=None) or env("DB_PORT", default=None)
 ]):
-    # SQLite configuration (for CI/tests or fallback)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -119,15 +118,14 @@ else:
             "PASSWORD": db_password,
             "HOST": db_host,
             "PORT": db_port,
-            # good defaults for emoji / wide characters & stable time behavior
             "OPTIONS": {
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
             },
-            # Use same database for tests (user doesn't have CREATE DATABASE permission in production)
-            # In CI, the test database will be created automatically
-            "TEST": {
-                "NAME": db_name,  # Always use the same database for tests (no CREATE DATABASE needed)
+            'TEST': {
+                'NAME': env("MYSQL_NAME"),
+                'CHARSET': 'utf8mb4',
+                'COLLATION': 'utf8mb4_unicode_ci',
             },
         }
     }

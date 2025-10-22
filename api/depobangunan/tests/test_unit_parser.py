@@ -276,6 +276,19 @@ class TestDepoBangunanUnitParserIntegration(unittest.TestCase):
                 result = self.parser.parse_unit_from_product_name(product_name)
                 self.assertEqual(result, expected_unit)
 
+    def test_extract_feet_patterns_and_standard_adjacent(self):
+        extractor = DepoBangunanUnitExtractor()
+        self.assertEqual(extractor.extract_unit_from_name("PIPA 6'"), 'FEET')
+        self.assertEqual(extractor.extract_unit_from_name("ROD 2 ft"), 'FEET')
+        self.assertEqual(extractor.extract_unit_from_name("NAIL 10 pcs"), 'PCS')
+
+    def test_extract_unit_from_detail_page_near_element(self):
+        parser = DepoBangunanUnitParser()
+        html = '<div><span>Ukuran</span><span> 2kg </span></div>'
+        # Should find 'Ukuran' keyword and then detect 2kg
+        res = parser.parse_unit_from_detail_page(html)
+        self.assertEqual(res, 'KG')
+
 
 if __name__ == '__main__':
     unittest.main()
