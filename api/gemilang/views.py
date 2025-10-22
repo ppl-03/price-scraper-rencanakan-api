@@ -1,12 +1,48 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+API_TOKENS = {
+    'dev-token-12345': {
+        'name': 'Development Token',
+        'allowed_ips': [],
+        'created': '2024-01-01',
+        'expires': None
+    },
+    'legacy-api-token-67890': {
+        'name': 'Legacy Client Token',
+        'allowed_ips': [],
+        'created': '2024-01-01',
+        'expires': None
+    }
+}
+
+def _validate_api_token(request) -> tuple[bool, str]:
+    token = request.headers.get('X-API-Token') or request.headers.get('Authorization', '').replace('Bearer ', '')
+    
+    if not token:
+        return False, 'API token required'
+    
+    if token not in API_TOKENS:
+        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        logger.warning(f"Invalid API token attempt from {client_ip}")
+        return False, 'Invalid API token'
+    
+    token_info = API_TOKENS[token]
+    client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+    allowed_ips = token_info.get('allowed_ips', [])
+    
+    if allowed_ips and client_ip not in allowed_ips:
+        logger.warning(f"IP {client_ip} not allowed for token {token_info['name']}")
+        return False, 'IP not authorized'
+    
+    logger.info(f"Valid API token used from {client_ip}: {token_info['name']}")
+    return True, ''
 
 
 @require_http_methods(["GET"])
@@ -124,9 +160,12 @@ def gemilang_locations_view(request):
         return JsonResponse(response_data, status=500)
 
 
-@csrf_exempt
 @require_http_methods(["POST"])
 def scrape_and_save(request):
+    is_valid, error_message = _validate_api_token(request)
+    if not is_valid:
+        return JsonResponse({'error': error_message}, status=401)
+    
     try:
         body = json.loads(request.body)
         keyword = body.get('keyword')

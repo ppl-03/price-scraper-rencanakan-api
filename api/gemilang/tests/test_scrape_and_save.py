@@ -9,6 +9,16 @@ class TestScrapeAndSaveEndpoint(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = '/api/gemilang/scrape-and-save/'
+        self.valid_token = 'dev-token-12345'
+    
+    def _post_with_token(self, data, token=None):
+        token = token or self.valid_token
+        return self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json',
+            HTTP_X_API_TOKEN=token
+        )
     
     @patch('api.gemilang.views.create_gemilang_scraper')
     def test_scrape_and_save_success_insert_mode(self, mock_create_scraper):
@@ -34,11 +44,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
             'use_price_update': False
         }
         
-        response = self.client.post(
-            self.url,
-            data=json.dumps(data),
-            content_type='application/json'
-        )
+        response = self._post_with_token(data)
         
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
@@ -76,11 +82,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
             'use_price_update': True
         }
         
-        response = self.client.post(
-            self.url,
-            data=json.dumps(data),
-            content_type='application/json'
-        )
+        response = self._post_with_token(data)
         
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
@@ -101,11 +103,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         
         data = {'keyword': 'test'}
         
-        response = self.client.post(
-            self.url,
-            data=json.dumps(data),
-            content_type='application/json'
-        )
+        response = self._post_with_token(data)
         
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
@@ -115,11 +113,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
     def test_scrape_and_save_missing_keyword(self):
         data = {}
         
-        response = self.client.post(
-            self.url,
-            data=json.dumps(data),
-            content_type='application/json'
-        )
+        response = self._post_with_token(data)
         
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)
@@ -129,7 +123,8 @@ class TestScrapeAndSaveEndpoint(TestCase):
         response = self.client.post(
             self.url,
             data='invalid json',
-            content_type='application/json'
+            content_type='application/json',
+            HTTP_X_API_TOKEN=self.valid_token
         )
         
         self.assertEqual(response.status_code, 400)
@@ -148,16 +143,31 @@ class TestScrapeAndSaveEndpoint(TestCase):
         
         data = {'keyword': 'test'}
         
-        response = self.client.post(
-            self.url,
-            data=json.dumps(data),
-            content_type='application/json'
-        )
+        response = self._post_with_token(data)
         
         self.assertEqual(response.status_code, 500)
         response_data = json.loads(response.content)
         self.assertFalse(response_data['success'])
     
+    def test_scrape_and_save_missing_token(self):
+        data = {'keyword': 'test'}
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 401)
+        response_data = json.loads(response.content)
+        self.assertEqual(response_data['error'], 'API token required')
+    
+    def test_scrape_and_save_invalid_token(self):
+        data = {'keyword': 'test'}
+        response = self._post_with_token(data, token='invalid-token')
+        self.assertEqual(response.status_code, 401)
+        response_data = json.loads(response.content)
+        self.assertEqual(response_data['error'], 'Invalid API token')
+    
     def test_scrape_and_save_get_method_not_allowed(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
+
