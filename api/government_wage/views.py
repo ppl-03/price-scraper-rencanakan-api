@@ -1,21 +1,3 @@
-"""
-Government Wage Scraper API Views
-
-This module provides API endpoints for scraping government wage data from various regions in Central Java.
-
-Available endpoints:
-1. /api/government_wage/scrape/ - Scrape wage data for a specific region
-2. /api/government_wage/search/ - Search wage data by work code
-3. /api/government_wage/regions/ - Get list of available regions
-4. /api/government_wage/scrape-all/ - Scrape data from all regions (use with caution)
-
-Example usage:
-- GET /api/government_wage/scrape/?region=Kab. Cilacap
-- GET /api/government_wage/search/?work_code=6.1.1&region=Kab. Cilacap
-- GET /api/government_wage/regions/
-- GET /api/government_wage/scrape-all/?max_regions=5
-"""
-
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
@@ -32,15 +14,6 @@ def _create_error_response(message, status=400):
 
 @require_http_methods(["GET"])
 def scrape_region_data(request):
-    """
-    Scrape government wage data for a specific region.
-    
-    Parameters:
-    - region: The region to scrape (optional, defaults to "Kab. Cilacap")
-    
-    Returns:
-    - JSON response with scraped wage data
-    """
     try:
         region = request.GET.get('region', 'Kab. Cilacap')
         
@@ -89,16 +62,6 @@ def scrape_region_data(request):
 
 @require_http_methods(["GET"])
 def search_by_work_code(request):
-    """
-    Search government wage data by work code.
-    
-    Parameters:
-    - work_code: The work code to search for (required)
-    - region: The region to search in (optional)
-    
-    Returns:
-    - JSON response with matching wage data
-    """
     try:
         work_code = request.GET.get('work_code')
         if not work_code or not work_code.strip():
@@ -148,12 +111,6 @@ def search_by_work_code(request):
 
 @require_http_methods(["GET"])
 def get_available_regions(request):
-    """
-    Get list of available regions for government wage data.
-    
-    Returns:
-    - JSON response with list of available regions
-    """
     try:
         scraper = create_government_wage_scraper()
         regions = scraper.get_available_regions()
@@ -175,17 +132,6 @@ def get_available_regions(request):
 
 @require_http_methods(["GET"])
 def scrape_all_regions(request):
-    """
-    Scrape government wage data for all available regions.
-    
-    Parameters:
-    - max_regions: Maximum number of regions to scrape (optional)
-    
-    Returns:
-    - JSON response with wage data from all regions
-    
-    Warning: This endpoint may take a long time to complete as it scrapes all regions.
-    """
     try:
         max_regions_param = request.GET.get('max_regions')
         max_regions = None
