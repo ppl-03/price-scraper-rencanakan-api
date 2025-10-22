@@ -25,8 +25,8 @@ class JuraganMaterialDatabaseService:
         """
 
         params_list = [
-            (it["name"], it["price"], it["url"], it["unit"], now, now)
-            for it in data
+            self._create_product_params(item, now)
+            for item in data
         ]
 
         with transaction.atomic():
@@ -34,6 +34,10 @@ class JuraganMaterialDatabaseService:
                 cursor.executemany(sql, params_list)
 
         return True
+    
+    def _create_product_params(self, item, now):
+        """Helper method to create product parameters for database insertion."""
+        return (item["name"], item["price"], item["url"], item["unit"], now, now)
     
     def _check_anomaly(self, item, existing_price, new_price):
         if existing_price == 0:
@@ -66,9 +70,27 @@ class JuraganMaterialDatabaseService:
     def _insert_new_product(self, cursor, item, now):
         cursor.execute(
             "INSERT INTO juragan_material_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-            (item["name"], item["price"], item["url"], item["unit"], now, now)
+            self._create_product_params(item, now)
         )
         return 1
+
+    def _get_existing_product(self, cursor, item):
+        """Helper method to get existing product by name, url, and unit."""
+        cursor.execute(
+            "SELECT id, price FROM juragan_material_products WHERE name = %s AND url = %s AND unit = %s",
+            (item["name"], item["url"], item["unit"])
+        )
+        return cursor.fetchone()
+
+    def _process_single_item(self, cursor, item, now, anomalies):
+        """Process a single item for save_with_price_update operation."""
+        existing = self._get_existing_product(cursor, item)
+        
+        if existing:
+            existing_id, existing_price = existing
+            return self._update_existing_product(cursor, item, existing_id, existing_price, now, anomalies), 0
+        else:
+            return 0, self._insert_new_product(cursor, item, now)
 
     def save_with_price_update(self, data):
         if not self._validate_data(data):
@@ -82,17 +104,9 @@ class JuraganMaterialDatabaseService:
         with transaction.atomic():
             with connection.cursor() as cursor:
                 for item in data:
-                    cursor.execute(
-                        "SELECT id, price FROM juragan_material_products WHERE name = %s AND url = %s AND unit = %s",
-                        (item["name"], item["url"], item["unit"])
-                    )
-                    existing = cursor.fetchone()
-
-                    if existing:
-                        existing_id, existing_price = existing
-                        updated_count += self._update_existing_product(cursor, item, existing_id, existing_price, now, anomalies)
-                    else:
-                        inserted_count += self._insert_new_product(cursor, item, now)
+                    updated, inserted = self._process_single_item(cursor, item, now, anomalies)
+                    updated_count += updated
+                    inserted_count += inserted
 
         return {
             "success": True,
