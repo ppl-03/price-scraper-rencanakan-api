@@ -369,11 +369,10 @@ class GetCsrfTokenViewTests(ViewsTestCase):
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertTrue(data['success'])
-        self.assertIn('csrf_token', data)
-        self.assertIn('usage', data)
-        self.assertIn('example', data)
-        self.assertEqual(data['example']['header'], 'X-CSRFToken')
+        self.assertIn('csrfToken', data)
+        self.assertIn('message', data)
+        self.assertIsNotNone(data['csrfToken'])
+        self.assertEqual(data['message'], 'Include this token in X-CSRFToken header for POST requests')
 
 
 class ValidateScrapingParamsEndpointViewTests(ViewsTestCase):
