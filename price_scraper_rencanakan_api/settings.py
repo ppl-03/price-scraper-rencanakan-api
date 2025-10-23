@@ -57,6 +57,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'api.middleware.DisableCSRFForAPIMiddleware',  # Disable CSRF for /api/* endpoints
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -96,6 +97,7 @@ if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
     env("MYSQL_HOST", default=None) or env("DB_HOST", default=None),
     env("MYSQL_PORT", default=None) or env("DB_PORT", default=None)
 ]):
+    # SQLite configuration (for CI/tests or fallback)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -121,6 +123,7 @@ else:
             "PASSWORD": db_password,
             "HOST": db_host,
             "PORT": db_port,
+            # good defaults for emoji / wide characters & stable time behavior
             "OPTIONS": {
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
