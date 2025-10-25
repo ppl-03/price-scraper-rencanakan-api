@@ -23,22 +23,23 @@ def _save_products_to_database(products):
     
     try:
         # Format products for database saving
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit if product.unit else ''
-            }
-            for product in products
-        ]
+        # products_data = [
+        #     {
+        #         'name': product.name,
+        #         'price': product.price,
+        #         'url': product.url,
+        #         'unit': product.unit,
+        #         'location': product.location
+        #     }
+        #     for product in products
+        # ]
         
         # Save to database
         db_service = JuraganMaterialDatabaseService()
-        result = db_service.save(products_data)
+        result = db_service.save(products)
         
         if result:
-            logger.info(f"Juragan Material: Saved {len(products_data)} products to database")
+            logger.info(f"Juragan Material: Saved {len(products)} products to database")
         else:
             logger.error("Juragan Material: Failed to save products to database")
         
@@ -116,7 +117,8 @@ def scrape_and_save_products(request):
         
         # Perform scraping and force saving to database
         response_data, _, _ = _perform_scraping_and_save(keyword, sort_by_price, page, save_to_db=True)
-            
+        
+        
         return JsonResponse(response_data)
         
     except Exception as e:

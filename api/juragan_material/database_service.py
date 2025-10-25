@@ -6,10 +6,19 @@ class JuraganMaterialDatabaseService:
         if not data:
             return False
         for item in data:
-            if not all(k in item for k in ("name", "price", "url", "unit")):
-                return False
-            if not isinstance(item["price"], int) or item["price"] < 0:
-                return False
+            # If dictionary
+            if isinstance(item, dict):
+                if not all(k in item for k in ("name", "price", "url", "unit", "location")):
+                    return False
+                if not isinstance(item["price"], int) or item["price"] < 0:
+                    return False
+            # If Object
+            elif isinstance(item, object):
+                # Gunakan hasattr untuk memeriksa atribut pada objek
+                if not all(hasattr(item, attr) for attr in ("name", "price", "url", "unit", "location")):
+                    return False
+                if not isinstance(item.price, int) or item.price < 0:
+                    return False
         return True
     
     def save(self, data):
@@ -20,14 +29,14 @@ class JuraganMaterialDatabaseService:
 
         sql = """
             INSERT INTO juragan_material_products
-                (name, price, url, unit, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                (name, price, url, unit, location, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s,%s)
         """
-
         params_list = [
             self._create_product_params(item, now)
             for item in data
         ]
+        
 
         with transaction.atomic():
             with connection.cursor() as cursor:
@@ -37,11 +46,14 @@ class JuraganMaterialDatabaseService:
     
     def _create_product_params(self, item, now):
         """Helper method to create product parameters for database insertion."""
-        return (item["name"], item["price"], item["url"], item["unit"], now, now)
+        if isinstance(item, dict):
+            return (item["name"], item["price"], item["url"], item["unit"], item["location"], now, now)
+        elif isinstance(item, object):
+            return (item.name, item.price, item.url, item.unit,item.location,now, now)
     
     def _extract_product_identifiers(self, item):
         """Helper method to extract product identifiers (name, url, unit) from item."""
-        return (item["name"], item["url"], item["unit"])
+        return (item.name, item.url, item.unit)
     
     def _calculate_price_change_percentage(self, existing_price, new_price):
         """Helper method to calculate price change percentage."""
@@ -52,9 +64,10 @@ class JuraganMaterialDatabaseService:
     def _create_anomaly_object(self, item, existing_price, new_price, price_diff_pct):
         """Helper method to create anomaly object."""
         return {
-            "name": item["name"],
-            "url": item["url"],
-            "unit": item["unit"],
+            "name": item.name,
+            "url": item.url,
+            "unit": item.unit,
+            "location": item.location,
             "old_price": existing_price,
             "new_price": new_price,
             "change_percent": round(price_diff_pct, 2)
@@ -70,7 +83,7 @@ class JuraganMaterialDatabaseService:
         return None
 
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
-        new_price = item["price"]
+        new_price = item.price
         if existing_price != new_price:
             anomaly = self._check_anomaly(item, existing_price, new_price)
             if anomaly:
@@ -84,7 +97,7 @@ class JuraganMaterialDatabaseService:
 
     def _insert_new_product(self, cursor, item, now):
         cursor.execute(
-            "INSERT INTO juragan_material_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s. %s, %s, %s)",
             self._create_product_params(item, now)
         )
         return 1

@@ -58,7 +58,6 @@ def _get_database_engine():
 def get_table_columns(table_name):
     """Get table column names for the current database engine."""
     db_engine = _get_database_engine()
-    
     if 'mysql' in db_engine:
         return get_table_columns_mysql(table_name)
     elif 'sqlite' in db_engine:
