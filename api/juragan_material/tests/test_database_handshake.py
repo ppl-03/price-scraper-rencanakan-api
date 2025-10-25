@@ -19,12 +19,12 @@ class TestJuraganMaterialDatabaseHandshake(MySQLTestCase):
     
     def test_juragan_material_products_table_has_correct_columns(self):
         column_names = get_table_columns('juragan_material_products')
-        
         self.assertIn('id', column_names)
         self.assertIn('name', column_names)
         self.assertIn('price', column_names)
         self.assertIn('url', column_names)
         self.assertIn('unit', column_names)
+        self.assertIn("location", column_names)
         self.assertIn('created_at', column_names)
         self.assertIn('updated_at', column_names)
 
@@ -36,7 +36,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Test Semen 50kg",
             price=65000,
             url="https://juraganmaterial.id/test",
-            unit="KG"
+            unit="KG",
+            location="Jakarta"
         )
         
         self.assertIsNotNone(product.id)
@@ -44,6 +45,7 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
         self.assertEqual(product.price, 65000)
         self.assertEqual(product.url, "https://juraganmaterial.id/test")
         self.assertEqual(product.unit, "KG")
+        self.assertEqual(product.location, "Jakarta")
         self.assertIsNotNone(product.created_at)
         self.assertIsNotNone(product.updated_at)
     
@@ -62,7 +64,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Retrievable Product",
             price=30000,
             url="https://juraganmaterial.id/test",
-            unit="M²"
+            unit="M²",
+            location="Bandung"
         )
         
         retrieved_product = JuraganMaterialProduct.objects.get(id=created_product.id)
@@ -70,19 +73,24 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
         self.assertEqual(retrieved_product.name, "Retrievable Product")
         self.assertEqual(retrieved_product.price, 30000)
         self.assertEqual(retrieved_product.unit, "M²")
+        self.assertEqual(retrieved_product.location, "Bandung")
+
     
     def test_retrieve_all_products(self):
         JuraganMaterialProduct.objects.create(
             name="Product 1",
             price=1000,
             url="https://juraganmaterial.id/p1",
-            unit="KG"
+            unit="KG",
+            location="Jakarta"
+            
         )
         JuraganMaterialProduct.objects.create(
             name="Product 2",
             price=2000,
             url="https://juraganmaterial.id/p2",
-            unit="M"
+            unit="M",
+            location="Surabaya"
         )
         
         all_products = JuraganMaterialProduct.objects.all()
@@ -94,13 +102,15 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Semen Portland 50kg",
             price=65000,
             url="https://juraganmaterial.id/semen",
-            unit="KG"
+            unit="KG",
+            location="Jakarta"
         )
         JuraganMaterialProduct.objects.create(
             name="Keramik 40x40",
             price=45000,
             url="https://juraganmaterial.id/keramik",
-            unit="M²"
+            unit="M²",
+            location="Bandung"
         )
         
         semen_products = JuraganMaterialProduct.objects.filter(name__icontains="semen")
@@ -113,7 +123,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Original Name",
             price=10000,
             url="https://juraganmaterial.id/test",
-            unit="KG"
+            unit="KG",
+            location="Jakarta"
         )
         
         original_created_at = product.created_at
@@ -134,7 +145,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="To Delete",
             price=5000,
             url="https://juraganmaterial.id/test",
-            unit="LITER"
+            unit="LITER",
+            location="Medan"
         )
         
         product_id = product.id
@@ -148,7 +160,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="String Test",
             price=15000,
             url="https://juraganmaterial.id/test",
-            unit="KG"
+            unit="KG",
+            location="Yogyakarta"
         )
         
         expected_string = "String Test - Rp15000"
@@ -159,7 +172,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Negative Price Test",
             price=-1000,
             url="https://juraganmaterial.id/test",
-            unit="KG"
+            unit="KG",
+            location="Semarang"
         )
         
         with self.assertRaises(ValidationError):
@@ -170,7 +184,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Zero Price",
             price=0,
             url="https://juraganmaterial.id/test",
-            unit="KG"
+            unit="KG",
+            location="Bali"
         )
         
         self.assertEqual(product.price, 0)
@@ -181,7 +196,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name=long_name,
             price=10000,
             url="https://juraganmaterial.id/test",
-            unit="KG"
+            unit="KG",
+            location="Jakarta"
         )
         
         self.assertEqual(len(product.name), 500)
@@ -192,7 +208,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Long URL Test",
             price=10000,
             url=long_url,
-            unit="KG"
+            unit="KG",
+            location="Jakarta"
         )
         
         self.assertEqual(len(product.url), 1000)
@@ -203,7 +220,8 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="Long Unit Test",
             price=10000,
             url="https://juraganmaterial.id/test",
-            unit=long_unit
+            unit=long_unit,
+            location="Jakarta"
         )
         
         self.assertEqual(len(product.unit), 50)
@@ -213,13 +231,15 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
             name="First Product",
             price=10000,
             url="https://juraganmaterial.id/p1",
-            unit="KG"
+            unit="KG",
+            location="Jakarta"
         )
         JuraganMaterialProduct.objects.create(
             name="Second Product",
             price=20000,
             url="https://juraganmaterial.id/p2",
-            unit="M"
+            unit="M",
+            location="Surabaya"
         )
         
         recent_products = JuraganMaterialProduct.objects.order_by('-created_at')
@@ -228,9 +248,9 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
         self.assertEqual(recent_products.last().name, "First Product")
     
     def test_filter_by_price_range(self):
-        JuraganMaterialProduct.objects.create(name="Cheap", price=1000, url="https://juraganmaterial.id/p1", unit="KG")
-        JuraganMaterialProduct.objects.create(name="Medium", price=5000, url="https://juraganmaterial.id/p2", unit="KG")
-        JuraganMaterialProduct.objects.create(name="Expensive", price=10000, url="https://juraganmaterial.id/p3", unit="KG")
+        JuraganMaterialProduct.objects.create(name="Cheap", price=1000, url="https://juraganmaterial.id/p1", unit="KG", location="Jakarta")
+        JuraganMaterialProduct.objects.create(name="Medium", price=5000, url="https://juraganmaterial.id/p2", unit="KG", location="Bandung")
+        JuraganMaterialProduct.objects.create(name="Expensive", price=10000, url="https://juraganmaterial.id/p3", unit="KG", location="Surabaya")
         
         mid_range = JuraganMaterialProduct.objects.filter(price__gte=2000, price__lte=7000)
         
@@ -239,7 +259,7 @@ class TestJuraganMaterialProductModel(MySQLTestCase):
     
     def test_bulk_create_products(self):
         products = [
-            JuraganMaterialProduct(name=f"Product {i}", price=i*1000, url=f"https://juraganmaterial.id/p{i}", unit="KG")
+            JuraganMaterialProduct(name=f"Product {i}", price=i*1000, url=f"https://juraganmaterial.id/p{i}", unit="KG", location="Jakarta")
             for i in range(1, 6)
         ]
         
