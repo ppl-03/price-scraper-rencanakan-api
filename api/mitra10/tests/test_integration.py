@@ -189,7 +189,7 @@ class TestMitra10Integration(TestCase):
         result = scraper.scrape_products("test")
         
         mock_url_builder.build_search_url.assert_called_once_with("test", True, 0)
-        mock_client_instance.get.assert_called_once_with("https://www.mitra10.com/catalogsearch/result?q=test")
+        mock_client_instance.get.assert_called_once_with("https://www.mitra10.com/catalogsearch/result?q=test", timeout=60)
         mock_html_parser.parse_products.assert_called_once_with(self.mock_html)
         
         self.assertTrue(result.success)

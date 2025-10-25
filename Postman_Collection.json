@@ -1,0 +1,158 @@
+{
+	"info": {
+		"_postman_id": "price-scraper-api-collection",
+		"name": "Rencanakan Price Scraper API",
+		"description": "API collection for Rencanakan price scraper with CSRF token support",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Get CSRF Token",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Save the CSRF token to environment variable",
+							"if (pm.response.code === 200) {",
+							"    const response = pm.response.json();",
+							"    pm.environment.set(\"csrf_token\", response.csrfToken);",
+							"    console.log(\"✅ CSRF Token saved:\", response.csrfToken);",
+							"    pm.test(\"Token received\", function() {",
+							"        pm.expect(response.csrfToken).to.exist;",
+							"    });",
+							"} else {",
+							"    console.log(\"❌ Failed to get token\");",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:8000/api/csrf-token/",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "8000",
+					"path": ["api", "csrf-token", ""]
+				},
+				"description": "Get a CSRF token to use in subsequent POST requests. This must be called first before any POST requests."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Gemilang - Scrape and Save",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "X-API-Token",
+						"value": "dev-token-12345",
+						"type": "text",
+						"description": "API authentication token"
+					},
+					{
+						"key": "X-CSRFToken",
+						"value": "{{csrf_token}}",
+						"type": "text",
+						"description": "CSRF token from step 1"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"keyword\": \"semen\",\n    \"sort_by_price\": true,\n    \"page\": 0,\n    \"use_price_update\": false\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/api/gemilang/scrape-and-save/",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "8000",
+					"path": ["api", "gemilang", "scrape-and-save", ""]
+				},
+				"description": "Scrape products from Gemilang Material and save to database. Requires CSRF token from step 1."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Gemilang - Scrape Products (GET)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:8000/api/gemilang/scrape/?keyword=semen&sort_by_price=true&page=0",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "8000",
+					"path": ["api", "gemilang", "scrape", ""],
+					"query": [
+						{
+							"key": "keyword",
+							"value": "semen",
+							"description": "Search keyword"
+						},
+						{
+							"key": "sort_by_price",
+							"value": "true",
+							"description": "Sort results by price"
+						},
+						{
+							"key": "page",
+							"value": "0",
+							"description": "Page number (0-indexed)"
+						}
+					]
+				},
+				"description": "Scrape products from Gemilang Material (GET request, no CSRF needed)"
+			},
+			"response": []
+		},
+		{
+			"name": "4. Gemilang - Get Locations",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:8000/api/gemilang/locations/?timeout=30",
+					"protocol": "http",
+					"host": ["127", "0", "0", "1"],
+					"port": "8000",
+					"path": ["api", "gemilang", "locations", ""],
+					"query": [
+						{
+							"key": "timeout",
+							"value": "30",
+							"description": "Request timeout in seconds"
+						}
+					]
+				},
+				"description": "Get list of available locations from Gemilang Material"
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "string"
+		},
+		{
+			"key": "api_token",
+			"value": "dev-token-12345",
+			"type": "string"
+		}
+	]
+}

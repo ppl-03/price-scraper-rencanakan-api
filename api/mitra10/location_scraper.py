@@ -29,7 +29,8 @@ class Mitra10LocationScraper:
     async def _extract_locations(self, client, url):
         await client._ensure_browser()
         page = client.page
-        await page.goto(url, timeout=60000)
+        # Increase timeout to 5 minutes (300000ms) for initial page load
+        await page.goto(url, timeout=300000)
 
         # remove leftover geolocation banners
         try:
@@ -39,7 +40,8 @@ class Mitra10LocationScraper:
         except Exception:
             pass
 
-        await page.wait_for_load_state("networkidle")
+        # Increase timeout to 5 minutes for networkidle state on heavy JavaScript sites
+        await page.wait_for_load_state("networkidle", timeout=300000)
 
         # close popup by clicking outside if present
         try:
@@ -51,7 +53,7 @@ class Mitra10LocationScraper:
             logger.warning(f"[Playwright] Popup click close failed: {e}")
 
         # wait until store button appears
-        await page.wait_for_selector("button.MuiButtonBase-root.jss368", state="visible", timeout=20000)
+        await page.wait_for_selector("button.MuiButtonBase-root.jss368", state="visible", timeout=60000)
         pilih_button = page.locator("button.MuiButtonBase-root.jss368").first
 
         # React hydration: wait until button text updates
@@ -62,7 +64,7 @@ class Mitra10LocationScraper:
                 const text = btn.innerText.toUpperCase();
                 return text.includes("PILIH TOKO") || text.startsWith("MITRA10 ");
             }""",
-            timeout=20000
+            timeout=60000
         )
 
         await pilih_button.scroll_into_view_if_needed()
@@ -85,8 +87,8 @@ class Mitra10LocationScraper:
         if not clicked:
             raise TimeoutError("Failed to click store selector after 3 attempts")
 
-        # wait for dropdown to appear 
-        await page.wait_for_selector("div[role='presentation'] li span", timeout=15000)
+        # wait for dropdown to appear with increased timeout (60 seconds)
+        await page.wait_for_selector("div[role='presentation'] li span", timeout=60000)
         logger.info("[Playwright] Dropdown appeared successfully!")
 
         # get page content and parse locations using the parser

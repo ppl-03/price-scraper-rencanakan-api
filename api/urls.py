@@ -1,8 +1,12 @@
 from django.urls import path
 from . import views
+from .csrf_views import get_csrf_token
 
 urlpatterns = [
     path('health/', views.health_check, name='health_check'),
+    
+    # CSRF token endpoint for API clients
+    path('csrf-token/', get_csrf_token, name='get_csrf_token'),
     
     # Secure validation endpoints (with CSRF protection)
     path('validate-input/', views.validate_scraper_input, name='validate_scraper_input'),
@@ -11,9 +15,6 @@ urlpatterns = [
     
     # Legacy CSRF-exempt endpoint (use only when necessary)
     path('validate-input-legacy/', views.validate_scraper_input_legacy_api, name='validate_scraper_input_legacy_api'),
-    
-    # CSRF token endpoint for API clients
-    path('csrf-token/', views.get_csrf_token, name='get_csrf_token'),
     
     path('validate/<str:vendor>/', views.validate_vendor_input, name='validate_vendor_input'),
     

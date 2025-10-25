@@ -44,8 +44,8 @@ class DepoPriceScraper(BasePriceScraper):
             return product
         
         try:
-            # Fetch the product detail page
-            detail_html = self.http_client.get(product.url)
+            # Fetch the product detail page with increased timeout
+            detail_html = self.http_client.get(product.url, timeout=60)
             
             # Extract unit from the detail page
             unit = self.unit_parser.parse_unit_from_detail_page(detail_html)

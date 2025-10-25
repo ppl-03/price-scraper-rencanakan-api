@@ -52,7 +52,7 @@ class TestMitra10PriceScraper(TestCase):
         self.assertEqual(result[0].url, "https://test.com/product1")
         
         self.mock_url_builder.build_search_url.assert_called_once_with(test_keyword)
-        mock_batch_client.get.assert_called_once_with(test_url)
+        mock_batch_client.get.assert_called_once_with(test_url, timeout=60)
         self.mock_html_parser.parse_products.assert_called_once_with(test_html)
         
         mock_batch_client_class.assert_called_once()
@@ -196,7 +196,7 @@ class TestMitra10PriceScraper(TestCase):
             elif keyword == "another_success":
                 return test_urls[2]
         
-        def mock_get_html(url):
+        def mock_get_html(url, **kwargs):
             if url == test_urls[1]:  
                 raise ConnectionError("Network error")
             return test_html
@@ -243,7 +243,7 @@ class TestMitra10PriceScraper(TestCase):
         self.assertEqual(result, [])
 
         self.mock_url_builder.build_search_url.assert_called_once_with("no_results_keyword")
-        mock_batch_client.get.assert_called_once_with(test_url)
+        mock_batch_client.get.assert_called_once_with(test_url, timeout=60)
         self.mock_html_parser.parse_products.assert_called_once_with(test_html)
     
     @patch('api.mitra10.scraper.BatchPlaywrightClient')

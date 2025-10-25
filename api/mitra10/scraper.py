@@ -17,9 +17,10 @@ class Mitra10PriceScraper(BasePriceScraper):
         try:
             url = self.url_builder.build_search_url(keyword, sort_by_price, page)
             
-            # Use BatchPlaywrightClient as a context manager
+            # Use BatchPlaywrightClient as a context manager with increased timeout
             with BatchPlaywrightClient(headless=True) as batch_client:
-                html_content = batch_client.get(url)
+                # Increase timeout to 60 seconds for heavy JavaScript sites
+                html_content = batch_client.get(url, timeout=60)
                 products = self.html_parser.parse_products(html_content)
             
             logger.info(f"Successfully scraped {len(products)} products for keyword '{keyword}'")
@@ -45,8 +46,9 @@ class Mitra10PriceScraper(BasePriceScraper):
         with BatchPlaywrightClient() as batch_client:
             for keyword in keywords:
                 try:
-                    url = self.url_builder.build_search_url(keyword)                    
-                    html_content = batch_client.get(url)                    
+                    url = self.url_builder.build_search_url(keyword)
+                    # Increase timeout to 60 seconds for heavy JavaScript sites
+                    html_content = batch_client.get(url, timeout=60)
                     products = self.html_parser.parse_products(html_content)
                     all_products.extend(products)
                     

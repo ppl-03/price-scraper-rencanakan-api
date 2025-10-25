@@ -1,5 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.middleware.csrf import get_token
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
 import json
@@ -162,6 +164,7 @@ def gemilang_locations_view(request):
 
 @require_http_methods(["POST"])
 def scrape_and_save(request):
+    # Validate API token - if valid token is present, we trust the request
     is_valid, error_message = _validate_api_token(request)
     if not is_valid:
         return JsonResponse({'error': error_message}, status=401)

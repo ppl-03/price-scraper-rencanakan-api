@@ -51,7 +51,7 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
             self.assertEqual(result.products[1].unit, "KG")
             
             # Verify detail page was fetched
-            self.mock_http_client.get.assert_called_once_with("https://example.com/2")
+            self.mock_http_client.get.assert_called_once_with("https://example.com/2", timeout=60)
             mock_parse_detail.assert_called_once_with(detail_html)
     
     @patch('api.depobangunan.scraper.BasePriceScraper.scrape_products')

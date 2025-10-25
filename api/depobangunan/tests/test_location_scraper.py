@@ -40,7 +40,7 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.assertIsNone(result.error_message)
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)
         self.mock_location_parser.parse_locations.assert_called_once_with(mock_html)
 
     def test_scrape_locations_http_client_error(self):
@@ -98,7 +98,7 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.scraper.scrape_locations()
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)
 
     def test_scrape_locations_generic_exception(self):
         """Test handling of generic exceptions"""
@@ -184,7 +184,7 @@ class TestDepoBangunanLocationScraper(TestCase):
         result = self.scraper.scrape_locations()
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)
         self.assertTrue(result.success)
 
     def test_scrape_locations_duplicate_locations(self):
@@ -223,4 +223,4 @@ class TestDepoBangunanLocationScraper(TestCase):
         self.scraper.scrape_locations(timeout=None)
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)

@@ -5,7 +5,7 @@ from api.tokopedia.factory import create_tokopedia_scraper
 from api.tokopedia.scraper import TokopediaPriceScraper
 from api.tokopedia.url_builder import TokopediaUrlBuilder
 from api.tokopedia.html_parser import TokopediaHtmlParser
-from api.core import BaseHttpClient
+from api.tokopedia_core import BaseHttpClient
 
 
 class TestTokopediaFactory(TestCase):

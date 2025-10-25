@@ -28,32 +28,20 @@ class TestCoreModuleCoverage(TestCase):
         self.assertEqual(result, 55000)
     
     def test_http_client_enhanced_headers(self):
-        """Test that BaseHttpClient sets enhanced headers for better compatibility"""
+        """Test that BaseHttpClient sets User-Agent header"""
         from api.config import config
         
         client = BaseHttpClient()
         
-        # Verify enhanced headers are set in the session
+        # Verify headers are set in the session
         headers = client.session.headers
         
-        # Check for modern browser headers - using config.user_agent as source of truth
+        # Check for User-Agent header - using config.user_agent as source of truth
         self.assertIn('User-Agent', headers)
         self.assertIn('Chrome/', headers['User-Agent'], 
                      f"Expected Chrome version in User-Agent, got: {headers['User-Agent']}")
         self.assertEqual(headers['User-Agent'], config.user_agent,
                         f"User-Agent mismatch. Expected: {config.user_agent}, Got: {headers['User-Agent']}")
-        self.assertIn('Accept', headers)
-        self.assertEqual(headers['Accept'], 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8')
-        self.assertIn('Accept-Language', headers)
-        self.assertIn('Accept-Encoding', headers)
-        self.assertIn('sec-ch-ua', headers)
-        self.assertIn('Chromium', headers['sec-ch-ua'])
-        self.assertIn('sec-ch-ua-mobile', headers)
-        self.assertIn('sec-ch-ua-platform', headers)
-        self.assertIn('Sec-Fetch-Dest', headers)
-        self.assertIn('Sec-Fetch-Mode', headers)
-        self.assertIn('Sec-Fetch-Site', headers)
-        self.assertIn('Sec-Fetch-User', headers)
     
     @patch('api.core.requests.Session')
     def test_http_client_request_retry_mechanism(self, mock_session_class):

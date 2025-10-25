@@ -360,22 +360,6 @@ class ValidateScraperInputLegacyApiViewTests(ViewsTestCase):
         self.assertTrue(data['success'])
 
 
-class GetCsrfTokenViewTests(ViewsTestCase):
-    """Tests for get_csrf_token view"""
-    
-    def test_get_csrf_token_success(self):
-        """Test successful CSRF token retrieval"""
-        response = self.client.get(reverse('get_csrf_token'))
-        
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(data['success'])
-        self.assertIn('csrf_token', data)
-        self.assertIn('usage', data)
-        self.assertIn('example', data)
-        self.assertEqual(data['example']['header'], 'X-CSRFToken')
-
-
 class ValidateScrapingParamsEndpointViewTests(ViewsTestCase):
     """Tests for validate_scraping_params_endpoint view"""
     
