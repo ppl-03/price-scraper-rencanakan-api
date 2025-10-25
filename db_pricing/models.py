@@ -112,6 +112,7 @@ class JuraganMaterialProduct(models.Model):
     price = models.IntegerField(validators=[MinValueValidator(0)])
     url = models.URLField(max_length=1000)
     unit = models.CharField(max_length=50, blank=True, default='')
+    location = models.CharField(max_length=200,default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
