@@ -4,7 +4,6 @@ This allows API token authentication to bypass CSRF checks in a secure way.
 """
 from functools import wraps
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,6 @@ def api_token_required(view_func):
             pass
     """
     @wraps(view_func)
-    @csrf_exempt  # Only exempt after wrapping with token validation
     def wrapped_view(request, *args, **kwargs):
         # Import here to avoid circular dependency
         from .views import _validate_api_token

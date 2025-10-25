@@ -6,6 +6,8 @@ Script to drop all tables from the MySQL database and reset for fresh migrations
 import os
 import django
 import sys
+import re
+import logging
 
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'price_scraper_rencanakan_api.settings')
@@ -14,31 +16,56 @@ django.setup()
 from django.db import connection
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
+# conservative table name validation: allow letters, numbers, underscore, dollar, and hyphen
+_TABLE_NAME_RE = re.compile(r"^[A-Za-z0-9_\-$]+$")
+
 def drop_all_tables():
     """Drop all tables in the database."""
     db_name = settings.DATABASES['default']['NAME']
-    
+
     with connection.cursor() as cursor:
         # Disable foreign key checks
         cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
-        
-        # Get all tables
-        cursor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{db_name}';")
-        tables = cursor.fetchall()
-        
+
+        # Prefer using Django's introspection which avoids formatting SQL ourselves
+        try:
+            tables = connection.introspection.table_names()
+        except Exception:
+            # Fallback to a parameterized information_schema query (safe against injection)
+            cursor.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = %s;",
+                [db_name],
+            )
+            tables = [row[0] for row in cursor.fetchall()]
+
         if not tables:
             print("✓ No tables found in database.")
+            # Re-enable foreign key checks before returning
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
             return
-        
+
         print(f"Found {len(tables)} tables to drop:")
-        for table in tables:
-            table_name = table[0]
+        for table_name in tables:
+            # table_name may be a tuple from some fetch implementations; normalize
+            if isinstance(table_name, (list, tuple)):
+                table_name = table_name[0]
+
+            # Basic sanity check: only allow well-formed table names
+            if not isinstance(table_name, str) or not _TABLE_NAME_RE.match(table_name):
+                logger.warning(f"Skipping suspicious table name: {table_name!r}")
+                continue
+
             print(f"  - Dropping {table_name}...")
-            cursor.execute(f"DROP TABLE IF EXISTS `{table_name}`;")
-        
+
+            # Use connection.ops.quote_name to safely quote the identifier for the backend
+            quoted = connection.ops.quote_name(table_name)
+            cursor.execute(f"DROP TABLE IF EXISTS {quoted};")
+
         # Re-enable foreign key checks
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-        
+
         print(f"\n✓ Successfully dropped all {len(tables)} tables!")
         print("\nNext steps:")
         print("  1. Run: python manage.py migrate")
