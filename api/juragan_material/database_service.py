@@ -2,24 +2,33 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 class JuraganMaterialDatabaseService:
+    def _validate_dict_item(self, item):
+        """Validate dictionary item has required fields and valid price."""
+        required_keys = ("name", "price", "url", "unit", "location")
+        if not all(k in item for k in required_keys):
+            return False
+        return isinstance(item["price"], int) and item["price"] >= 0
+    
+    def _validate_object_item(self, item):
+        """Validate object item has required attributes and valid price."""
+        required_attrs = ("name", "price", "url", "unit", "location")
+        if not all(hasattr(item, attr) for attr in required_attrs):
+            return False
+        return isinstance(item.price, int) and item.price >= 0
+    
+    def _validate_single_item(self, item):
+        """Validate a single item regardless of type (dict or object)."""
+        if isinstance(item, dict):
+            return self._validate_dict_item(item)
+        elif isinstance(item, object):
+            return self._validate_object_item(item)
+        return False
+    
     def _validate_data(self, data):
+        """Validate data array contains valid items."""
         if not data:
             return False
-        for item in data:
-            # If dictionary
-            if isinstance(item, dict):
-                if not all(k in item for k in ("name", "price", "url", "unit", "location")):
-                    return False
-                if not isinstance(item["price"], int) or item["price"] < 0:
-                    return False
-            # If Object
-            elif isinstance(item, object):
-                # Gunakan hasattr untuk memeriksa atribut pada objek
-                if not all(hasattr(item, attr) for attr in ("name", "price", "url", "unit", "location")):
-                    return False
-                if not isinstance(item.price, int) or item.price < 0:
-                    return False
-        return True
+        return all(self._validate_single_item(item) for item in data)
     
     def save(self, data):
         if not self._validate_data(data):
