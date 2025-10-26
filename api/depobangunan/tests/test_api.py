@@ -1,9 +1,13 @@
 
+
 from django.test import TestCase, Client
 from django.urls import reverse
 from unittest.mock import patch, MagicMock
 import json
 
+
+
+# Helper functions (single definition)
 def create_mock_product(name, price, url, unit):
     product = MagicMock()
     product.name = name
@@ -22,10 +26,23 @@ def create_mock_scraper(success=True, products=None, error_message=None, url="ht
     mock_scraper.scrape_products.return_value = mock_result
     return mock_scraper
 
+def create_mock_location(name, code):
+    location = MagicMock()
+    location.name = name
+    location.code = code
+    return location
+
 def assert_json_response(testcase, response, expected_status=200):
     testcase.assertEqual(response.status_code, expected_status)
     testcase.assertEqual(response['Content-Type'], 'application/json')
     return json.loads(response.content)
+
+def create_mock_db_service(save_return=True, side_effect=None):
+    mock_db_service = MagicMock()
+    mock_db_service.save.return_value = save_return
+    if side_effect:
+        mock_db_service.save.side_effect = side_effect
+    return mock_db_service
 
 
 class DepoBangunanAPITest(TestCase):
@@ -52,12 +69,10 @@ class DepoBangunanAPITest(TestCase):
         self.assertTrue(response_data['success'])
         self.assertIsNone(response_data['error_message'])
         self.assertEqual(len(response_data['products']), 2)
-        self.assertEqual(response_data['products'][0]['name'], "Test Product 1")
-        self.assertEqual(response_data['products'][0]['price'], 5000)
-        self.assertEqual(response_data['products'][0]['url'], "https://www.depobangunan.co.id/test-product-1")
-        self.assertEqual(response_data['products'][1]['name'], "Test Product 2")
-        self.assertEqual(response_data['products'][1]['price'], 7500)
-        self.assertEqual(response_data['products'][1]['url'], "https://www.depobangunan.co.id/test-product-2")
+        for i, prod in enumerate(products):
+            self.assertEqual(response_data['products'][i]['name'], prod.name)
+            self.assertEqual(response_data['products'][i]['price'], prod.price)
+            self.assertEqual(response_data['products'][i]['url'], prod.url)
         self.assertEqual(response_data['url'], "https://www.depobangunan.co.id/catalogsearch/result/?q=cat&product_list_order=low_to_high")
         mock_create_scraper.return_value.scrape_products.assert_called_once_with(
             keyword='cat',
@@ -67,26 +82,14 @@ class DepoBangunanAPITest(TestCase):
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_successful_scrape_with_no_products(self, mock_create_scraper):
-        mock_scraper = MagicMock()
+        mock_scraper = create_mock_scraper(products=[], url="https://www.depobangunan.co.id/catalogsearch/result/?q=nonexistent")
         mock_create_scraper.return_value = mock_scraper
-        
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.products = []
-        mock_result.error_message = None
-        mock_result.url = "https://www.depobangunan.co.id/catalogsearch/result/?q=nonexistent"
-        
-        mock_scraper.scrape_products.return_value = mock_result
-        
         response = self.client.get(self.scrape_url, {
             'keyword': 'nonexistent',
             'sort_by_price': 'true',
             'page': '0'
         })
-        
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.content)
-        
+        response_data = assert_json_response(self, response)
         self.assertTrue(response_data['success'])
         self.assertEqual(len(response_data['products']), 0)
         self.assertIsNone(response_data['error_message'])
@@ -140,44 +143,36 @@ class DepoBangunanAPITest(TestCase):
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_sort_by_price_parameter_variations(self, mock_create_scraper):
-        mock_scraper = MagicMock()
+        mock_scraper = create_mock_scraper()
         mock_create_scraper.return_value = mock_scraper
-        
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.products = []
-        mock_result.error_message = None
-        mock_result.url = "https://www.depobangunan.co.id/test"
-        
-        mock_scraper.scrape_products.return_value = mock_result
-        
-        # Test various truthy values
-        for value in ['true', '1', 'yes', 'TRUE', 'True']:
-            response = self.client.get(self.scrape_url, {
-                'keyword': 'cat',
-                'sort_by_price': value,
-                'page': '0'
-            })
-            self.assertEqual(response.status_code, 200)
-            mock_scraper.scrape_products.assert_called_with(
-                keyword='cat',
-                sort_by_price=True,
-                page=0
-            )
-        
-        # Test various falsy values
-        for value in ['false', '0', 'no', 'FALSE', 'False', 'random']:
-            response = self.client.get(self.scrape_url, {
-                'keyword': 'cat',
-                'sort_by_price': value,
-                'page': '0'
-            })
-            self.assertEqual(response.status_code, 200)
-            mock_scraper.scrape_products.assert_called_with(
-                keyword='cat',
-                sort_by_price=False,
-                page=0
-            )
+        truthy = ['true', '1', 'yes', 'TRUE', 'True']
+        falsy = ['false', '0', 'no', 'FALSE', 'False', 'random']
+        for value in truthy:
+            with self.subTest(sort_by_price=value):
+                response = self.client.get(self.scrape_url, {
+                    'keyword': 'cat',
+                    'sort_by_price': value,
+                    'page': '0'
+                })
+                self.assertEqual(response.status_code, 200)
+                mock_scraper.scrape_products.assert_called_with(
+                    keyword='cat',
+                    sort_by_price=True,
+                    page=0
+                )
+        for value in falsy:
+            with self.subTest(sort_by_price=value):
+                response = self.client.get(self.scrape_url, {
+                    'keyword': 'cat',
+                    'sort_by_price': value,
+                    'page': '0'
+                })
+                self.assertEqual(response.status_code, 200)
+                mock_scraper.scrape_products.assert_called_with(
+                    keyword='cat',
+                    sort_by_price=False,
+                    page=0
+                )
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_default_parameters(self, mock_create_scraper):
@@ -206,26 +201,14 @@ class DepoBangunanAPITest(TestCase):
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_scraper_failure(self, mock_create_scraper):
-        mock_scraper = MagicMock()
+        mock_scraper = create_mock_scraper(success=False, products=[], error_message="Unable to connect to website", url="https://www.depobangunan.co.id/test")
         mock_create_scraper.return_value = mock_scraper
-        
-        mock_result = MagicMock()
-        mock_result.success = False
-        mock_result.products = []
-        mock_result.error_message = "Unable to connect to website"
-        mock_result.url = "https://www.depobangunan.co.id/test"
-        
-        mock_scraper.scrape_products.return_value = mock_result
-        
         response = self.client.get(self.scrape_url, {
             'keyword': 'cat',
             'sort_by_price': 'true',
             'page': '0'
         })
-        
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.content)
-        
+        response_data = assert_json_response(self, response)
         self.assertFalse(response_data['success'])
         self.assertEqual(response_data['error_message'], "Unable to connect to website")
         self.assertEqual(len(response_data['products']), 0)
@@ -393,44 +376,22 @@ class DepoBangunanAPITest(TestCase):
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_json_response_structure_with_products(self, mock_create_scraper):
-        mock_scraper = MagicMock()
+        mock_product = create_mock_product("Test Product", 1000, "https://example.com/product", "KG")
+        mock_scraper = create_mock_scraper(products=[mock_product], url="https://example.com/search")
         mock_create_scraper.return_value = mock_scraper
-        
-        # Create mock product with all attributes
-        mock_product = MagicMock()
-        mock_product.name = "Test Product"
-        mock_product.price = 1000
-        mock_product.url = "https://example.com/product"
-        mock_product.unit = "KG"  # Add proper unit attribute
-        
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.products = [mock_product]
-        mock_result.error_message = None
-        mock_result.url = "https://example.com/search"
-        
-        mock_scraper.scrape_products.return_value = mock_result
-        
         response = self.client.get(self.scrape_url, {
             'keyword': 'cat'
         })
-        
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.content)
-        
-        # Check response structure
+        response_data = assert_json_response(self, response)
         self.assertIn('success', response_data)
         self.assertIn('products', response_data)
         self.assertIn('error_message', response_data)
         self.assertIn('url', response_data)
-        
-        # Check product structure
         self.assertEqual(len(response_data['products']), 1)
         product = response_data['products'][0]
         self.assertIn('name', product)
         self.assertIn('price', product)
         self.assertIn('url', product)
-        
         self.assertEqual(product['name'], "Test Product")
         self.assertEqual(product['price'], 1000)
         self.assertEqual(product['url'], "https://example.com/product")
@@ -450,48 +411,27 @@ class TestDepoBangunanLocationAPI(TestCase):
     @patch('api.depobangunan.views.create_depo_location_scraper')
     def test_depobangunan_locations_success(self, mock_create_scraper):
         """Test successful location scraping"""
-        from api.interfaces import LocationScrapingResult, Location
-        
+        from api.interfaces import LocationScrapingResult
         mock_scraper = MagicMock()
-        
         mock_locations = [
-            Location(
-                name="Depo Bangunan - Kalimalang",
-                code="Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"
-            ),
-            Location(
-                name="Depo Bangunan - Tangerang Selatan",
-                code="Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325"
-            )
+            create_mock_location("Depo Bangunan - Kalimalang", "Jl. Raya Kalimalang No.46, Duren Sawit, Kec. Duren Sawit, Timur, Daerah Khusus Ibukota Jakarta 13440"),
+            create_mock_location("Depo Bangunan - Tangerang Selatan", "Jl. Raya Serpong No.KM.2, Pakulonan, Kec. Serpong Utara, Kota Tangerang Selatan, Banten 15325")
         ]
-        
         mock_result = LocationScrapingResult(
             locations=mock_locations,
             success=True,
             error_message=None
         )
-        
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
-        
         response = self.client.get('/api/depobangunan/locations/')
-        
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.content)
-        
+        response_data = assert_json_response(self, response)
         self.assertTrue(response_data['success'])
         self.assertEqual(len(response_data['locations']), 2)
-        
-        # Check first location
-        self.assertEqual(response_data['locations'][0]['name'], "Depo Bangunan - Kalimalang")
-        self.assertIn("Jl. Raya Kalimalang", response_data['locations'][0]['code'])
-        
-        # Check second location
-        self.assertEqual(response_data['locations'][1]['name'], "Depo Bangunan - Tangerang Selatan")
-        self.assertIn("Jl. Raya Serpong", response_data['locations'][1]['code'])
-        
+        for i, loc in enumerate(mock_locations):
+            self.assertEqual(response_data['locations'][i]['name'], loc.name)
+            self.assertIn(loc.code.split()[0], response_data['locations'][i]['code'])
         self.assertIsNone(response_data['error_message'])
-        
         mock_scraper.scrape_locations.assert_called_once_with(timeout=30)
         
     @patch('api.depobangunan.views.create_depo_location_scraper')
@@ -523,22 +463,19 @@ class TestDepoBangunanLocationAPI(TestCase):
     def test_depobangunan_locations_with_custom_timeout(self, mock_create_scraper):
         """Test location scraping with custom timeout"""
         from api.interfaces import LocationScrapingResult
-        
         mock_scraper = MagicMock()
-        
         mock_result = LocationScrapingResult(
             locations=[],
             success=True,
             error_message=None
         )
-        
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
-        
-        response = self.client.get('/api/depobangunan/locations/', {'timeout': '60'})
-        
-        self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_locations.assert_called_once_with(timeout=60)
+        for timeout in [60, 9999, -10]:
+            with self.subTest(timeout=timeout):
+                response = self.client.get('/api/depobangunan/locations/', {'timeout': str(timeout)})
+                self.assertEqual(response.status_code, 200)
+                mock_scraper.scrape_locations.assert_called_with(timeout=timeout)
         
     @patch('api.depobangunan.views.create_depo_location_scraper')
     def test_depobangunan_locations_invalid_timeout(self, mock_create_scraper):
@@ -652,64 +589,30 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_successful_scrape_and_save(self, mock_create_scraper, mock_db_service_class):
         """Test successful scraping and saving of products"""
-        # Mock the scraper
-        mock_scraper = MagicMock()
+        products = [
+            create_mock_product("Test Product 1", 5000, "https://www.depobangunan.co.id/test-product-1", "PCS"),
+            create_mock_product("Test Product 2", 7500, "https://www.depobangunan.co.id/test-product-2", "KG"),
+        ]
+        mock_scraper = create_mock_scraper(products=products, url="https://www.depobangunan.co.id/catalogsearch/result/?q=semen")
         mock_create_scraper.return_value = mock_scraper
-        
-        # Create mock products
-        mock_product1 = MagicMock()
-        mock_product1.name = "Test Product 1"
-        mock_product1.price = 5000
-        mock_product1.url = "https://www.depobangunan.co.id/test-product-1"
-        mock_product1.unit = "PCS"
-        
-        mock_product2 = MagicMock()
-        mock_product2.name = "Test Product 2"
-        mock_product2.price = 7500
-        mock_product2.url = "https://www.depobangunan.co.id/test-product-2"
-        mock_product2.unit = "KG"
-        
-        # Mock scraping result
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.products = [mock_product1, mock_product2]
-        mock_result.error_message = None
-        mock_result.url = "https://www.depobangunan.co.id/catalogsearch/result/?q=semen"
-        
-        mock_scraper.scrape_products.return_value = mock_result
-        
-        # Mock database service
-        mock_db_service = MagicMock()
-        mock_db_service.save.return_value = True
+        mock_db_service = create_mock_db_service()
         mock_db_service_class.return_value = mock_db_service
-        
-        # Make the API call
         response = self.client.post(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_by_price': 'true',
             'page': '0'
         })
-        
-        # Assertions
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/json')
-        
-        response_data = json.loads(response.content)
-        
+        response_data = assert_json_response(self, response)
         self.assertTrue(response_data['success'])
         self.assertEqual(response_data['message'], 'Products scraped and saved successfully')
         self.assertEqual(response_data['scraped_count'], 2)
         self.assertEqual(response_data['saved_count'], 2)
         self.assertEqual(response_data['url'], "https://www.depobangunan.co.id/catalogsearch/result/?q=semen")
-        
-        # Verify scraper was called correctly
         mock_scraper.scrape_products.assert_called_once_with(
             keyword='semen',
             sort_by_price=True,
             page=0
         )
-        
-        # Verify database save was called
         mock_db_service.save.assert_called_once()
         saved_data = mock_db_service.save.call_args[0][0]
         self.assertEqual(len(saved_data), 2)
@@ -939,44 +842,29 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_scrape_and_save_sort_by_price_variations(self, mock_create_scraper, mock_db_service_class):
         """Test various truthy and falsy values for sort_by_price"""
-        mock_scraper = MagicMock()
+        mock_product = create_mock_product("Test Product", 5000, "https://www.depobangunan.co.id/test", "PCS")
+        mock_scraper = create_mock_scraper(products=[mock_product], url="https://www.depobangunan.co.id/test")
         mock_create_scraper.return_value = mock_scraper
-        
-        mock_product = MagicMock()
-        mock_product.name = "Test Product"
-        mock_product.price = 5000
-        mock_product.url = "https://www.depobangunan.co.id/test"
-        mock_product.unit = "PCS"
-        
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.products = [mock_product]
-        mock_result.error_message = None
-        mock_result.url = "https://www.depobangunan.co.id/test"
-        
-        mock_scraper.scrape_products.return_value = mock_result
-        
-        mock_db_service = MagicMock()
-        mock_db_service.save.return_value = True
+        mock_db_service = create_mock_db_service()
         mock_db_service_class.return_value = mock_db_service
-        
-        # Test truthy values
-        for value in ['true', '1', 'yes', 'TRUE', 'True', 'YES']:
-            response = self.client.post(self.scrape_and_save_url, {
-                'keyword': 'semen',
-                'sort_by_price': value,
-                'page': '0'
-            })
-            self.assertEqual(response.status_code, 200)
-        
-        # Test falsy values
-        for value in ['false', '0', 'no', 'FALSE', 'random']:
-            response = self.client.post(self.scrape_and_save_url, {
-                'keyword': 'semen',
-                'sort_by_price': value,
-                'page': '0'
-            })
-            self.assertEqual(response.status_code, 200)
+        truthy = ['true', '1', 'yes', 'TRUE', 'True', 'YES']
+        falsy = ['false', '0', 'no', 'FALSE', 'random']
+        for value in truthy:
+            with self.subTest(sort_by_price=value):
+                response = self.client.post(self.scrape_and_save_url, {
+                    'keyword': 'semen',
+                    'sort_by_price': value,
+                    'page': '0'
+                })
+                self.assertEqual(response.status_code, 200)
+        for value in falsy:
+            with self.subTest(sort_by_price=value):
+                response = self.client.post(self.scrape_and_save_url, {
+                    'keyword': 'semen',
+                    'sort_by_price': value,
+                    'page': '0'
+                })
+                self.assertEqual(response.status_code, 200)
     
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
     @patch('api.depobangunan.views.create_depo_scraper')
