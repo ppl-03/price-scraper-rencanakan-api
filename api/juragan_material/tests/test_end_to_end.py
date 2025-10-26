@@ -63,8 +63,8 @@ class TestJuraganMaterialEndToEnd(MySQLTestCase):
     def test_database_service_save_with_valid_data(self):
         service = JuraganMaterialDatabaseService()
         data = [
-            {"name": "Test Product 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs"},
-            {"name": "Test Product 2", "price": 20000, "url": "https://example.com/2", "unit": "box"}
+            {"name": "Test Product 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"},
+            {"name": "Test Product 2", "price": 20000, "url": "https://example.com/2", "unit": "box", "location": "Bandung"}
         ]
 
         result = service.save(data)
@@ -79,8 +79,8 @@ class TestJuraganMaterialEndToEnd(MySQLTestCase):
     def test_database_service_save_with_duplicate_data(self):
         service = JuraganMaterialDatabaseService()
         data = [
-            {"name": "Duplicate Product", "price": 15000, "url": "https://example.com/dup", "unit": "pcs"},
-            {"name": "Duplicate Product", "price": 15000, "url": "https://example.com/dup", "unit": "pcs"}
+            {"name": "Duplicate Product", "price": 15000, "url": "https://example.com/dup", "unit": "pcs", "location": "Jakarta"},
+            {"name": "Duplicate Product", "price": 15000, "url": "https://example.com/dup", "unit": "pcs", "location": "Jakarta"}
         ]
 
         result = service.save(data)
@@ -92,13 +92,13 @@ class TestJuraganMaterialEndToEnd(MySQLTestCase):
         # First save some initial data
         service = JuraganMaterialDatabaseService()
         initial_data = [
-            {"name": "Price Update Product", "price": 10000, "url": "https://example.com/update", "unit": "pcs"}
+            {"name": "Price Update Product", "price": 10000, "url": "https://example.com/update", "unit": "pcs", "location": "Jakarta"}
         ]
         service.save(initial_data)
 
         # Now update with new price
         update_data = [
-            {"name": "Price Update Product", "price": 12000, "url": "https://example.com/update", "unit": "pcs"}
+            {"name": "Price Update Product", "price": 12000, "url": "https://example.com/update", "unit": "pcs", "location": "Jakarta"}
         ]
         update_result = service.save_with_price_update(update_data)
 
@@ -114,13 +114,13 @@ class TestJuraganMaterialEndToEnd(MySQLTestCase):
         # First save some initial data
         service = JuraganMaterialDatabaseService()
         initial_data = [
-            {"name": "Anomaly Product", "price": 10000, "url": "https://example.com/anomaly", "unit": "pcs"}
+            {"name": "Anomaly Product", "price": 10000, "url": "https://example.com/anomaly", "unit": "pcs", "location": "Jakarta"}
         ]
         service.save(initial_data)
 
         # Now update with price change > 15%
         anomaly_data = [
-            {"name": "Anomaly Product", "price": 12000, "url": "https://example.com/anomaly", "unit": "pcs"}
+            {"name": "Anomaly Product", "price": 12000, "url": "https://example.com/anomaly", "unit": "pcs", "location": "Jakarta"}
         ]
         update_result = service.save_with_price_update(anomaly_data)
 

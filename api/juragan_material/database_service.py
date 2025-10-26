@@ -62,7 +62,10 @@ class JuraganMaterialDatabaseService:
     
     def _extract_product_identifiers(self, item):
         """Helper method to extract product identifiers (name, url, unit) from item."""
-        return (item.name, item.url, item.unit)
+        if isinstance(item, dict):
+            return (item["name"], item["url"], item["unit"])
+        elif isinstance(item, object):
+            return (item.name, item.url, item.unit)
     
     def _calculate_price_change_percentage(self, existing_price, new_price):
         """Helper method to calculate price change percentage."""
@@ -72,15 +75,26 @@ class JuraganMaterialDatabaseService:
     
     def _create_anomaly_object(self, item, existing_price, new_price, price_diff_pct):
         """Helper method to create anomaly object."""
-        return {
-            "name": item.name,
-            "url": item.url,
-            "unit": item.unit,
-            "location": item.location,
-            "old_price": existing_price,
-            "new_price": new_price,
-            "change_percent": round(price_diff_pct, 2)
-        }
+        if isinstance(item, dict):
+            return {
+                "name": item["name"],
+                "url": item["url"],
+                "unit": item["unit"],
+                "location": item["location"],
+                "old_price": existing_price,
+                "new_price": new_price,
+                "change_percent": round(price_diff_pct, 2)
+            }
+        elif isinstance(item, object):
+            return {
+                "name": item.name,
+                "url": item.url,
+                "unit": item.unit,
+                "location": item.location,
+                "old_price": existing_price,
+                "new_price": new_price,
+                "change_percent": round(price_diff_pct, 2)
+            }
     
     def _check_anomaly(self, item, existing_price, new_price):
         price_diff_pct = self._calculate_price_change_percentage(existing_price, new_price)
@@ -92,7 +106,7 @@ class JuraganMaterialDatabaseService:
         return None
 
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
-        new_price = item.price
+        new_price = item["price"] if isinstance(item, dict) else item.price
         if existing_price != new_price:
             anomaly = self._check_anomaly(item, existing_price, new_price)
             if anomaly:
