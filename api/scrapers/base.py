@@ -45,11 +45,16 @@ class BaseHttpClient(IHttpClient):
     def get(self, url: str, timeout: int = None) -> str:
         timeout = timeout or config.request_timeout
         self._rate_limit()
+        
+        return self._execute_with_retry(lambda: self._attempt_request(url, timeout))
+    
+    def _execute_with_retry(self, request_func):
+        """Execute a request function with retry logic."""
         last_exception = None
         
         for attempt in range(self.max_retries):
             try:
-                return self._attempt_request(url, timeout, attempt)
+                return request_func()
             except HttpClientError as e:
                 last_exception = e
                 if attempt < self.max_retries - 1:
@@ -58,40 +63,24 @@ class BaseHttpClient(IHttpClient):
         
         raise last_exception
     
-    def _attempt_request(self, url: str, timeout: int, attempt: int) -> str:
+    def _attempt_request(self, url: str, timeout: int) -> str:
         try:
-            if config.log_requests:
-                logger.info(f"Fetching URL (attempt {attempt + 1}/{self.max_retries}): {url}")
-                try:
-                    logger.debug(f"Request headers: {dict(self.session.headers)}")
-                except (TypeError, AttributeError):
-                    pass
-            
+            self._log_request_start(url)
             response = self.session.get(url, timeout=timeout)
-            
-            if config.log_requests:
-                logger.info(f"Response status: {response.status_code}")
-                try:
-                    logger.debug(f"Response headers: {dict(response.headers)}")
-                except (TypeError, AttributeError):
-                    pass
+            self._log_response(response)
             
             response.raise_for_status()
             
             if not response.content:
                 raise HttpClientError(f"Empty response from {url}")
             
-            encoding = response.encoding or 'utf-8'
-            html_content = response.content.decode(encoding, errors='ignore')
+            html_content = self._decode_response(response)
+            self._log_request_success(url, html_content)
             
-            if config.log_requests:
-                logger.info(f"Successfully fetched {len(html_content)} characters from {url}")
-                logger.debug(f"First 500 chars of response: {html_content[:500]}")
             return html_content
             
         except requests.exceptions.Timeout:
-            logger.error(f"Request timeout after {timeout} seconds for {url}")
-            raise HttpClientError(f"Request timeout after {timeout} seconds for {url}")
+            raise self._handle_timeout_error(url, timeout)
         except requests.exceptions.ConnectionError as e:
             raise HttpClientError(f"Connection error for {url}: {str(e)}")
         except requests.exceptions.HTTPError as e:
@@ -100,6 +89,40 @@ class BaseHttpClient(IHttpClient):
             raise HttpClientError(f"Request failed for {url}: {str(e)}")
         except Exception as e:
             raise HttpClientError(f"Unexpected error fetching {url}: {str(e)}")
+    
+    def _log_request_start(self, url: str):
+        """Log request start if logging is enabled."""
+        if config.log_requests:
+            logger.info(f"Fetching URL: {url}")
+            try:
+                logger.debug(f"Request headers: {dict(self.session.headers)}")
+            except (TypeError, AttributeError):
+                pass
+    
+    def _log_response(self, response):
+        """Log response details if logging is enabled."""
+        if config.log_requests:
+            logger.info(f"Response status: {response.status_code}")
+            try:
+                logger.debug(f"Response headers: {dict(response.headers)}")
+            except (TypeError, AttributeError):
+                pass
+    
+    def _decode_response(self, response) -> str:
+        """Decode response content to string."""
+        encoding = response.encoding or 'utf-8'
+        return response.content.decode(encoding, errors='ignore')
+    
+    def _log_request_success(self, url: str, html_content: str):
+        """Log successful request if logging is enabled."""
+        if config.log_requests:
+            logger.info(f"Successfully fetched {len(html_content)} characters from {url}")
+            logger.debug(f"First 500 chars of response: {html_content[:500]}")
+    
+    def _handle_timeout_error(self, url: str, timeout: int) -> HttpClientError:
+        """Handle timeout errors with proper logging."""
+        logger.error(f"Request timeout after {timeout} seconds for {url}")
+        return HttpClientError(f"Request timeout after {timeout} seconds for {url}")
     
     def _rate_limit(self):
         current_time = time.time()
