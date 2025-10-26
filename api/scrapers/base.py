@@ -179,8 +179,33 @@ class BasePriceScraper(IPriceScraper):
         self.url_builder = url_builder
         self.html_parser = html_parser
     
-    def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> ScrapingResult:
+    def _handle_scraping_error(self, error: Exception, context: str, url: str = None) -> ScrapingResult:
+        """Handle scraping errors with consistent logging and result creation."""
+        if isinstance(error, (UrlBuilderError, HttpClientError, HtmlParserError)):
+            logger.error(f"{context} failed: {str(error)}")
+            return ScrapingResult(
+                products=[],
+                success=False,
+                error_message=str(error),
+                url=getattr(error, 'url', url)
+            )
+        else:
+            logger.error(f"Unexpected error during {context.lower()}: {str(error)}")
+            return ScrapingResult(
+                products=[],
+                success=False,
+                error_message=f"Unexpected error: {str(error)}"
+            )
+    
+    def _execute_scraping_operation(self, operation_func, context: str, url: str = None):
+        """Execute a scraping operation with consistent error handling."""
         try:
+            return operation_func()
+        except Exception as e:
+            return self._handle_scraping_error(e, context, url)
+    
+    def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> ScrapingResult:
+        def _scrape_operation():
             url = self.url_builder.build_search_url(keyword, sort_by_price, page)
             html_content = self.http_client.get(url)
             products = self.html_parser.parse_products(html_content)
@@ -190,25 +215,11 @@ class BasePriceScraper(IPriceScraper):
                 success=True,
                 url=url
             )
-            
-        except (UrlBuilderError, HttpClientError, HtmlParserError) as e:
-            logger.error(f"Scraping failed: {str(e)}")
-            return ScrapingResult(
-                products=[],
-                success=False,
-                error_message=str(e),
-                url=getattr(e, 'url', None)
-            )
-        except Exception as e:
-            logger.error(f"Unexpected error during scraping: {str(e)}")
-            return ScrapingResult(
-                products=[],
-                success=False,
-                error_message=f"Unexpected error: {str(e)}"
-            )
+        
+        return self._execute_scraping_operation(_scrape_operation, "Scraping")
     
     def scrape_product_details(self, product_url: str) -> Optional[Product]:
-        try:
+        def _scrape_details_operation():
             html_content = self.http_client.get(product_url)
             
             if hasattr(self.html_parser, 'parse_product_details'):
@@ -216,7 +227,9 @@ class BasePriceScraper(IPriceScraper):
             else:
                 logger.warning("HTML parser does not support detailed product parsing")
                 return None
-                
+        
+        try:
+            return _scrape_details_operation()
         except (HttpClientError, HtmlParserError) as e:
             logger.error(f"Failed to scrape product details from {product_url}: {str(e)}")
             return None
