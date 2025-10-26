@@ -1,7 +1,31 @@
+
 from django.test import TestCase, Client
 from django.urls import reverse
 from unittest.mock import patch, MagicMock
 import json
+
+def create_mock_product(name, price, url, unit):
+    product = MagicMock()
+    product.name = name
+    product.price = price
+    product.url = url
+    product.unit = unit
+    return product
+
+def create_mock_scraper(success=True, products=None, error_message=None, url="https://test.url"):
+    mock_scraper = MagicMock()
+    mock_result = MagicMock()
+    mock_result.success = success
+    mock_result.products = products or []
+    mock_result.error_message = error_message
+    mock_result.url = url
+    mock_scraper.scrape_products.return_value = mock_result
+    return mock_scraper
+
+def assert_json_response(testcase, response, expected_status=200):
+    testcase.assertEqual(response.status_code, expected_status)
+    testcase.assertEqual(response['Content-Type'], 'application/json')
+    return json.loads(response.content)
 
 
 class DepoBangunanAPITest(TestCase):
@@ -14,63 +38,28 @@ class DepoBangunanAPITest(TestCase):
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_successful_scrape_with_products(self, mock_create_scraper):
-        # Mock the scraper and its result
-        mock_scraper = MagicMock()
-        mock_create_scraper.return_value = mock_scraper
-        
-        # Create mock products
-        mock_product1 = MagicMock()
-        mock_product1.name = "Test Product 1"
-        mock_product1.price = 5000
-        mock_product1.url = "https://www.depobangunan.co.id/test-product-1"
-        mock_product1.unit = "PCS"
-        
-        mock_product2 = MagicMock()
-        mock_product2.name = "Test Product 2"
-        mock_product2.price = 7500
-        mock_product2.url = "https://www.depobangunan.co.id/test-product-2"
-        mock_product2.unit = "KG"
-        
-        # Mock the scraping result
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.products = [mock_product1, mock_product2]
-        mock_result.error_message = None
-        mock_result.url = "https://www.depobangunan.co.id/catalogsearch/result/?q=cat&product_list_order=low_to_high"
-        
-        mock_scraper.scrape_products.return_value = mock_result
-        
-        # Make the API call
+        products = [
+            create_mock_product("Test Product 1", 5000, "https://www.depobangunan.co.id/test-product-1", "PCS"),
+            create_mock_product("Test Product 2", 7500, "https://www.depobangunan.co.id/test-product-2", "KG"),
+        ]
+        mock_create_scraper.return_value = create_mock_scraper(products=products, url="https://www.depobangunan.co.id/catalogsearch/result/?q=cat&product_list_order=low_to_high")
         response = self.client.get(self.scrape_url, {
             'keyword': 'cat',
             'sort_by_price': 'true',
             'page': '0'
         })
-        
-        # Assertions
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/json')
-        
-        response_data = json.loads(response.content)
-        
+        response_data = assert_json_response(self, response)
         self.assertTrue(response_data['success'])
         self.assertIsNone(response_data['error_message'])
         self.assertEqual(len(response_data['products']), 2)
-        
-        # Check first product
         self.assertEqual(response_data['products'][0]['name'], "Test Product 1")
         self.assertEqual(response_data['products'][0]['price'], 5000)
         self.assertEqual(response_data['products'][0]['url'], "https://www.depobangunan.co.id/test-product-1")
-        
-        # Check second product
         self.assertEqual(response_data['products'][1]['name'], "Test Product 2")
         self.assertEqual(response_data['products'][1]['price'], 7500)
         self.assertEqual(response_data['products'][1]['url'], "https://www.depobangunan.co.id/test-product-2")
-        
         self.assertEqual(response_data['url'], "https://www.depobangunan.co.id/catalogsearch/result/?q=cat&product_list_order=low_to_high")
-        
-        # Verify scraper was called with correct parameters
-        mock_scraper.scrape_products.assert_called_once_with(
+        mock_create_scraper.return_value.scrape_products.assert_called_once_with(
             keyword='cat',
             sort_by_price=True,
             page=0
