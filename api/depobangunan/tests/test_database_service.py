@@ -848,8 +848,8 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         result = service.save_with_price_update(data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["inserted"], 2)
-        self.assertEqual(result["updated"], 0)
+        self.assertEqual(result["new_count"], 2)
+        self.assertEqual(result["updated_count"], 0)
         self.assertEqual(len(result["anomalies"]), 0)
         self.assertEqual(DepoBangunanProduct.objects.count(), 2)
     
@@ -867,8 +867,8 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         result = service.save_with_price_update(updated_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["inserted"], 0)
-        self.assertEqual(result["updated"], 1)
+        self.assertEqual(result["new_count"], 0)
+        self.assertEqual(result["updated_count"], 1)
         self.assertEqual(len(result["anomalies"]), 0)
         
         product = DepoBangunanProduct.objects.get(name="Product 1")
@@ -888,7 +888,7 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         result = service.save_with_price_update(updated_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 1)
+        self.assertEqual(result["updated_count"], 1)
         self.assertEqual(len(result["anomalies"]), 1)
         
         anomaly = result["anomalies"][0]
@@ -979,8 +979,8 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         result = service.save_with_price_update(same_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 0)
-        self.assertEqual(result["inserted"], 0)
+        self.assertEqual(result["updated_count"], 0)
+        self.assertEqual(result["new_count"], 0)
     
     def test_save_with_price_update_multiple_products_with_mixed_results(self):
         service = DepoBangunanDatabaseService()
@@ -999,8 +999,8 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         result = service.save_with_price_update(updated_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 2)
-        self.assertEqual(result["inserted"], 1)
+        self.assertEqual(result["updated_count"], 2)
+        self.assertEqual(result["new_count"], 1)
         self.assertEqual(len(result["anomalies"]), 1)
         self.assertEqual(result["anomalies"][0]["name"], "Product 1")
     
@@ -1013,6 +1013,6 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         result = service.save_with_price_update(invalid_data)
         
         self.assertFalse(result["success"])
-        self.assertEqual(result["updated"], 0)
-        self.assertEqual(result["inserted"], 0)
+        self.assertEqual(result["updated_count"], 0)
+        self.assertEqual(result["new_count"], 0)
         self.assertEqual(len(result["anomalies"]), 0)

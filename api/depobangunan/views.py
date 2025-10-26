@@ -1,6 +1,5 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
 from .factory import create_depo_scraper, create_depo_location_scraper
 from .database_service import DepoBangunanDatabaseService
 import logging
@@ -17,23 +16,54 @@ def _create_error_response(message, status=400):
     return JsonResponse({'error': message}, status=status)
 
 
+def _validate_and_parse_keyword(keyword):
+    """Validate and parse keyword parameter"""
+    if not keyword or not keyword.strip():
+        return None, _create_error_response(ERROR_KEYWORD_REQUIRED)
+    return keyword.strip(), None
+
+
+def _parse_sort_by_price(sort_by_price_param):
+    """Parse sort_by_price parameter"""
+    if sort_by_price_param:
+        return sort_by_price_param.lower() in ['true', '1', 'yes']
+    return True  # Default to True
+
+
+def _parse_page(page_param):
+    """Parse and validate page parameter"""
+    try:
+        return int(page_param or '0'), None
+    except ValueError:
+        return None, _create_error_response(ERROR_PAGE_INVALID)
+
+
+def _convert_products_to_dict(products):
+    """Convert product objects to dictionary format"""
+    return [
+        {
+            'name': product.name,
+            'price': product.price,
+            'url': product.url,
+            'unit': product.unit
+        }
+        for product in products
+    ]
+
+
 @require_http_methods(["GET"])
 def scrape_products(request):
     try:
-        keyword = request.GET.get('keyword')
-        if not keyword or not keyword.strip():
-            return _create_error_response(ERROR_KEYWORD_REQUIRED)
+        # Validate and parse parameters
+        keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
+        if error:
+            return error
         
-        keyword = keyword.strip()
+        sort_by_price = _parse_sort_by_price(request.GET.get('sort_by_price', 'true'))
         
-        sort_by_price_param = request.GET.get('sort_by_price', 'true').lower()
-        sort_by_price = sort_by_price_param in ['true', '1', 'yes']
-        
-        page_param = request.GET.get('page', '0')
-        try:
-            page = int(page_param)
-        except ValueError:
-            return _create_error_response(ERROR_PAGE_INVALID)
+        page, error = _parse_page(request.GET.get('page', '0'))
+        if error:
+            return error
         
         scraper = create_depo_scraper()
         result = scraper.scrape_products(
@@ -42,15 +72,7 @@ def scrape_products(request):
             page=page
         )
         
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit
-            }
-            for product in result.products
-        ]
+        products_data = _convert_products_to_dict(result.products)
         
         response_data = {
             'success': result.success,
@@ -100,24 +122,19 @@ def depobangunan_locations_view(request):
         return _create_error_response(ERROR_INTERNAL_SERVER, 500)
 
 
-@csrf_exempt
 @require_http_methods(["POST"])
 def scrape_and_save_products(request):
     try:
-        keyword = request.POST.get('keyword')
-        if not keyword or not keyword.strip():
-            return _create_error_response(ERROR_KEYWORD_REQUIRED)
+        # Validate and parse parameters
+        keyword, error = _validate_and_parse_keyword(request.POST.get('keyword'))
+        if error:
+            return error
         
-        keyword = keyword.strip()
+        sort_by_price = _parse_sort_by_price(request.POST.get('sort_by_price', 'true'))
         
-        sort_by_price_param = request.POST.get('sort_by_price', 'true')
-        sort_by_price = sort_by_price_param.lower() in ['true', '1', 'yes']
-        
-        page_param = request.POST.get('page', '0')
-        try:
-            page = int(page_param)
-        except ValueError:
-            return _create_error_response(ERROR_PAGE_INVALID)
+        page, error = _parse_page(request.POST.get('page', '0'))
+        if error:
+            return error
         
         scraper = create_depo_scraper()
         result = scraper.scrape_products(
@@ -137,15 +154,7 @@ def scrape_and_save_products(request):
                 'saved_count': 0
             })
         
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit
-            }
-            for product in result.products
-        ]
+        products_data = _convert_products_to_dict(result.products)
         
         db_service = DepoBangunanDatabaseService()
         save_result = db_service.save(products_data)
