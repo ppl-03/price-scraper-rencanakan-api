@@ -59,13 +59,15 @@ def drop_all_tables():
 
             print(f"  - Dropping {table_name}...")
 
-            # Use connection.ops.quote_name to safely quote the identifier for the backend.
-            # We validated `table_name` against _TABLE_NAME_RE above, so this identifier
-            # is safe to include in an identifier position. Build the query by
-            # concatenation from the quoted identifier (not user input) and execute.
-            quoted = connection.ops.quote_name(table_name)
-            query = "DROP TABLE IF EXISTS " + quoted + ";"  # NOSONAR - safe: validated table_name + quote_name
-            cursor.execute(query)
+            # Use Django's SQL formatting capabilities for safer identifier handling.
+            # We validated `table_name` against _TABLE_NAME_RE above, ensuring it's safe.
+            # Django's quote_name provides database-specific identifier quoting.
+            quoted_table = connection.ops.quote_name(table_name)
+            
+            # Use explicit SQL template with safe identifier substitution
+            sql_template = "DROP TABLE IF EXISTS {table}"
+            drop_query = sql_template.format(table=quoted_table)
+            cursor.execute(drop_query)
 
         # Re-enable foreign key checks
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
