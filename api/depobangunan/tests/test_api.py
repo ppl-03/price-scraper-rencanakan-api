@@ -94,52 +94,23 @@ class DepoBangunanAPITest(TestCase):
         self.assertEqual(len(response_data['products']), 0)
         self.assertIsNone(response_data['error_message'])
     
-    def test_missing_keyword_parameter(self):
-        response = self.client.get(self.scrape_url, {
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 400)
+    def run_error_response_test(self, url, method, data, expected_status, expected_error):
+        response = getattr(self.client, method)(url, data)
+        self.assertEqual(response.status_code, expected_status)
         response_data = json.loads(response.content)
         self.assertIn('error', response_data)
-        self.assertEqual(response_data['error'], 'Keyword parameter is required')
-    
-    def test_empty_keyword_parameter(self):
-        response = self.client.get(self.scrape_url, {
-            'keyword': '',
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 400)
-        response_data = json.loads(response.content)
-        self.assertIn('error', response_data)
-        self.assertEqual(response_data['error'], 'Keyword parameter is required')
-    
-    def test_whitespace_only_keyword_parameter(self):
-        response = self.client.get(self.scrape_url, {
-            'keyword': '   ',
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 400)
-        response_data = json.loads(response.content)
-        self.assertIn('error', response_data)
-        self.assertEqual(response_data['error'], 'Keyword parameter is required')
-    
-    def test_invalid_page_parameter(self):
-        response = self.client.get(self.scrape_url, {
-            'keyword': 'cat',
-            'sort_by_price': 'true',
-            'page': 'invalid'
-        })
-        
-        self.assertEqual(response.status_code, 400)
-        response_data = json.loads(response.content)
-        self.assertIn('error', response_data)
-        self.assertEqual(response_data['error'], 'Page parameter must be a valid integer')
+        self.assertEqual(response_data['error'], expected_error)
+
+    def test_keyword_error_responses(self):
+        cases = [
+            ({'sort_by_price': 'true', 'page': '0'}, 400, 'Keyword parameter is required'),
+            ({'keyword': '', 'sort_by_price': 'true', 'page': '0'}, 400, 'Keyword parameter is required'),
+            ({'keyword': '   ', 'sort_by_price': 'true', 'page': '0'}, 400, 'Keyword parameter is required'),
+            ({'keyword': 'cat', 'sort_by_price': 'true', 'page': 'invalid'}, 400, 'Page parameter must be a valid integer'),
+        ]
+        for data, status, error in cases:
+            with self.subTest(data=data):
+                self.run_error_response_test(self.scrape_url, 'get', data, status, error)
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_sort_by_price_parameter_variations(self, mock_create_scraper):
@@ -232,28 +203,16 @@ class DepoBangunanAPITest(TestCase):
         self.assertIn('error', response_data)
         self.assertEqual(response_data['error'], 'Internal server error occurred')
     
-    def test_post_method_not_allowed(self):
-        response = self.client.post(self.scrape_url, {
-            'keyword': 'cat',
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 405) 
-    
-    def test_put_method_not_allowed(self):
-        response = self.client.put(self.scrape_url, {
-            'keyword': 'cat',
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 405)
-    
-    def test_delete_method_not_allowed(self):
-        response = self.client.delete(self.scrape_url)
-        
-        self.assertEqual(response.status_code, 405)  
+    def test_method_not_allowed(self):
+        cases = [
+            ('post', self.scrape_url, {'keyword': 'cat', 'sort_by_price': 'true', 'page': '0'}),
+            ('put', self.scrape_url, {'keyword': 'cat', 'sort_by_price': 'true', 'page': '0'}),
+            ('delete', self.scrape_url, {}),
+        ]
+        for method, url, data in cases:
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(url, data)
+                self.assertEqual(response.status_code, 405)
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_keyword_with_special_characters(self, mock_create_scraper):
@@ -502,7 +461,6 @@ class TestDepoBangunanLocationAPI(TestCase):
         self.assertEqual(response_data['error'], 'Internal server error occurred')
 
     def test_depobangunan_locations_post_method_not_allowed(self):
-        """Test that POST method is not allowed"""
         response = self.client.post('/api/depobangunan/locations/')
         self.assertEqual(response.status_code, 405)
 
@@ -647,53 +605,20 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         self.assertEqual(response_data['scraped_count'], 0)
         self.assertEqual(response_data['saved_count'], 0)
     
-    def test_scrape_and_save_missing_keyword(self):
-        """Test error when keyword parameter is missing"""
-        response = self.client.post(self.scrape_and_save_url, {
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 400)
-        response_data = json.loads(response.content)
-        self.assertIn('error', response_data)
-        self.assertEqual(response_data['error'], 'Keyword parameter is required')
-    
-    def test_scrape_and_save_empty_keyword(self):
-        """Test error when keyword is empty"""
-        response = self.client.post(self.scrape_and_save_url, {
-            'keyword': '',
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 400)
-        response_data = json.loads(response.content)
-        self.assertEqual(response_data['error'], 'Keyword parameter is required')
-    
-    def test_scrape_and_save_whitespace_keyword(self):
-        """Test error when keyword is only whitespace"""
-        response = self.client.post(self.scrape_and_save_url, {
-            'keyword': '   ',
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 400)
-        response_data = json.loads(response.content)
-        self.assertEqual(response_data['error'], 'Keyword parameter is required')
-    
-    def test_scrape_and_save_invalid_page_parameter(self):
-        """Test error when page parameter is not a valid integer"""
-        response = self.client.post(self.scrape_and_save_url, {
-            'keyword': 'semen',
-            'sort_by_price': 'true',
-            'page': 'invalid'
-        })
-        
-        self.assertEqual(response.status_code, 400)
-        response_data = json.loads(response.content)
-        self.assertEqual(response_data['error'], 'Page parameter must be a valid integer')
+    def test_scrape_and_save_error_responses(self):
+        cases = [
+            ({'sort_by_price': 'true', 'page': '0'}, 400, 'Keyword parameter is required'),
+            ({'keyword': '', 'sort_by_price': 'true', 'page': '0'}, 400, 'Keyword parameter is required'),
+            ({'keyword': '   ', 'sort_by_price': 'true', 'page': '0'}, 400, 'Keyword parameter is required'),
+            ({'keyword': 'semen', 'sort_by_price': 'true', 'page': 'invalid'}, 400, 'Page parameter must be a valid integer'),
+        ]
+        for data, status, error in cases:
+            with self.subTest(data=data):
+                response = self.client.post(self.scrape_and_save_url, data)
+                self.assertEqual(response.status_code, status)
+                response_data = json.loads(response.content)
+                self.assertIn('error', response_data)
+                self.assertEqual(response_data['error'], error)
     
     @patch('api.depobangunan.views.create_depo_scraper')
     def test_scrape_and_save_scraping_failure(self, mock_create_scraper):
@@ -777,27 +702,16 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         self.assertIn('error', response_data)
         self.assertEqual(response_data['error'], 'Internal server error occurred')
     
-    def test_scrape_and_save_get_method_not_allowed(self):
-        """Test that GET method is not allowed"""
-        response = self.client.get(self.scrape_and_save_url, {
-            'keyword': 'semen',
-            'sort_by_price': 'true',
-            'page': '0'
-        })
-        
-        self.assertEqual(response.status_code, 405)
-    
-    def test_scrape_and_save_put_method_not_allowed(self):
-        """Test that PUT method is not allowed"""
-        response = self.client.put(self.scrape_and_save_url)
-        
-        self.assertEqual(response.status_code, 405)
-    
-    def test_scrape_and_save_delete_method_not_allowed(self):
-        """Test that DELETE method is not allowed"""
-        response = self.client.delete(self.scrape_and_save_url)
-        
-        self.assertEqual(response.status_code, 405)
+    def test_scrape_and_save_method_not_allowed(self):
+        cases = [
+            ('get', self.scrape_and_save_url, {'keyword': 'semen', 'sort_by_price': 'true', 'page': '0'}),
+            ('put', self.scrape_and_save_url, {}),
+            ('delete', self.scrape_and_save_url, {}),
+        ]
+        for method, url, data in cases:
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(url, data)
+                self.assertEqual(response.status_code, 405)
     
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
     @patch('api.depobangunan.views.create_depo_scraper')
