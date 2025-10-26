@@ -63,10 +63,9 @@ def drop_all_tables():
             # We validated `table_name` against _TABLE_NAME_RE above, so this identifier
             # is safe to include in an identifier position. Build the query by
             # concatenation from the quoted identifier (not user input) and execute.
-            # Mark with NOSONAR to explicitly document the safety for static scanners.
             quoted = connection.ops.quote_name(table_name)
-            query = "DROP TABLE IF EXISTS " + quoted + ";"
-            cursor.execute(query)  # NOSONAR - safe: validated table_name + quote_name
+            query = "DROP TABLE IF EXISTS " + quoted + ";"  # NOSONAR - safe: validated table_name + quote_name
+            cursor.execute(query)
 
         # Re-enable foreign key checks
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
