@@ -1324,21 +1324,22 @@ def _get_bot_challenge_hint(url: str) -> str:
     return ""
 
 
-def _run_vendor_to_prices(request, keyword: str, maker, label: str, fallback=None) -> list[dict]:
+def _run_vendor_to_prices(request, keyword: str, maker, label: str, fallback=None, limit: int | None = None) -> list[dict]:
     try:
-        return _execute_vendor_scraping(request, keyword, maker, label, fallback)
+        return _execute_vendor_scraping(request, keyword, maker, label, fallback, limit=limit)
     except Exception as e:
         return _handle_vendor_scraping_exception(request, keyword, label, fallback, e)
 
 
-def _execute_vendor_scraping(request, keyword: str, maker, label: str, fallback) -> list[dict]:
+def _execute_vendor_scraping(request, keyword: str, maker, label: str, fallback, limit: int | None = None) -> list[dict]:
     """Execute the main vendor scraping logic."""
     scraper, urlb = maker()
     url = _build_url_defensively(urlb, keyword, sort_by_price=True, page=0)
     html_len = _fetch_len(url)
 
     # Handle BatchPlaywrightClient context manager issue
-    res = _safe_scrape_products(scraper, keyword, sort_by_price=True, page=0)
+    # Pass vendor-specific limit (e.g., Tokopedia) when provided
+    res = _safe_scrape_products(scraper, keyword, sort_by_price=True, page=0, limit=limit)
 
     if getattr(res, "success", False) and getattr(res, "products", None):
         return _handle_successful_scrape(request, res, label, url, html_len)
@@ -1363,7 +1364,7 @@ def _handle_vendor_scraping_exception(request, keyword: str, label: str, fallbac
         return []
 
 
-def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, page: int = 0):
+def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, page: int = 0, limit: int | None = None):
     """
     Safely handle scraping with proper context manager usage for BatchPlaywrightClient-based scrapers.
     """
@@ -1371,13 +1372,17 @@ def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, pag
 
     # Check if this scraper uses BatchPlaywrightClient
     if hasattr(scraper, 'http_client') and isinstance(scraper.http_client, BatchPlaywrightClient):
-        return _handle_playwright_scraper(scraper, keyword, sort_by_price, page)
+        return _handle_playwright_scraper(scraper, keyword, sort_by_price, page, limit=limit)
     else:
         # For regular HTTP client scrapers, use normal method
-        return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
+        # If the scraper supports a 'limit' parameter, pass it through
+        try:
+            return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page, limit=limit)
+        except TypeError:
+            return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
 
 
-def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page: int):
+def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page: int, limit: int | None = None):
     """Handle scraping for BatchPlaywrightClient-based scrapers."""
     from api.playwright_client import BatchPlaywrightClient
     from api.interfaces import ScrapingResult
@@ -1385,7 +1390,20 @@ def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page:
     try:
         # Try to use scrape_batch method if available (like Mitra10)
         if hasattr(scraper, 'scrape_batch'):
-            products = scraper.scrape_batch([keyword])
+            # If limit is provided and scrape_batch supports batching, attempt to collect up to limit
+            if limit and hasattr(scraper, 'scrape_batch'):
+                # scrape_batch takes a list of keywords; for a single keyword we may need paging inside the scraper
+                products = scraper.scrape_batch([keyword])
+                # If scrape_batch returned fewer than limit, and the scraper supports paginate via scrape_products, attempt to fetch more
+                if len(products) < limit and hasattr(scraper, 'scrape_products'):
+                    try:
+                        extra_res = scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=1, limit=limit - len(products))
+                        if getattr(extra_res, 'success', False) and getattr(extra_res, 'products', None):
+                            products.extend(extra_res.products)
+                    except TypeError:
+                        pass
+            else:
+                products = scraper.scrape_batch([keyword])
             return ScrapingResult(products=products, success=True, url="")
         else:
             return _handle_playwright_scraper_fallback(scraper, keyword, sort_by_price, page)
@@ -1463,9 +1481,13 @@ def _format_location_results(locations, label: str) -> list[dict]:
     """Format location results into standardized format."""
     formatted_locations = []
     for i, loc in enumerate(locations):
+        # Support both name/code and store_name/address patterns
+        store_name = getattr(loc, 'store_name', None) or getattr(loc, 'name', '')
+        address = getattr(loc, 'address', None) or getattr(loc, 'code', '')
+        
         formatted_locations.append({
-            "store_name": loc.store_name,
-            "address": loc.address,
+            "store_name": store_name,
+            "address": address,
             "source": label
         })
     return formatted_locations
@@ -1636,7 +1658,8 @@ def _scrape_all_vendors(request, keyword: str) -> list[dict]:
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback)
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback)
+    # Request 20 items from Tokopedia (default was showing 5)
+    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback, limit=20)
     return prices
 
 
@@ -1892,3 +1915,8 @@ def curated_price_from_scrape(request):
         "url": request.POST.get("url") or "",
     }
     form = ItemPriceProvinceForm(initial=initial)
+    return render(request, DASHBOARD_FORM_TEMPLATE, {
+        "title": "Save Price from Scrape", 
+        "form": form,
+        "form_action": reverse("curated_price_create_post")
+    })

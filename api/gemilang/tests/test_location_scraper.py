@@ -39,7 +39,7 @@ class TestGemilangLocationScraper(TestCase):
         self.assertIsNone(result.error_message)
 
         expected_url = "https://gemilang-store.com/pusat/store-locations"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)
         self.mock_location_parser.parse_locations.assert_called_once_with(mock_html)
 
     def test_scrape_locations_http_client_error(self):
@@ -92,7 +92,7 @@ class TestGemilangLocationScraper(TestCase):
         self.scraper.scrape_locations()
 
         expected_url = "https://gemilang-store.com/pusat/store-locations"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)
 
     def test_scrape_locations_generic_exception(self):
         self.mock_http_client.get.side_effect = Exception("Unexpected error")
@@ -170,7 +170,7 @@ class TestGemilangLocationScraper(TestCase):
         result = self.scraper.scrape_locations()
 
         expected_url = "https://gemilang-store.com/pusat/store-locations"
-        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=30)
+        self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)
         self.assertTrue(result.success)
 
     def test_scrape_locations_duplicate_locations(self):
@@ -274,7 +274,7 @@ class TestGemilangLocationScraper(TestCase):
         from api.gemilang.location_scraper import LocationDataValidator
         
         result = LocationDataValidator.validate_timeout(None)
-        self.assertEqual(result, 30)
+        self.assertEqual(result, 60)
 
     def test_location_data_validator_validate_timeout_negative(self):
         from api.gemilang.location_scraper import LocationDataValidator

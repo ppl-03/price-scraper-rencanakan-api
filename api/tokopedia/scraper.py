@@ -1,7 +1,7 @@
 import logging
 import warnings
 from typing import List, Optional
-from api.core import BasePriceScraper, BaseHttpClient
+from api.tokopedia_core import BasePriceScraper, BaseHttpClient
 from api.interfaces import IHttpClient, IUrlBuilder, IHtmlParser, Product, ScrapingResult
 from api.playwright_client import BatchPlaywrightClient
 from .url_builder import TokopediaUrlBuilder
@@ -130,8 +130,8 @@ class TokopediaPriceScraper(BasePriceScraper):
                 location_ids=location_ids
             )
             
-            # Use http_client directly (works with both BaseHttpClient and BatchPlaywrightClient)
-            html_content = self.http_client.get(url)
+            # Use http_client directly with increased timeout for heavy JavaScript sites
+            html_content = self.http_client.get(url, timeout=60)
             products = self.html_parser.parse_products(html_content)
             
             return ScrapingResult(
@@ -191,7 +191,8 @@ class TokopediaPriceScraper(BasePriceScraper):
                 )
                 last_url = url
                 
-                html_content = self.http_client.get(url)
+                # Increase timeout to 60 seconds for heavy JavaScript sites
+                html_content = self.http_client.get(url, timeout=60)
                 products = self.html_parser.parse_products(html_content)
                 
                 # If no products found on this page, stop

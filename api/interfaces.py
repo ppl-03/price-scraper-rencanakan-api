@@ -5,16 +5,41 @@ from dataclasses import dataclass
 
 @dataclass
 class Location:
+    """
+    Unified Location class supporting multiple use cases.
+    Can be used with name/code or store_name/address patterns.
+    """
     name: str
     code: Optional[str] = None
+    store_name: Optional[str] = None
+    address: Optional[str] = None
+    
+    def __post_init__(self):
+        # Ensure both patterns are available by syncing fields
+        # If store_name/address are provided, use them as primary
+        if self.store_name and not self.name:
+            self.name = self.store_name
+        if self.address and not self.code:
+            self.code = self.address
+        
+        # If name/code are provided, also populate store_name/address
+        if self.name and not self.store_name:
+            self.store_name = self.name
+        if self.code and not self.address:
+            self.address = self.code
 
 
 @dataclass
 class LocationScrapingResult:
+    """
+    Result of a location scraping operation.
+    Includes locations found, success status, error messages, and metadata.
+    """
     locations: List[Location]
     success: bool
     error_message: Optional[str] = None
     attempts_made: int = 1
+    url: Optional[str] = None
 
 
 @dataclass
@@ -36,20 +61,6 @@ class ScrapingResult:
     def __len__(self):
         """Return the number of products in the result"""
         return len(self.products)
-
-
-@dataclass
-class Location:
-    store_name: str
-    address: str
-
-
-@dataclass
-class LocationScrapingResult:
-    locations: List[Location]
-    success: bool
-    error_message: Optional[str] = None
-    url: Optional[str] = None
 
 
 class IHttpClient(ABC):

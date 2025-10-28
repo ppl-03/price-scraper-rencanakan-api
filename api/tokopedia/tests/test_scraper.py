@@ -40,7 +40,7 @@ class TestTokopediaPriceScraper(TestCase):
         self.assertIsInstance(scraper.html_parser, TokopediaHtmlParser)
         # TokopediaPriceScraper uses BaseHttpClient as default (not BatchPlaywrightClient)
         # due to HTTP/2 issues with Tokopedia
-        from api.core import BaseHttpClient
+        from api.tokopedia_core import BaseHttpClient
         self.assertIsInstance(scraper.http_client, BaseHttpClient)
 
     def test_scraper_initialization_with_custom_components(self):
@@ -105,7 +105,7 @@ class TestTokopediaPriceScraper(TestCase):
             max_price=100000,
             location_ids=[174, 175, 176, 177, 178, 179]  # Jakarta location IDs
         )
-        mock_http_client.get.assert_called_once_with(test_url)
+        mock_http_client.get.assert_called_once_with(test_url, timeout=60)
         mock_html_parser.parse_products.assert_called_once_with(self.sample_html)
 
     def test_scrape_products_with_filters_unknown_location(self):

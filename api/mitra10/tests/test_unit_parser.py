@@ -311,5 +311,70 @@ class TestMitra10UnitParser(unittest.TestCase):
         self.assertIsNone(unit)
 
 
+class TestErrorHandlingMixin(unittest.TestCase):
+    """Test ErrorHandlingMixin methods"""
+    
+    def test_safe_execute_success(self):
+        from api.mitra10.unit_parser import ErrorHandlingMixin
+        mixin = ErrorHandlingMixin()
+        
+        def success_operation():
+            return "success"
+        
+        result = mixin.safe_execute(success_operation, "test operation")
+        self.assertEqual(result, "success")
+    
+    def test_safe_execute_with_exception(self):
+        from api.mitra10.unit_parser import ErrorHandlingMixin
+        mixin = ErrorHandlingMixin()
+        
+        def failing_operation():
+            raise ValueError("Test error")
+        
+        result = mixin.safe_execute(failing_operation, "test operation")
+        self.assertIsNone(result)
+    
+    def test_safe_execute_with_default_success(self):
+        from api.mitra10.unit_parser import ErrorHandlingMixin
+        mixin = ErrorHandlingMixin()
+        
+        def success_operation():
+            return "success"
+        
+        result = mixin.safe_execute_with_default(success_operation, "default", "test operation")
+        self.assertEqual(result, "success")
+    
+    def test_safe_execute_with_default_exception(self):
+        from api.mitra10.unit_parser import ErrorHandlingMixin
+        mixin = ErrorHandlingMixin()
+        
+        def failing_operation():
+            raise ValueError("Test error")
+        
+        result = mixin.safe_execute_with_default(failing_operation, "default_value", "test operation")
+        self.assertEqual(result, "default_value")
+
+
+class TestMitra10UnitParserEdgeCases(unittest.TestCase):
+    """Test edge cases in UnitParser"""
+    
+    def setUp(self):
+        self.parser = Mitra10UnitParser()
+    
+    def test_parse_unit_with_soup_creation_exception(self):
+        # Mock BeautifulSoup to raise exception
+        with unittest.mock.patch('api.mitra10.unit_parser.BeautifulSoup', side_effect=Exception("Parser error")):
+            unit = self.parser.parse_unit("<div>test</div>")
+            self.assertIsNone(unit)
+    
+    def test_extract_specifications_safely_with_empty_result(self):
+        html = "<div>No specifications</div>"
+        
+        # This should handle cases where no specifications are found
+        result = self.parser._parse_unit_from_html(html)
+        # Result depends on implementation, just verify it doesn't crash
+        self.assertTrue(result is None or isinstance(result, str))
+
+
 if __name__ == '__main__':
     unittest.main()
