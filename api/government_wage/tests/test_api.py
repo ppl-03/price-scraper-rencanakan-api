@@ -7,6 +7,16 @@ import json
 class GovernmentWageViewsTestCase(TestCase):
     def setUp(self):
         self.client = Client()
+        # Clear cache before each test
+        self.cache_patcher = patch('api.government_wage.views.get_cache')
+        self.mock_cache_getter = self.cache_patcher.start()
+        self.mock_cache = MagicMock()
+        self.mock_cache.get.return_value = None  # Default: no cache hit
+        self.mock_cache.set.return_value = None
+        self.mock_cache_getter.return_value = self.mock_cache
+    
+    def tearDown(self):
+        self.cache_patcher.stop()
 
     def test_get_available_regions_success(self):
         """Test successful retrieval of available regions"""
@@ -27,8 +37,12 @@ class GovernmentWageViewsTestCase(TestCase):
             self.assertIsNone(data['error_message'])
 
     def test_scrape_region_data_success(self):
-        """Test successful region data scraping"""
-        with patch('api.government_wage.views.create_government_wage_scraper') as mock_create_scraper:
+        """Test successful region data scraping with cache miss"""
+        with patch('api.government_wage.views.create_government_wage_scraper') as mock_create_scraper, \
+             patch('api.government_wage.views.make_cache_key') as mock_make_key:
+            
+            mock_make_key.return_value = 'test_cache_key'
+            
             mock_scraper = MagicMock()
             mock_item = MagicMock()
             mock_item.item_number = '1'
@@ -54,10 +68,54 @@ class GovernmentWageViewsTestCase(TestCase):
             self.assertEqual(data['region'], 'Kab. Cilacap')
             self.assertEqual(data['count'], 1)
             self.assertEqual(data['data'][0]['work_code'], '6.1.1')
+            self.assertFalse(data['cached'])  # Should be False for cache miss
+            
+            # Verify cache was checked and set
+            self.mock_cache.get.assert_called_once_with('test_cache_key')
+            self.mock_cache.set.assert_called_once()
+
+    def test_scrape_region_data_cache_hit(self):
+        """Test region data scraping with cache hit"""
+        with patch('api.government_wage.views.make_cache_key') as mock_make_key:
+            mock_make_key.return_value = 'test_cache_key'
+            
+            # Mock cache hit
+            cached_data = [
+                {
+                    'item_number': '1',
+                    'work_code': '6.1.1',
+                    'work_description': 'Mandor',
+                    'unit': 'OH',
+                    'unit_price_idr': 150000,
+                    'region': 'Kab. Cilacap',
+                    'edition': 'Edisi Ke - 2',
+                    'year': '2024',
+                    'sector': 'Bidang Cipta Karya dan Perumahan'
+                }
+            ]
+            self.mock_cache.get.return_value = cached_data
+            
+            response = self.client.get('/api/government_wage/scrape/?region=Kab. Cilacap')
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            self.assertTrue(data['success'])
+            self.assertEqual(data['region'], 'Kab. Cilacap')
+            self.assertEqual(data['count'], 1)
+            self.assertEqual(data['data'][0]['work_code'], '6.1.1')
+            self.assertTrue(data['cached'])  # Should be True for cache hit
+            
+            # Verify cache was checked but not set (since we had a hit)
+            self.mock_cache.get.assert_called_once_with('test_cache_key')
+            self.mock_cache.set.assert_not_called()
 
     def test_scrape_region_data_default_region(self):
         """Test region data scraping with default region"""
-        with patch('api.government_wage.views.create_government_wage_scraper') as mock_create_scraper:
+        with patch('api.government_wage.views.create_government_wage_scraper') as mock_create_scraper, \
+             patch('api.government_wage.views.make_cache_key') as mock_make_key:
+            
+            mock_make_key.return_value = 'test_cache_key'
+            
             mock_scraper = MagicMock()
             mock_scraper.scrape_region_data.return_value = []
             mock_scraper.__enter__.return_value = mock_scraper
@@ -70,10 +128,15 @@ class GovernmentWageViewsTestCase(TestCase):
             data = json.loads(response.content)
             self.assertTrue(data['success'])
             self.assertEqual(data['region'], 'Kab. Cilacap')  # Default region
+            self.assertFalse(data['cached'])  # Should be False for cache miss
 
     def test_search_by_work_code_success(self):
-        """Test successful work code search"""
-        with patch('api.government_wage.views.create_government_wage_scraper') as mock_create_scraper:
+        """Test successful work code search with cache miss"""
+        with patch('api.government_wage.views.create_government_wage_scraper') as mock_create_scraper, \
+             patch('api.government_wage.views.make_cache_key') as mock_make_key:
+            
+            mock_make_key.return_value = 'test_search_cache_key'
+            
             mock_scraper = MagicMock()
             mock_item = MagicMock()
             mock_item.item_number = '1'
@@ -98,6 +161,45 @@ class GovernmentWageViewsTestCase(TestCase):
             self.assertTrue(data['success'])
             self.assertEqual(data['work_code'], '6.1.1')
             self.assertEqual(data['count'], 1)
+            self.assertFalse(data['cached'])  # Should be False for cache miss
+            
+            # Verify cache was checked and set
+            self.mock_cache.get.assert_called_once_with('test_search_cache_key')
+            self.mock_cache.set.assert_called_once()
+
+    def test_search_by_work_code_cache_hit(self):
+        """Test work code search with cache hit"""
+        with patch('api.government_wage.views.make_cache_key') as mock_make_key:
+            mock_make_key.return_value = 'test_search_cache_key'
+            
+            # Mock cache hit
+            cached_data = [
+                {
+                    'item_number': '1',
+                    'work_code': '6.1.1',
+                    'work_description': 'Mandor',
+                    'unit': 'OH',
+                    'unit_price_idr': 150000,
+                    'region': 'Kab. Cilacap',
+                    'edition': 'Edisi Ke - 2',
+                    'year': '2024',
+                    'sector': 'Bidang Cipta Karya dan Perumahan'
+                }
+            ]
+            self.mock_cache.get.return_value = cached_data
+            
+            response = self.client.get('/api/government_wage/search/?work_code=6.1.1')
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            self.assertTrue(data['success'])
+            self.assertEqual(data['work_code'], '6.1.1')
+            self.assertEqual(data['count'], 1)
+            self.assertTrue(data['cached'])  # Should be True for cache hit
+            
+            # Verify cache was checked but not set (since we had a hit)
+            self.mock_cache.get.assert_called_once_with('test_search_cache_key')
+            self.mock_cache.set.assert_not_called()
 
     def test_search_by_work_code_missing_parameter(self):
         """Test work code search with missing work_code parameter"""
