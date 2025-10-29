@@ -158,7 +158,8 @@ def _format_scrape_result(result) -> dict:
             {
                 'name': product.name,
                 'price': product.price,
-                'url': product.url
+                'url': product.url,
+                'location': product.location
             }
             for product in result.products
         ],

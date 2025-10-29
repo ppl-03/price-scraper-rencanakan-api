@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import TokopediaPriceCleaner
+from .location_scraper import get_location_scraper
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class TokopediaHtmlParser(IHtmlParser):
     
     def __init__(self, price_cleaner: TokopediaPriceCleaner = None):
         self.price_cleaner = price_cleaner or TokopediaPriceCleaner()
+        self.location_scraper = get_location_scraper()
         # Cache selectors as instance variables to avoid repeated string operations
         self._product_selector = 'a[data-testid="lnkProductContainer"]'
         self._name_selector = 'span.css-20kt3o'
@@ -98,7 +100,10 @@ class TokopediaHtmlParser(IHtmlParser):
         if not self.price_cleaner.validate_price(price):
             return None
         
-        return Product(name=name, price=price, url=url)
+        # Extract location information (optional field)
+        location = self.location_scraper.extract_location_from_product_item(item)
+        
+        return Product(name=name, price=price, url=url, location=location)
     
     def _extract_product_name(self, item) -> Optional[str]:
         name = self._try_primary_name_selector(item)
