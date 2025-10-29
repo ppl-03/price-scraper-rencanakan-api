@@ -2,6 +2,7 @@ import logging
 import re
 from typing import Optional
 from bs4 import BeautifulSoup, Tag
+from .config import TokopediaLocations
 
 logger = logging.getLogger(__name__)
 
@@ -13,25 +14,18 @@ class TokopediaLocationScraper:
     Location is displayed as merchant/shop location on product cards,
     indicating where the seller is located and useful for understanding
     product availability and shipping times.
+    
+    Uses dependency injection to allow custom location configuration.
     """
     
-    # Common Indonesian cities and regencies (popular ones that appear in listings)
-    POPULAR_LOCATIONS = {
-        'jakarta', 'surabaya', 'bandung', 'medan', 'semarang', 'yogyakarta',
-        'makassar', 'tangerang', 'depok', 'bekasi', 'bogor', 'malang',
-        'sidoarjo', 'jombang', 'pasuruan', 'tasikmalaya', 'bandar lampung',
-        'palembang', 'batam', 'pekanbaru', 'padang', 'banjarmasin',
-        'samarinda', 'manado', 'pontianak', 'denpasar', 'lombok', 'jayapura',
-        'serang', 'cilegon', 'pandeglang', 'rangkasbitung', 'purwakarta',
-        'subang', 'karawang', 'cirebon', 'kudus', 'pati', 'rembang',
-        'sleman', 'sukoharjo', 'wonogiri', 'klaten', 'demak', 'grobogan',
-        'jakarta utara', 'jakarta selatan', 'jakarta timur', 'jakarta barat',
-        'jakarta pusat', 'kota jakarta', 'kab bogor', 'kab bekasi',
-        'kota tangerang', 'kota depok', 'kab tangerang'
-    }
-    
-    def __init__(self):
-        """Initialize the location scraper."""
+    def __init__(self, location_config: TokopediaLocations = None):
+        """
+        Initialize the location scraper with optional configuration.
+        
+        Args:
+            location_config: TokopediaLocations config object (uses defaults if None)
+        """
+        self.location_config = location_config or TokopediaLocations()
         self.locations_found = set()
     
     def extract_location_from_product_item(self, product_item: Tag) -> Optional[str]:
@@ -92,22 +86,6 @@ class TokopediaLocationScraper:
         We skip common UI buttons like "Tambah ke Wishlist", "Beli", etc.
         We also prioritize spans that contain location keywords.
         """
-        # Common UI text to skip (buttons, links, etc)
-        skip_texts = {
-            'tambah ke wishlist', 'add to wishlist', 'beli', 'buy',
-            'lihat semua', 'view all', 'gratis ongkir', 'free shipping',
-            'terjual', 'sold', 'rating', 'komentar', 'comment', 'review'
-        }
-        
-        # Location keywords that suggest this is a location span
-        location_keywords = {
-            'jakarta', 'bandung', 'surabaya', 'medan', 'semarang',
-            'yogyakarta', 'makassar', 'tangerang', 'depok', 'bekasi',
-            'bogor', 'malang', 'kab', 'kota', 'utara', 'selatan',
-            'timur', 'barat', 'pusat', 'riau', 'sulawesi', 'bali',
-            'sumatra', 'kalimantan', 'jawa', 'nusa', 'papua'
-        }
-        
         # Find all span elements
         spans = product_item.find_all('span')
         
@@ -119,7 +97,7 @@ class TokopediaLocationScraper:
                 continue
             
             # Skip common UI text
-            if text.lower() in skip_texts or any(skip in text.lower() for skip in skip_texts):
+            if text.lower() in self.location_config.SKIP_TEXTS or any(skip in text.lower() for skip in self.location_config.SKIP_TEXTS):
                 continue
             
             # Skip if text is too long (likely a product name or description)
@@ -132,7 +110,7 @@ class TokopediaLocationScraper:
                 # Check if it contains location keywords
                 location_lower = location.lower()
                 has_location_keyword = any(
-                    keyword in location_lower for keyword in location_keywords
+                    keyword in location_lower for keyword in self.location_config.LOCATION_KEYWORDS
                 )
                 
                 # Only return if it has location keywords or has specific pattern (Kab./Kota.)
@@ -152,7 +130,7 @@ class TokopediaLocationScraper:
         all_text = product_item.get_text()
         
         # Split by common delimiters and check each segment
-        segments = re.split(r'[\n\r•\|,]', all_text)
+        segments = re.split(self.location_config.DELIMITER_PATTERN, all_text)
         
         # First pass: look for known location names or keywords
         for segment in segments:
@@ -167,12 +145,7 @@ class TokopediaLocationScraper:
                 # Check if it's a known location
                 location_lower = location.lower()
                 is_known_location = any(
-                    known in location_lower for known in [
-                        'jakarta', 'bandung', 'surabaya', 'medan', 'semarang',
-                        'yogyakarta', 'makassar', 'tangerang', 'depok', 'bekasi',
-                        'bogor', 'malang', 'kab', 'kota', 'utara', 'selatan',
-                        'timur', 'barat', 'pusat'
-                    ]
+                    known in location_lower for known in self.location_config.LOCATION_KEYWORDS
                 )
                 
                 if is_known_location:
@@ -213,7 +186,7 @@ class TokopediaLocationScraper:
         text = ' '.join(text.split()).strip()
         
         # Skip if too short or too long
-        if len(text) < 2 or len(text) > 100:
+        if len(text) < self.location_config.MIN_LENGTH or len(text) > self.location_config.MAX_LENGTH:
             return None
         
         # Basic cleanup - remove very special characters but keep letters, numbers, spaces, hyphens, periods
@@ -264,9 +237,17 @@ class TokopediaLocationScraper:
 _location_scraper = None
 
 
-def get_location_scraper() -> TokopediaLocationScraper:
-    """Get or create the singleton location scraper instance."""
+def get_location_scraper(location_config: TokopediaLocations = None) -> TokopediaLocationScraper:
+    """
+    Get or create the singleton location scraper instance.
+    
+    Args:
+        location_config: Optional custom location configuration
+        
+    Returns:
+        TokopediaLocationScraper singleton instance
+    """
     global _location_scraper
     if _location_scraper is None:
-        _location_scraper = TokopediaLocationScraper()
+        _location_scraper = TokopediaLocationScraper(location_config)
     return _location_scraper
