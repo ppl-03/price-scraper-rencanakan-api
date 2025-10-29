@@ -12,12 +12,13 @@ class BaseTokopediaAPITest(TestCase):
         self.scrape_url = reverse('tokopedia:scrape_products')
         self.scrape_with_filters_url = reverse('tokopedia:scrape_products_with_filters')
     
-    def _create_mock_product(self, name: str, price: int, url: str):
+    def _create_mock_product(self, name: str, price: int, url: str, location: str = None):
         """Create a mock product object"""
         mock_product = MagicMock()
         mock_product.name = name
         mock_product.price = price
         mock_product.url = url
+        mock_product.location = location
         return mock_product
     
     def _create_mock_result(self, success: bool = True, products: list = None, 
