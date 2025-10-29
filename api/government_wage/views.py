@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from .factory import create_government_wage_scraper
+from .simple_cache import get_cache, make_cache_key
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,21 @@ def scrape_region_data(request):
         
         region = region.strip()
         
-        # Create scraper and scrape region data
+        # Check cache first
+        cache = get_cache()
+        cache_key = make_cache_key("region", region)
+        cached_data = cache.get(cache_key)
+        
+        if cached_data:
+            response_data = {
+                'success': True,
+                'region': region,
+                'data': cached_data,
+                'count': len(cached_data),
+                'error_message': None,
+                'cached': True
+            }
+            return JsonResponse(response_data)
         scraper = create_government_wage_scraper()
         
         with scraper:
@@ -44,12 +59,16 @@ def scrape_region_data(request):
             for item in items
         ]
         
+        # Store in cache for 15 minutes
+        cache.set(cache_key, wage_data, 900)
+        
         response_data = {
             'success': True,
             'region': region,
             'data': wage_data,
             'count': len(wage_data),
-            'error_message': None
+            'error_message': None,
+            'cached': False
         }
         
         logger.info(f"Government wage scraping successful for region '{region}': {len(items)} items found")
@@ -70,7 +89,23 @@ def search_by_work_code(request):
         work_code = work_code.strip()
         region = request.GET.get('region')  # Optional parameter
         
-        # Create scraper and search by work code
+        # Check cache first
+        cache = get_cache()
+        search_string = f"{work_code}_{region or ''}"
+        cache_key = make_cache_key("search", search_string)
+        cached_data = cache.get(cache_key)
+        
+        if cached_data:
+            response_data = {
+                'success': True,
+                'work_code': work_code,
+                'region': region,
+                'data': cached_data,
+                'count': len(cached_data),
+                'error_message': None,
+                'cached': True
+            }
+            return JsonResponse(response_data)
         scraper = create_government_wage_scraper()
         
         with scraper:
@@ -92,13 +127,17 @@ def search_by_work_code(request):
             for item in items
         ]
         
+        # Store in cache for 15 minutes
+        cache.set(cache_key, wage_data, 900)
+        
         response_data = {
             'success': True,
             'work_code': work_code,
             'region': region,
             'data': wage_data,
             'count': len(wage_data),
-            'error_message': None
+            'error_message': None,
+            'cached': False
         }
         
         logger.info(f"Government wage search successful for work code '{work_code}' in region '{region}': {len(items)} items found")
