@@ -106,7 +106,7 @@ def _fetch_len(url: str) -> int:
 # ---------------- Juragan fallback (HTML-only) ----------------
 def _extract_juragan_product_name(card) -> str | None:
     """Extract product name from Juragan Material card."""
-    for sel in ("a p.product-name", "p.product-name", PRODUCT_NAME_SELECTOR, "[class*=name]"):
+    for sel in ("a " + PRODUCT_NAME_SELECTOR, PRODUCT_NAME_SELECTOR, PRODUCT_NAME_SELECTOR, "[class*=name]"):
         el = card.select_one(sel)
         if el and el.get_text(strip=True):
             return _clean_text(el.get_text(" ", strip=True))
@@ -120,7 +120,7 @@ def _extract_juragan_product_name(card) -> str | None:
 
 def _extract_juragan_product_link(card) -> str:
     """Extract product link from Juragan Material card."""
-    link = card.select_one("a:has(p.product-name)") or card.select_one(HREF_SELECTOR)
+    link = card.select_one("a:has(p" + PRODUCT_NAME_SELECTOR + ")") or card.select_one(HREF_SELECTOR)
     return link.get("href") if link and link.get("href") else "/products/product"
 
 
@@ -345,7 +345,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
 def _extract_depo_product_name(card) -> str | None:
     """Extract product name from Depo Bangunan card."""
     # Try specific Depo Bangunan selectors
-    for sel in ("strong.product.name.product-item-name a", "strong.product-item-name a", ".product-item-name", ".product-name"):
+    for sel in ("strong.product.name.product-item-name a", "strong.product-item-name a", ".product-item-name", PRODUCT_NAME_SELECTOR):
         el = card.select_one(sel)
         if el and el.get_text(strip=True):
             return _clean_text(el.get_text(" ", strip=True))
@@ -731,7 +731,7 @@ def _try_specific_mitra10_selectors(container) -> str | None:
     """Try specific product selectors for Mitra10."""
     specific_selectors = [
         "a.product-item-link",
-        ".product-name",
+        PRODUCT_NAME_SELECTOR,
         "h3", "h2", "h1"
     ]
 
