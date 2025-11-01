@@ -198,6 +198,18 @@ class TestTokopediaLocationScraper(unittest.TestCase):
         location = self.scraper.extract_location_from_product_item(product_item)
         self.assertIsNotNone(location)
         self.assertEqual(location, 'Kota Bandung')
+
+    def test_reset_clears_state(self):
+        self.scraper.locations_found.add('Jakarta')
+        self.scraper.reset()
+        self.assertEqual(len(self.scraper.locations_found), 0)
+
+    def test_is_valid_location_edge_cases(self):
+        self.assertFalse(self.scraper._is_valid_location(''))
+        self.assertFalse(self.scraper._is_valid_location('A'))
+        self.assertFalse(self.scraper._is_valid_location('x' * 101))
+        self.assertFalse(self.scraper._is_valid_location('123456'))
+        self.assertTrue(self.scraper._is_valid_location('A1'))
     
     def test_location_with_special_characters_cleaned(self):
         """Test that special characters are removed but structure preserved"""
@@ -309,6 +321,57 @@ class TestTokopediaLocationScraper(unittest.TestCase):
         location = self.scraper.extract_location_from_product_item(product_item)
         self.assertIsNotNone(location)
         self.assertIn('Surabaya', location)
+
+
+class TestLocationScraperCoverage(unittest.TestCase):
+    """Additional tests to achieve 100% coverage"""
+    
+    def setUp(self):
+        self.scraper = TokopediaLocationScraper()
+    
+    def test_skip_texts_in_span_elements(self):
+        """Test that SKIP_TEXTS are skipped in _extract_from_span_elements"""
+        # Create HTML with SKIP_TEXTS in span
+        html = '''
+        <a data-testid="lnkProductContainer">
+            <div>
+                <span>Gratis Ongkir</span>
+                <span>Terjual 100+</span>
+                <span>Rating 5.0</span>
+            </div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        product_item = soup.find('a', {'data-testid': 'lnkProductContainer'})
+        
+        # Should skip all SKIP_TEXTS and return None
+        location = self.scraper._extract_from_span_elements(product_item)
+        self.assertIsNone(location)
+    
+    def test_text_node_with_very_long_segment(self):
+        """Test that segments longer than 80 chars are skipped in _extract_from_text_nodes"""
+        # Create a very long text segment
+        long_text = "a" * 85
+        html = f'''
+        <a data-testid="lnkProductContainer">
+            <div>
+                <span>{long_text}</span>
+            </div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        product_item = soup.find('a', {'data-testid': 'lnkProductContainer'})
+        
+        # Should skip the long text
+        location = self.scraper._extract_from_text_nodes(product_item)
+        self.assertIsNone(location)
+    
+    def test_clean_and_validate_empty_after_cleaning(self):
+        """Test _clean_and_validate_location returns None when text becomes empty after cleaning"""
+        # Text with only special characters that get removed (except hyphens, periods, commas)
+        text = "***###@@@!!!"
+        result = self.scraper._clean_and_validate_location(text)
+        self.assertIsNone(result)
 
 
 class TestLocationScraperIntegration(unittest.TestCase):

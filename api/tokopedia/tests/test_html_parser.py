@@ -927,6 +927,28 @@ class TestTokopediaHtmlParserIntegration(TestCase):
         
         url = self.parser._extract_product_url(item)
         self.assertEqual(url, "https://www.tokopedia.com/product/semen-gresik")
+    
+    def test_extract_unit_from_name_with_empty_name(self):
+        """Test _extract_unit_from_name with empty name (line 208)"""
+        result = self.parser._extract_unit_from_name("")
+        self.assertIsNone(result)
+        
+        result = self.parser._extract_unit_from_name(None)
+        self.assertIsNone(result)
+    
+    def test_extract_unit_from_name_with_exception(self):
+        """Test _extract_unit_from_name when extractor raises exception (lines 213-215)"""
+        parser = TokopediaHtmlParser()
+        
+        # Mock the unit parser's extractor to raise an exception
+        with patch.object(parser.unit_parser.extractor, 'extract_unit', side_effect=Exception("test error")):
+            result = parser._extract_unit_from_name("Semen 50kg")
+            self.assertIsNone(result)
+    
+    def test_extract_unit_from_name_with_valid_name(self):
+        """Test _extract_unit_from_name with valid product name"""
+        result = self.parser._extract_unit_from_name("Semen 50kg")
+        self.assertIsNotNone(result)
 
 
 if __name__ == '__main__':

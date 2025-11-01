@@ -1012,3 +1012,94 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         mock_scraper.scrape_products_with_filters.assert_not_called()
 
 
+
+class TokopediaViewsHelpersCoverage(TestCase):
+    def test_sanitize_string_and_format_result(self):
+        from api.tokopedia.views import _sanitize_string, _format_scrape_result
+        from unittest.mock import MagicMock
+
+        raw = "  abc\t\n\r \x01\x02def  " + ("x" * 500)
+        # _sanitize_string truncates before removing control chars
+        self.assertEqual(_sanitize_string(raw, max_length=10), "abc")
+
+        product = MagicMock()
+        product.name = "Name"
+        product.price = 1
+        product.url = "http://u"
+        # product.unit intentionally left as MagicMock to be coerced to None
+
+        result = MagicMock()
+        result.success = True
+        result.products = [product]
+        result.url = "http://search"
+        result.error_message = None
+
+        payload = _format_scrape_result(result)
+        self.assertTrue(payload['success'])
+        self.assertEqual(payload['url'], "http://search")
+        self.assertEqual(payload['products'][0]['name'], "Name")
+        self.assertIsNone(payload['products'][0]['unit'])
+
+    def test_parse_integer_parameter_required_and_default_clamp(self):
+        from api.tokopedia.views import _parse_integer_parameter
+        from django.test import RequestFactory
+
+        factory = RequestFactory()
+        # Missing param with required=True -> error
+        request = factory.get('/test')
+        value, err = _parse_integer_parameter(request, 'must', required=True)
+        self.assertIsNone(value)
+        self.assertIsNotNone(err)
+
+        # Default provided beyond max should be clamped
+        value, err = _parse_integer_parameter(request, 'lim', default='5000', required=False, min_value=1, max_value=1000)
+        self.assertEqual(value, 1000)
+        self.assertIsNone(err)
+
+    def test_sanitize_string_none_and_boolean_default(self):
+        from api.tokopedia.views import _sanitize_string, _parse_boolean_parameter
+        class Req:
+            GET = {}
+        # Empty string input returns empty string
+        self.assertEqual(_sanitize_string(""), "")
+        # Missing param uses default path
+        self.assertFalse(_parse_boolean_parameter(Req(), 'flag', default='false'))
+    
+    def test_parse_default_value_below_min(self):
+        """Test _parse_default_value when default is below min_value (line 97)"""
+        from api.tokopedia.views import _parse_default_value
+        
+        # Default value below min should be clamped to min
+        result = _parse_default_value('5', min_value=10, max_value=100)
+        self.assertEqual(result, 10)
+        
+        # Default value above max should be clamped to max  
+        result = _parse_default_value('200', min_value=10, max_value=100)
+        self.assertEqual(result, 100)
+    
+    def test_parse_integer_parameter_invalid_sanitized_value(self):
+        """Test _parse_integer_parameter with value that fails int conversion (lines 147-148)"""
+        from api.tokopedia import views
+        from unittest.mock import patch
+        
+        class MockRequest:
+            GET = {'param': '123'}  # Valid integer string
+        
+        request = MockRequest()
+        
+        # Mock int() only in the views module to test the exception handler
+        original_int = int
+        def selective_int(value):
+            if value == '123':  # Only raise for our test value
+                raise ValueError("test error")
+            return original_int(value)
+        
+        with patch.object(views, 'int', side_effect=selective_int):
+            value, error = views._parse_integer_parameter(request, 'param', required=False)
+            
+            # Should catch ValueError and return error response
+            self.assertIsNone(value)
+            self.assertIsNotNone(error)
+            self.assertEqual(error.status_code, 400)
+
+
