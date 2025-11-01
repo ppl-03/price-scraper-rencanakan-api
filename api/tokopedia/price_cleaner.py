@@ -1,11 +1,19 @@
 import re
 from typing import Optional
+from .config import TokopediaPriceConfig
 
 
 class TokopediaPriceCleaner:
     """Clean and normalize price strings from Tokopedia"""
     
-    def __init__(self):
+    def __init__(self, price_config: TokopediaPriceConfig = None):
+        """
+        Initialize price cleaner with optional configuration.
+        
+        Args:
+            price_config: Custom price configuration (uses defaults if None)
+        """
+        self.price_config = price_config or TokopediaPriceConfig()
         # Regex pattern to match Tokopedia price format: Rp123.456
         self.price_pattern = re.compile(r'Rp\s*([\d,\.]+)', re.IGNORECASE)
         self.number_pattern = re.compile(r'[\d,\.]+')
@@ -86,5 +94,5 @@ class TokopediaPriceCleaner:
         if not isinstance(price, int):
             return False
         
-        # Price should be between 100 Rp and 100 million Rp
-        return 100 <= price <= 100_000_000
+        # Use configured price range
+        return self.price_config.is_valid(price)
