@@ -27,36 +27,84 @@ class UnitExtractionStrategy(Protocol):
 
 
 class UnitPatternRepository:
-    """Repository for unit patterns and priority ordering."""
+    """Repository for unit patterns and priority ordering - Tokopedia specific."""
     
     def __init__(self):
-        self._unit_patterns = self._initialize_patterns()
-        self._priority_order = self._initialize_priority_order()
+        self._unit_patterns = self._build_unit_patterns()
+        self._priority_order = self._build_priority_order()
     
-    def _initialize_patterns(self) -> Dict[str, List[str]]:
-        """Initialize all unit pattern mappings."""
+    def _build_unit_patterns(self) -> Dict[str, List[str]]:
+        """Build all unit pattern mappings for Tokopedia."""
+        # Combine all pattern groups
+        patterns = {}
+        patterns.update(self._get_length_patterns())
+        patterns.update(self._get_area_patterns())
+        patterns.update(self._get_volume_patterns())
+        patterns.update(self._get_weight_patterns())
+        patterns.update(self._get_liquid_patterns())
+        patterns.update(self._get_electrical_patterns())
+        patterns.update(self._get_quantity_patterns())
+        patterns.update(self._get_time_patterns())
+        patterns.update(self._get_pressure_patterns())
+        patterns.update(self._get_speed_patterns())
+        return patterns
+    
+    def _get_length_patterns(self) -> Dict[str, List[str]]:
+        """Length measurement patterns."""
         return {
             'MM': ['mm', 'milimeter', 'millimeter'],
             'CM': ['cm', 'centimeter', 'sentimeter'],
             'M': ['meter', 'metre', r'm(?!m|l|g|²|³)'],
             'INCH': ['inch', 'inchi', '"', '″'],
             'FEET': ['feet', 'ft', '\'', '′'],
+        }
+    
+    def _get_area_patterns(self) -> Dict[str, List[str]]:
+        """Area measurement patterns."""
+        return {
             UNIT_CM2: ['cm²', 'cm2', 'centimeter persegi', 'sentimeter persegi'],
             UNIT_M2: ['m²', 'm2', 'meter persegi', 'square meter'],
             UNIT_INCH2: ['inch²', 'inch2', 'square inch', 'inchi persegi'],
+        }
+    
+    def _get_volume_patterns(self) -> Dict[str, List[str]]:
+        """Volume measurement patterns."""
+        return {
+            'M³': ['m³', 'm3', 'meter kubik', 'cubic meter'],
+            'CM³': ['cm³', 'cm3', 'centimeter kubik', 'cubic centimeter'],
+        }
+    
+    def _get_weight_patterns(self) -> Dict[str, List[str]]:
+        """Weight measurement patterns."""
+        return {
             UNIT_KG: ['kg', 'kilogram', 'kilo'],
             'GRAM': ['gram', 'gr', 'g(?!a)'],
             'TON': ['ton', 'tonnes'],
             'POUND': ['pound', 'lb', 'lbs', 'pon'],
+        }
+    
+    def _get_liquid_patterns(self) -> Dict[str, List[str]]:
+        """Liquid measurement patterns."""
+        return {
             'LITER': ['liter', 'litre', 'l(?!b|t)'],
             'ML': ['ml', 'mililiter', 'milliliter'],
             'GALLON': ['gallon', 'gal'],
-            'M³': ['m³', 'm3', 'meter kubik', 'cubic meter'],
-            'CM³': ['cm³', 'cm3', 'centimeter kubik', 'cubic centimeter'],
+        }
+    
+    def _get_electrical_patterns(self) -> Dict[str, List[str]]:
+        """Electrical measurement patterns."""
+        return {
             'WATT': ['watt', 'w(?!a)', 'daya'],
             'VOLT': ['volt', 'v(?!a|e)'],
             'AMPERE': ['ampere', 'amp', 'a(?!l|r|n)'],
             'KWH': ['kwh', 'kilowatt hour', 'kilowatt-hour'],
+            'KVA': ['kva', 'kilovolt ampere'],
+            'HP': ['hp', 'horsepower', 'horse power'],
+        }
+    
+    def _get_quantity_patterns(self) -> Dict[str, List[str]]:
+        """Quantity/packaging patterns."""
+        return {
             'PCS': ['pcs', 'pieces', 'piece', 'buah', 'biji'],
             'SET': ['set', 'sets'],
             'PACK': ['pack', 'pak', 'kemasan'],
@@ -67,6 +115,11 @@ class UnitPatternRepository:
             'BATANG': ['batang', 'bar', 'rod', 'stick'],
             'LEMBAR': ['lembar', 'sheet', 'lbr'],
             'UNIT': ['unit', 'units'],
+        }
+    
+    def _get_time_patterns(self) -> Dict[str, List[str]]:
+        """Time measurement patterns."""
+        return {
             'HARI': ['hari', 'day', 'days'],
             'MINGGU': ['minggu', 'week', 'weeks'],
             'BULAN': ['bulan', 'month', 'months'],
@@ -74,25 +127,42 @@ class UnitPatternRepository:
             'JAM': ['jam', 'hour', 'hours', 'hr'],
             'MENIT': ['menit', 'minute', 'minutes', 'min'],
             'DETIK': ['detik', 'second', 'seconds', 'sec'],
-            'KVA': ['kva', 'kilovolt ampere'],
-            'HP': ['hp', 'horsepower', 'horse power'],
-            'PSI': ['psi', 'pound per square inch'],
-            'BAR': ['bar', 'tekanan'],
-            'MPH': ['mph', 'mile per hour'],
-            'KMH': ['kmh', 'km/h', 'kilometer per hour']
         }
     
-    def _initialize_priority_order(self) -> List[str]:
-        """Initialize priority order for unit detection."""
+    def _get_pressure_patterns(self) -> Dict[str, List[str]]:
+        """Pressure measurement patterns."""
+        return {
+            'PSI': ['psi', 'pound per square inch'],
+            'BAR': ['bar', 'tekanan'],
+        }
+    
+    def _get_speed_patterns(self) -> Dict[str, List[str]]:
+        """Speed measurement patterns."""
+        return {
+            'MPH': ['mph', 'mile per hour'],
+            'KMH': ['kmh', 'km/h', 'kilometer per hour'],
+        }
+    
+    def _build_priority_order(self) -> List[str]:
+        """Build priority order for unit detection."""
         return [
+            # Area units (highest priority)
             UNIT_M2, UNIT_CM2, UNIT_INCH2, UNIT_MM2,
+            # Volume units
             UNIT_M3, UNIT_CM3,
+            # Weight units
             UNIT_KG, UNIT_GRAM, UNIT_TON, UNIT_POUND,
+            # Length units
             'M', 'CM', 'MM', 'INCH', 'FEET',
+            # Liquid units
             'LITER', 'ML', 'GALLON',
+            # Electrical units
             'WATT', 'KWH', 'VOLT', 'AMPERE', 'KVA', 'HP',
+            # Quantity units
             'PCS', 'SET', 'PACK', 'BOX', 'ROLL', 'SHEET', 'PAPAN', 'BATANG', 'LEMBAR', 'UNIT',
+            # Time units
             'HARI', 'MINGGU', 'BULAN', 'TAHUN', 'JAM', 'MENIT', 'DETIK',
+            # Pressure and speed units
             'PSI', 'BAR', 'MPH', 'KMH'
         ]
     
