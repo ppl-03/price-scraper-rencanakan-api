@@ -7,6 +7,7 @@ from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import TokopediaPriceCleaner
 from .location_scraper import get_location_scraper
 from .config import TokopediaSelectors, TokopediaUrlConfig
+from .unit_parser import TokopediaUnitParser
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,8 @@ class TokopediaHtmlParser(IHtmlParser):
                  price_cleaner: TokopediaPriceCleaner = None,
                  location_scraper = None,
                  selectors: TokopediaSelectors = None,
-                 url_config: TokopediaUrlConfig = None):
+                 url_config: TokopediaUrlConfig = None,
+                 unit_parser: TokopediaUnitParser = None):
         """
         Initialize HTML parser with optional dependencies.
         
@@ -44,11 +46,13 @@ class TokopediaHtmlParser(IHtmlParser):
             location_scraper: Custom location scraper (uses singleton if None)
             selectors: Custom CSS selectors configuration (uses defaults if None)
             url_config: Custom URL configuration (uses defaults if None)
+            unit_parser: Custom unit parser (uses default if None)
         """
         self.price_cleaner = price_cleaner or TokopediaPriceCleaner()
         self.location_scraper = location_scraper or get_location_scraper()
         self.selectors = selectors or TokopediaSelectors()
         self.url_config = url_config or TokopediaUrlConfig()
+        self.unit_parser = unit_parser or TokopediaUnitParser()
     
     def parse_products(self, html_content: str) -> List[Product]:
         if not html_content:
@@ -115,7 +119,16 @@ class TokopediaHtmlParser(IHtmlParser):
         # Extract location information (optional field)
         location = self.location_scraper.extract_location_from_product_item(item)
         
-        return Product(name=name, price=price, url=url, location=location)
+        # Extract unit information from product item (optional field)
+        # First try to extract from product name (fast path)
+        unit = self._extract_unit_from_name(name)
+        
+        # If not found in name, try full item HTML (slower but more thorough)
+        if not unit:
+            item_html = str(item)
+            unit = self.unit_parser.parse_unit(item_html)
+        
+        return Product(name=name, price=price, url=url, location=location, unit=unit)
     
     def _extract_product_name(self, item) -> Optional[str]:
         name = self._try_primary_name_selector(item)
@@ -179,6 +192,27 @@ class TokopediaHtmlParser(IHtmlParser):
                 return self.url_config.get_product_url(slug)
         
         return self.url_config.get_unknown_url()
+    
+    def _extract_unit_from_name(self, name: str) -> Optional[str]:
+        """
+        Extract unit from product name using fast pattern matching.
+        Checks if product name contains unit keywords.
+        
+        Args:
+            name: Product name to check
+            
+        Returns:
+            Unit string (e.g., 'M', 'KG', 'PCS') or None
+        """
+        if not name:
+            return None
+        
+        try:
+            # Use the unit parser's extractor for fast matching
+            return self.unit_parser.extractor.extract_unit(name)
+        except Exception as e:
+            logger.warning(f"Error extracting unit from name '{name}': {str(e)}")
+            return None
     
     def _generate_slug(self, name: str) -> str:
         """
