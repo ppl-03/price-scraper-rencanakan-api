@@ -2,8 +2,8 @@ import unittest
 import logging
 from unittest.mock import Mock, patch
 from bs4 import BeautifulSoup
-from api.tokopedia.unit_parser import (
-    TokopediaUnitParser,
+from api.tokopedia.unit_parser import TokopediaUnitParser, TokopediaUnitParserConfiguration
+from api.gemilang.unit_parser import (
     UnitExtractor,
     UnitPatternRepository,
     AreaPatternStrategy,
@@ -275,7 +275,7 @@ class TestUnitParserConfiguration(unittest.TestCase):
     """Test UnitParserConfiguration"""
     
     def setUp(self):
-        self.config = UnitParserConfiguration()
+        self.config = TokopediaUnitParserConfiguration()
     
     def test_construction_context_detection(self):
         """Test construction context detection"""
