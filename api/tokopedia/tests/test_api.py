@@ -1025,18 +1025,18 @@ class TokopediaViewsHelpersCoverage(TestCase):
         product = MagicMock()
         product.name = "Name"
         product.price = 1
-        product.url = "http://u"
+        product.url = "https://u"
         # product.unit intentionally left as MagicMock to be coerced to None
 
         result = MagicMock()
         result.success = True
         result.products = [product]
-        result.url = "http://search"
+        result.url = "https://search"
         result.error_message = None
 
         payload = _format_scrape_result(result)
         self.assertTrue(payload['success'])
-        self.assertEqual(payload['url'], "http://search")
+        self.assertEqual(payload['url'], "https://search")
         self.assertEqual(payload['products'][0]['name'], "Name")
         self.assertIsNone(payload['products'][0]['unit'])
 
