@@ -371,8 +371,79 @@ class TestGemilangLocationAPI(TestCase):
         mock_scraper.scrape_locations.return_value = mock_result
         mock_create_scraper.return_value = mock_scraper
         
-        response = self.client.get('/api/gemilang/locations/', {'timeout': '-10'})
+        response = self.client.get('/api/gemilang/locations/', {'timeout': '0'})
         
         self.assertEqual(response.status_code, 200)
-        # Negative timeout is clamped to 0 by max(0, timeout) in parse_timeout
         mock_scraper.scrape_locations.assert_called_once_with(timeout=0)
+
+
+class TestGemilangAPIValidation(TestCase):
+    def setUp(self):
+        self.client = Client()
+    
+    def test_scrape_with_sql_injection_attempt(self):
+        response = self.client.get('/api/gemilang/scrape/', {
+            'keyword': "'; DROP TABLE users; --"
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+    
+    def test_scrape_with_xss_attempt(self):
+        response = self.client.get('/api/gemilang/scrape/', {
+            'keyword': "<script>alert('XSS')</script>"
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+    
+    def test_scrape_with_long_keyword(self):
+        response = self.client.get('/api/gemilang/scrape/', {
+            'keyword': 'a' * 101
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+    
+    def test_scrape_with_invalid_page(self):
+        response = self.client.get('/api/gemilang/scrape/', {
+            'keyword': 'cement',
+            'page': 'invalid'
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+    
+    def test_scrape_with_negative_page(self):
+        response = self.client.get('/api/gemilang/scrape/', {
+            'keyword': 'cement',
+            'page': '-1'
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+    
+    def test_scrape_with_page_exceeds_max(self):
+        response = self.client.get('/api/gemilang/scrape/', {
+            'keyword': 'cement',
+            'page': '101'
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+    
+    def test_locations_with_timeout_exceeds_max(self):
+        response = self.client.get('/api/gemilang/locations/', {
+            'timeout': '121'
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+    
+    def test_locations_with_negative_timeout(self):
+        response = self.client.get('/api/gemilang/locations/', {
+            'timeout': '-1'
+        })
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
