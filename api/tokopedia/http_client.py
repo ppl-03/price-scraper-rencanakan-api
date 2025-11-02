@@ -4,7 +4,7 @@ This client adds Tokopedia-specific headers to improve scraping success rate,
 especially important when running in cloud environments like Azure.
 """
 
-from api.core import BaseHttpClient
+from api.tokopedia_core import BaseHttpClient
 from api.config import config
 import logging
 
