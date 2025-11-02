@@ -14,9 +14,10 @@ class GemilangDatabaseService:
     
     def save(self, data):
         if not self._validate_data(data):
-            return False
+            return {"success": False, "product_ids": []}
 
         now = timezone.now()
+        product_ids = []
 
         sql = """
             INSERT INTO gemilang_products
@@ -31,9 +32,11 @@ class GemilangDatabaseService:
 
         with transaction.atomic():
             with connection.cursor() as cursor:
-                cursor.executemany(sql, params_list)
+                for params in params_list:
+                    cursor.execute(sql, params)
+                    product_ids.append(cursor.lastrowid)
 
-        return True
+        return {"success": True, "product_ids": product_ids}
     
     def _check_anomaly(self, item, existing_price, new_price):
         if existing_price == 0:
@@ -68,16 +71,17 @@ class GemilangDatabaseService:
             "INSERT INTO gemilang_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
             (item["name"], item["price"], item["url"], item["unit"], now, now)
         )
-        return 1
+        return cursor.lastrowid
 
     def save_with_price_update(self, data):
         if not self._validate_data(data):
-            return {"success": False, "updated": 0, "inserted": 0, "anomalies": []}
+            return {"success": False, "updated": 0, "inserted": 0, "anomalies": [], "product_ids": []}
 
         now = timezone.now()
         updated_count = 0
         inserted_count = 0
         anomalies = []
+        product_ids = []
 
         with transaction.atomic():
             with connection.cursor() as cursor:
@@ -90,13 +94,19 @@ class GemilangDatabaseService:
 
                     if existing:
                         existing_id, existing_price = existing
-                        updated_count += self._update_existing_product(cursor, item, existing_id, existing_price, now, anomalies)
+                        if self._update_existing_product(cursor, item, existing_id, existing_price, now, anomalies):
+                            updated_count += 1
+                        product_ids.append(existing_id)
                     else:
-                        inserted_count += self._insert_new_product(cursor, item, now)
+                        new_id = self._insert_new_product(cursor, item, now)
+                        if new_id:
+                            inserted_count += 1
+                            product_ids.append(new_id)
 
         return {
             "success": True,
             "updated": updated_count,
             "inserted": inserted_count,
-            "anomalies": anomalies
+            "anomalies": anomalies,
+            "product_ids": product_ids
         }

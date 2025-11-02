@@ -10,7 +10,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 2)
         self.assertEqual(GemilangProduct.objects.count(), 2)
         product = GemilangProduct.objects.get(name="Item 1")
         self.assertEqual(product.price, 10000)
@@ -21,7 +22,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         data = []
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertFalse(result)
+        self.assertFalse(result['success'])
+        self.assertEqual(len(result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_save_missing_name_field(self):
@@ -30,7 +32,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertFalse(result)
+        self.assertFalse(result['success'])
+        self.assertEqual(len(result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_save_missing_price_field(self):
@@ -39,7 +42,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertFalse(result)
+        self.assertFalse(result['success'])
+        self.assertEqual(len(result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_save_missing_url_field(self):
@@ -48,7 +52,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertFalse(result)
+        self.assertFalse(result['success'])
+        self.assertEqual(len(result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_save_missing_unit_field(self):
@@ -57,7 +62,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertFalse(result)
+        self.assertFalse(result['success'])
+        self.assertEqual(len(result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_save_negative_price(self):
@@ -66,7 +72,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertFalse(result)
+        self.assertFalse(result['success'])
+        self.assertEqual(len(result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_save_zero_price(self):
@@ -75,7 +82,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 1)
         self.assertEqual(GemilangProduct.objects.count(), 1)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.price, 0)
@@ -87,7 +95,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 2)
         self.assertEqual(GemilangProduct.objects.count(), 2)
 
     def test_save_large_price(self):
@@ -96,7 +105,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 1)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.price, 999999999)
 
@@ -106,7 +116,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 1)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.unit, "")
 
@@ -117,7 +128,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 1)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.name, long_name)
 
@@ -128,7 +140,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 1)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.url, long_url)
 
@@ -138,7 +151,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertTrue(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['product_ids']), 1)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.name, "Item @#$% & * () 1")
 
@@ -148,7 +162,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
         ]
         service = GemilangDatabaseService()
         result = service.save(data)
-        self.assertFalse(result)
+        self.assertFalse(result['success'])
+        self.assertEqual(len(result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_save_multiple_batches(self):
@@ -161,8 +176,10 @@ class TestGemilangDatabaseService(MySQLTestCase):
         service = GemilangDatabaseService()
         result1 = service.save(data1)
         result2 = service.save(data2)
-        self.assertTrue(result1)
-        self.assertTrue(result2)
+        self.assertTrue(result1['success'])
+        self.assertTrue(result2['success'])
+        self.assertEqual(len(result1['product_ids']), 1)
+        self.assertEqual(len(result2['product_ids']), 1)
         self.assertEqual(GemilangProduct.objects.count(), 2)
 
     def test_verify_timestamps_created(self):
