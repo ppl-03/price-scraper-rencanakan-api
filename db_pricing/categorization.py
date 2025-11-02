@@ -46,6 +46,29 @@ class ProductCategorizer:
     
     CATEGORY_SANITAIR = "Material Sanitair"
     
+    # Alat Berat (Heavy Equipment)
+    ALAT_BERAT_KEYWORDS = {
+        'crane', 'bulldozer', 'drilling rig', 'truck', 'excavator',
+        'compactor', 'roller', 'diesel', 'backhoe', 'loader',
+        'grader', 'vibrator', 'palu', 'jackhammer', 'pneumatic',
+        'genset', 'alat berat', 'heavy equipment', 'mesin berat'
+    }
+    
+    ALAT_BERAT_PATTERNS = [
+        r'\bcrane\b',
+        r'\bbulldozer\b',
+        r'\bdrilling\s*rig\b',
+        r'\btrucking\b|\btruck\b',
+        r'\bexcavator\b',
+        r'\bcompactor\b',
+        r'\broller\b',
+        r'\bdiesel\b',
+        r'\bbackhoe\b',
+        r'\bloader\b',
+    ]
+    
+    CATEGORY_ALAT_BERAT = "Alat Berat"
+    
     def categorize(self, product_name: str) -> str | None:
         if not product_name:
             return None
@@ -67,6 +90,12 @@ class ProductCategorizer:
             # Avoid misclassifying construction pipes as sanitair; rely on explicit sanitair terms
             if not any(term in normalized for term in ('pipa', 'pipe', 'conduit')):
                 return self.CATEGORY_SANITAIR
+        
+        # Alat Berat detection
+        if any(keyword in normalized for keyword in self.ALAT_BERAT_KEYWORDS):
+            return self.CATEGORY_ALAT_BERAT
+        if any(re.search(pattern, normalized) for pattern in self.ALAT_BERAT_PATTERNS):
+            return self.CATEGORY_ALAT_BERAT
         
         return None
     
