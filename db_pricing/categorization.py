@@ -20,6 +20,32 @@ class ProductCategorizer:
     
     CATEGORY_STEEL = "Baja dan Besi Tulangan"
     
+    # Material Sanitair (bathroom/sanitary fixtures & accessories)
+    SANITAIR_KEYWORDS = {
+        'sanitair', 'sanitary',
+        'closet', 'toilet', 'wc', 'bidet', 'urinoir', 'urinal',
+        'wastafel', 'sink', 'lavatory', 'bathtub', 'bathup',
+        'kran', 'keran', 'faucet', 'mixer', 'stop kran', 'stopkeran',
+        'shower', 'jet shower', 'hand shower', 'shower set',
+        'floor drain', 'floortrap', 'floor trap', 'drain',
+        'siphon', 'p-trap', 'ptrap', 'trap',
+        'selang flexible', 'flexible hose', 'selang shower', 'selang wc',
+        'handuk', 'towel bar', 'towel holder', 'tissue', 'paper holder',
+        'dispenser sabun', 'soap dispenser', 'cermin kamar mandi', 'cermin bathroom', 'kaca kamar mandi',
+        'spray jet', 'jet washer', 'bidet spray'
+    }
+    
+    SANITAIR_PATTERNS = [
+        r'\bcloset (duduk|jongkok)\b',
+        r'\b(shower|wastafel|urinoir|toilet)\b',
+        r'\b(hand\s*shower|jet\s*shower|shower\s*set)\b',
+        r'\bfloor\s*(drain|trap)\b',
+        r'\b(stop\s*kran|keran|kran|faucet|mixer)\b',
+        r'\b(p-?trap|siphon)\b',
+    ]
+    
+    CATEGORY_SANITAIR = "Material Sanitair"
+    
     def categorize(self, product_name: str) -> str | None:
         if not product_name:
             return None
@@ -33,6 +59,14 @@ class ProductCategorizer:
         has_pattern = any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS)
         if has_pattern and ('besi' in normalized or 'baja' in normalized or 'wire' in normalized):
             return self.CATEGORY_STEEL
+
+        # Sanitair detection
+        if any(keyword in normalized for keyword in self.SANITAIR_KEYWORDS):
+            return self.CATEGORY_SANITAIR
+        if any(re.search(pattern, normalized) for pattern in self.SANITAIR_PATTERNS):
+            # Avoid misclassifying construction pipes as sanitair; rely on explicit sanitair terms
+            if not any(term in normalized for term in ('pipa', 'pipe', 'conduit')):
+                return self.CATEGORY_SANITAIR
         
         return None
     
