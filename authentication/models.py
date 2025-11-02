@@ -13,8 +13,8 @@ class Company(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
     email = models.EmailField(blank=True, null=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
-    address = models.TextField(blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
     website = models.URLField(blank=True, null=True)
     
     # Company settings
@@ -105,7 +105,7 @@ class User(AbstractUser):
     
     # Authentication & Security
     email_verified_at = models.DateTimeField(null=True, blank=True)
-    verification_token = models.CharField(max_length=255, blank=True, null=True)
+    verification_token = models.CharField(max_length=255, blank=True)
     
     # API Token fields (Sanctum-like)
     api_tokens = models.JSONField(default=list, blank=True)
