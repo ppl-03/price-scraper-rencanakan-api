@@ -43,7 +43,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
             ]
             service = GemilangDatabaseService()
             save_result = service.save(formatted_data)
-            self.assertTrue(save_result)
+            self.assertTrue(save_result['success'])
+            self.assertGreater(len(save_result['product_ids']), 0)
             self.assertGreater(GemilangProduct.objects.count(), 0)
 
     def test_scrape_with_empty_keyword(self):
@@ -63,7 +64,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
         
         service = GemilangDatabaseService()
         save_result = service.save([])
-        self.assertFalse(save_result)
+        self.assertFalse(save_result['success'])
+        self.assertEqual(len(save_result['product_ids']), 0)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_scrape_invalid_html_and_no_save(self):
@@ -77,7 +79,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
         if not result.success or len(result.products) == 0:
             service = GemilangDatabaseService()
             save_result = service.save([])
-            self.assertFalse(save_result)
+            self.assertFalse(save_result['success'])
+            self.assertEqual(len(save_result['product_ids']), 0)
             self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_scrape_multiple_keywords_and_save(self):
@@ -126,7 +129,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
         if all_data:
             service = GemilangDatabaseService()
             save_result = service.save(all_data)
-            self.assertTrue(save_result)
+            self.assertTrue(save_result['success'])
+            self.assertEqual(len(save_result['product_ids']), len(all_data))
             self.assertGreaterEqual(GemilangProduct.objects.count(), len(all_data))
 
     def test_scrape_and_save_with_unit_field(self):
@@ -155,7 +159,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
             ]
             service = GemilangDatabaseService()
             save_result = service.save(formatted_data)
-            self.assertTrue(save_result)
+            self.assertTrue(save_result['success'])
+            self.assertGreater(len(save_result['product_ids']), 0)
             
             product = GemilangProduct.objects.first()
             if product:
@@ -221,7 +226,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
             ]
             service = GemilangDatabaseService()
             save_result = service.save(formatted_data)
-            self.assertTrue(save_result)
+            self.assertTrue(save_result['success'])
+            self.assertEqual(len(save_result['product_ids']), len(formatted_data))
             self.assertGreaterEqual(GemilangProduct.objects.count(), len(formatted_data))
 
     def test_scrape_with_timeout_and_no_save(self):
@@ -235,7 +241,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
         
         service = GemilangDatabaseService()
         save_result = service.save([])
-        self.assertFalse(save_result)
+        self.assertFalse(save_result['success'])
+        self.assertEqual(len(save_result['product_ids']), 0)
 
     def test_scrape_and_save_idempotency(self):
         scraper = create_gemilang_scraper()
