@@ -26,7 +26,7 @@ class ProductCategorizer:
         'plafon', 'plafond', 'ceiling', 'gypsum', 'gipsum',
         'wallpaper', 'wall paper', 'dinding', 'keramik', 'ceramic',
         'granit', 'granite', 'marmer', 'marble', 'parket', 'parquet',
-        'vinyl', 'laminate', 'laminasi', 'klist', 'klist', 
+        'vinyl', 'laminate', 'laminasi', 'klist',
         'skirting', 'list', 'lantai', 'flooring', 'floor',
         'tile', 'tiles', 'ubin', 'cat', 'paint', 'lem', 'glue'
     }
