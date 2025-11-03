@@ -81,7 +81,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": 0, "url": "https://example.com/1", "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         self.assertEqual(GemilangProduct.objects.count(), 1)
         product = GemilangProduct.objects.first()
@@ -93,7 +93,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         self.assertEqual(GemilangProduct.objects.count(), 2)
 
@@ -102,7 +102,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": 999999999, "url": "https://example.com/1", "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.price, 999999999)
@@ -112,7 +112,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": ""}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.unit, "")
@@ -123,7 +123,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": long_name, "price": 10000, "url": "https://example.com/1", "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.name, long_name)
@@ -134,7 +134,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": 10000, "url": long_url, "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.url[:1000], long_url[:1000])
@@ -144,7 +144,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item Test 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.name, "Item Test 1")
@@ -167,8 +167,8 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 2", "price": 20000, "url": "https://example.com/2", "unit": "box"}
         ]
         service = GemilangDatabaseService()
-        success1, error_msg1 = service.save(data1)
-        success2, error_msg2 = service.save(data2)
+        success1, _ = service.save(data1)
+        success2, _ = service.save(data2)
         self.assertTrue(success1)
         self.assertTrue(success2)
         self.assertEqual(GemilangProduct.objects.count(), 2)
@@ -178,7 +178,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         product = GemilangProduct.objects.first()
         self.assertIsNotNone(product.created_at)
         self.assertIsNotNone(product.updated_at)
@@ -195,7 +195,7 @@ class TestDatabaseServiceCoverage(MySQLTestCase):
             {"name": "Product 2", "price": 20000, "url": "https://test2.com", "unit": "BOX"}
         ]
         
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         self.assertEqual(GemilangProduct.objects.count(), 2)
 

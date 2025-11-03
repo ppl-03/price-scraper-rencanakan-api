@@ -62,7 +62,7 @@ class TestGemilangEndToEnd(MySQLTestCase):
         self.assertEqual(len(result.products), 0)
         
         service = GemilangDatabaseService()
-        success, error_msg = service.save([])
+        success, _ = service.save([])
         self.assertFalse(success)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
@@ -76,7 +76,7 @@ class TestGemilangEndToEnd(MySQLTestCase):
         
         if not result.success or len(result.products) == 0:
             service = GemilangDatabaseService()
-            success, error_msg = service.save([])
+            success, _ = service.save([])
             self.assertFalse(success)
             self.assertEqual(GemilangProduct.objects.count(), 0)
 
@@ -234,7 +234,7 @@ class TestGemilangEndToEnd(MySQLTestCase):
         self.assertEqual(len(result.products), 0)
         
         service = GemilangDatabaseService()
-        success, error_msg = service.save([])
+        success, _ = service.save([])
         self.assertFalse(success)
 
     def test_scrape_and_save_idempotency(self):

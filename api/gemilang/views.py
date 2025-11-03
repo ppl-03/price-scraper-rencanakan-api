@@ -16,16 +16,20 @@ from .security import (
 logger = logging.getLogger(__name__)
 
 
+def _validate_page_param(x):
+    """Helper function to validate page parameter."""
+    if not x:
+        return InputValidator.validate_integer(0, 'page', min_value=0, max_value=100)
+    if str(x).lstrip('-').isdigit():
+        return InputValidator.validate_integer(int(x), 'page', min_value=0, max_value=100)
+    return (False, 'page must be a valid integer', None)
+
+
 @require_http_methods(["GET"])
 @enforce_resource_limits
 @validate_input({
     'keyword': lambda x: InputValidator.validate_keyword(x or '', max_length=100),
-    'page': lambda x: (
-        InputValidator.validate_integer(int(x), 'page', min_value=0, max_value=100) 
-        if x and str(x).lstrip('-').isdigit() 
-        else InputValidator.validate_integer(0, 'page', min_value=0, max_value=100) if not x
-        else (False, 'page must be a valid integer', None)
-    ),
+    'page': _validate_page_param,
     'sort_by_price': lambda x: InputValidator.validate_boolean(x, 'sort_by_price')
 })
 def scrape_products(request):
@@ -68,14 +72,18 @@ def scrape_products(request):
         }, status=500)
 
 
+def _validate_timeout_param(x):
+    """Helper function to validate timeout parameter."""
+    if not x:
+        return InputValidator.validate_integer(30, 'timeout', min_value=0, max_value=120)
+    if str(x).lstrip('-').isdigit():
+        return InputValidator.validate_integer(int(x), 'timeout', min_value=0, max_value=120)
+    return (False, 'timeout must be a valid integer', None)
+
+
 @require_http_methods(["GET"])
 @validate_input({
-    'timeout': lambda x: (
-        InputValidator.validate_integer(int(x), 'timeout', min_value=0, max_value=120)
-        if x and str(x).lstrip('-').isdigit()
-        else InputValidator.validate_integer(30, 'timeout', min_value=0, max_value=120) if not x
-        else (False, 'timeout must be a valid integer', None)
-    )
+    'timeout': _validate_timeout_param
 })
 def gemilang_locations_view(request):
     try:
@@ -110,51 +118,79 @@ def gemilang_locations_view(request):
         }, status=500)
 
 
+def _parse_request_body(request):
+    """Parse and return JSON body or error response."""
+    try:
+        return json.loads(request.body), None
+    except json.JSONDecodeError:
+        return None, JsonResponse({'error': 'Invalid JSON in request body'}, status=400)
+
+
+def _validate_scrape_params(body):
+    """Validate all scrape and save parameters."""
+    keyword = body.get('keyword')
+    is_valid, error_msg, sanitized_keyword = InputValidator.validate_keyword(
+        keyword or '', max_length=100
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    page = body.get('page', 0)
+    is_valid, error_msg, validated_page = InputValidator.validate_integer(
+        page, 'page', min_value=0, max_value=100
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    sort_by_price = body.get('sort_by_price', True)
+    is_valid, error_msg, validated_sort = InputValidator.validate_boolean(
+        sort_by_price, 'sort_by_price'
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    use_price_update = body.get('use_price_update', False)
+    is_valid, error_msg, validated_update = InputValidator.validate_boolean(
+        use_price_update, 'use_price_update'
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    return {
+        'keyword': sanitized_keyword,
+        'page': validated_page,
+        'sort_by_price': validated_sort,
+        'use_price_update': validated_update
+    }, None
+
+
+def _validate_products_business_logic(products_data):
+    """Validate business logic for all products."""
+    for idx, product in enumerate(products_data):
+        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product)
+        if not is_valid:
+            return JsonResponse({'error': f'Product {idx}: {error_msg}'}, status=400)
+    return None
+
+
 @require_http_methods(["POST"])
 @require_api_token(required_permission='write')
 @enforce_resource_limits
 def scrape_and_save(request):
     try:
-        try:
-            body = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'error': 'Invalid JSON in request body'
-            }, status=400)
+        body, error_response = _parse_request_body(request)
+        if error_response:
+            return error_response
         
-        keyword = body.get('keyword')
-        is_valid, error_msg, sanitized_keyword = InputValidator.validate_keyword(
-            keyword or '', max_length=100
-        )
-        if not is_valid:
-            return JsonResponse({'error': error_msg}, status=400)
-        
-        page = body.get('page', 0)
-        is_valid, error_msg, validated_page = InputValidator.validate_integer(
-            page, 'page', min_value=0, max_value=100
-        )
-        if not is_valid:
-            return JsonResponse({'error': error_msg}, status=400)
-        
-        sort_by_price = body.get('sort_by_price', True)
-        is_valid, error_msg, validated_sort = InputValidator.validate_boolean(
-            sort_by_price, 'sort_by_price'
-        )
-        if not is_valid:
-            return JsonResponse({'error': error_msg}, status=400)
-        
-        use_price_update = body.get('use_price_update', False)
-        is_valid, error_msg, validated_update = InputValidator.validate_boolean(
-            use_price_update, 'use_price_update'
-        )
-        if not is_valid:
-            return JsonResponse({'error': error_msg}, status=400)
+        params, error_response = _validate_scrape_params(body)
+        if error_response:
+            return error_response
         
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
-            keyword=sanitized_keyword,
-            sort_by_price=validated_sort,
-            page=validated_page
+            keyword=params['keyword'],
+            sort_by_price=params['sort_by_price'],
+            page=params['page']
         )
         
         if not result.success:
@@ -187,16 +223,13 @@ def scrape_and_save(request):
                 'anomalies': []
             })
         
-        for idx, product in enumerate(products_data):
-            is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product)
-            if not is_valid:
-                return JsonResponse({
-                    'error': f'Product {idx}: {error_msg}'
-                }, status=400)
+        error_response = _validate_products_business_logic(products_data)
+        if error_response:
+            return error_response
         
         db_service = GemilangDatabaseService()
         
-        if validated_update:
+        if params['use_price_update']:
             save_result = db_service.save_with_price_update(products_data)
             
             if not save_result.get('success', False):

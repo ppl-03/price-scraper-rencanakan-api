@@ -25,51 +25,87 @@ class GemilangDatabaseService:
             if col not in self.ALLOWED_COLUMNS:
                 raise ValueError(f"Invalid column name: {col}")
     
-    def _validate_data(self, data: List[Dict[str, Any]]) -> Tuple[bool, str]:
+    def _validate_basic_structure(self, data: List[Dict[str, Any]]) -> Tuple[bool, str]:
+        """Validate basic data structure."""
         if not data:
             return False, "Data cannot be empty"
-        
         if not isinstance(data, list):
             return False, "Data must be a list"
+        return True, ""
+    
+    def _validate_item_structure(self, item: Any, idx: int) -> Tuple[bool, str]:
+        """Validate individual item structure."""
+        if not isinstance(item, dict):
+            return False, f"Item {idx} must be a dictionary"
+        
+        required_fields = ["name", "price", "url", "unit"]
+        missing_fields = [f for f in required_fields if f not in item]
+        if missing_fields:
+            return False, f"Item {idx} missing required fields: {missing_fields}"
+        return True, ""
+    
+    def _validate_price(self, price: Any, idx: int) -> Tuple[bool, str]:
+        """Validate price field."""
+        if not isinstance(price, (int, float)):
+            return False, f"Item {idx}: price must be a number"
+        if price < 0:
+            return False, f"Item {idx}: price must be non-negative"
+        if price > 1000000000:
+            return False, f"Item {idx}: price exceeds reasonable limit"
+        return True, ""
+    
+    def _validate_name(self, name: Any, idx: int) -> Tuple[bool, str]:
+        """Validate name field."""
+        if not isinstance(name, str):
+            return False, f"Item {idx}: name must be a string"
+        if len(name) < 2 or len(name) > 500:
+            return False, f"Item {idx}: name length must be between 2 and 500"
+        return True, ""
+    
+    def _validate_url(self, url: Any, idx: int) -> Tuple[bool, str]:
+        """Validate URL field with security checks."""
+        if not isinstance(url, str):
+            return False, f"Item {idx}: url must be a string"
+        if not url.startswith('https://'):
+            return False, f"Item {idx}: url must use HTTPS protocol for security"
+        if any(x in url.lower() for x in ['localhost', '127.0.0.1', '0.0.0.0']):
+            logger.critical(f"SSRF attempt detected: {url}")
+            return False, f"Item {idx}: invalid URL"
+        return True, ""
+    
+    def _validate_unit(self, unit: Any, idx: int) -> Tuple[bool, str]:
+        """Validate unit field."""
+        if not isinstance(unit, str):
+            return False, f"Item {idx}: unit must be a string"
+        if len(unit) > 50:
+            return False, f"Item {idx}: unit too long"
+        return True, ""
+    
+    def _validate_data(self, data: List[Dict[str, Any]]) -> Tuple[bool, str]:
+        is_valid, error_msg = self._validate_basic_structure(data)
+        if not is_valid:
+            return False, error_msg
         
         for idx, item in enumerate(data):
-            if not isinstance(item, dict):
-                return False, f"Item {idx} must be a dictionary"
+            is_valid, error_msg = self._validate_item_structure(item, idx)
+            if not is_valid:
+                return False, error_msg
             
-            required_fields = ["name", "price", "url", "unit"]
-            missing_fields = [f for f in required_fields if f not in item]
-            if missing_fields:
-                return False, f"Item {idx} missing required fields: {missing_fields}"
+            is_valid, error_msg = self._validate_price(item.get("price"), idx)
+            if not is_valid:
+                return False, error_msg
             
-            price = item.get("price")
-            if not isinstance(price, (int, float)):
-                return False, f"Item {idx}: price must be a number"
-            if price < 0:
-                return False, f"Item {idx}: price must be non-negative"
-            if price > 1000000000:
-                return False, f"Item {idx}: price exceeds reasonable limit"
+            is_valid, error_msg = self._validate_name(item.get("name"), idx)
+            if not is_valid:
+                return False, error_msg
             
-            name = item.get("name")
-            if not isinstance(name, str):
-                return False, f"Item {idx}: name must be a string"
-            if len(name) < 2 or len(name) > 500:
-                return False, f"Item {idx}: name length must be between 2 and 500"
+            is_valid, error_msg = self._validate_url(item.get("url"), idx)
+            if not is_valid:
+                return False, error_msg
             
-            url = item.get("url")
-            if not isinstance(url, str):
-                return False, f"Item {idx}: url must be a string"
-            # Enforce HTTPS protocol for security
-            if not url.startswith('https://'):
-                return False, f"Item {idx}: url must use HTTPS protocol for security"
-            if any(x in url.lower() for x in ['localhost', '127.0.0.1', '0.0.0.0']):
-                logger.critical(f"SSRF attempt detected: {url}")
-                return False, f"Item {idx}: invalid URL"
-            
-            unit = item.get("unit")
-            if not isinstance(unit, str):
-                return False, f"Item {idx}: unit must be a string"
-            if len(unit) > 50:
-                return False, f"Item {idx}: unit too long"
+            is_valid, error_msg = self._validate_unit(item.get("unit"), idx)
+            if not is_valid:
+                return False, error_msg
         
         return True, ""
     

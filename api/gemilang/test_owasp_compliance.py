@@ -75,7 +75,7 @@ class TestA01BrokenAccessControl(TestCase):
             '/api/gemilang/scrape/',
             HTTP_X_API_TOKEN='invalid-token-xyz'
         )
-        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+        is_valid, error_msg, _ = AccessControlManager.validate_token(request)
         
         self.assertFalse(is_valid, "Invalid token should be rejected")
         self.assertEqual(error_msg, 'Invalid API token')
@@ -149,7 +149,7 @@ class TestA01BrokenAccessControl(TestCase):
         client_id = "attacker_ip_456"
         
         # Exceed rate limit to trigger block
-        for i in range(11):
+        for _ in range(11):
             rate_limiter.check_rate_limit(
                 client_id, max_requests=10, window_seconds=60, block_on_violation=True
             )
@@ -247,7 +247,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for injection_attempt in sql_injection_attempts:
-            is_valid, error_msg, _ = InputValidator.validate_keyword(injection_attempt)
+            is_valid, _, _ = InputValidator.validate_keyword(injection_attempt)
             self.assertFalse(
                 is_valid,
                 f"SQL injection should be detected: {injection_attempt}"
@@ -284,7 +284,7 @@ class TestA03InjectionPrevention(TestCase):
         # Valid inputs
         valid_inputs = ["cement", "batu bata", "cat-tembok", "semen_gresik"]
         for valid_input in valid_inputs:
-            is_valid, error_msg, sanitized = InputValidator.validate_keyword(valid_input)
+            is_valid, _, _ = InputValidator.validate_keyword(valid_input)
             self.assertTrue(is_valid, f"Valid input rejected: {valid_input}")
             print(f"✓ Valid input accepted: {valid_input}")
         
@@ -342,7 +342,7 @@ class TestA03InjectionPrevention(TestCase):
         db_service = GemilangDatabaseService()
         
         # This should fail validation before reaching the database
-        success, error_msg = db_service.save(test_data)
+        _, _ = db_service.save(test_data)
         
         # Even if validation passes, parameterized queries protect against injection
         # The apostrophe in the name will be properly escaped
@@ -406,7 +406,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for xss_attempt in xss_attempts:
-            is_valid, error_msg, sanitized = InputValidator.validate_keyword(xss_attempt)
+            is_valid, _, _ = InputValidator.validate_keyword(xss_attempt)
             # Should be rejected due to invalid characters
             self.assertFalse(is_valid, f"XSS should be rejected: {xss_attempt}")
             print(f"✓ XSS attempt blocked: {xss_attempt[:40]}...")
@@ -479,7 +479,7 @@ class TestA04InsecureDesign(TestCase):
         
         for ssrf_url in ssrf_attempts:
             data = {'name': 'Product', 'price': 1000, 'url': ssrf_url}
-            is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+            is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
             self.assertFalse(is_valid, f"SSRF should be prevented: {ssrf_url}")
             print(f"✓ SSRF prevented: {ssrf_url}")
     
@@ -587,7 +587,7 @@ class TestIntegratedSecurityScenarios(TestCase):
         ]
         
         for injection, description in injection_chain:
-            is_valid, error_msg, _ = InputValidator.validate_keyword(injection)
+            is_valid, _, _ = InputValidator.validate_keyword(injection)
             self.assertFalse(is_valid, f"{description} should be blocked")
             print(f"✓ {description} blocked")
         
@@ -621,7 +621,7 @@ class TestIntegratedSecurityScenarios(TestCase):
         
         # Attempt to request excessive data
         request = RequestFactory().get('/api/test', {'limit': '999999'})
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request)
         self.assertFalse(is_valid)
         print("✓ Excessive data request blocked")
         

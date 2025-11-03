@@ -202,10 +202,13 @@ class AccessControlManager:
         Implements OWASP A01:2021 - Log access control failures.
         """
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-        user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')
-        path = request.path
+        # Sanitize user-controlled data to prevent log injection
+        user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')[:200]
+        user_agent = ''.join(c if c.isprintable() else '' for c in user_agent)
+        path = request.path[:200]
         method = request.method
         
+        # Create log data with sanitized values
         log_data = {
             'timestamp': datetime.now().isoformat(),
             'client_ip': client_ip,
@@ -476,40 +479,54 @@ class SecurityDesignPatterns:
     """
     
     @staticmethod
+    def _validate_price_field(price: Any) -> Tuple[bool, str]:
+        """Validate price field in business logic."""
+        if not isinstance(price, (int, float)) or price < 0:
+            return False, "Price must be a positive number"
+        if price > 1000000000:
+            logger.warning(f"Suspicious price value: {price}")
+            return False, "Price value exceeds reasonable limit"
+        return True, ""
+    
+    @staticmethod
+    def _validate_name_field(name: str) -> Tuple[bool, str]:
+        """Validate name field in business logic."""
+        if len(name) > 500:
+            return False, "Product name too long"
+        if len(name) < 2:
+            return False, "Product name too short"
+        return True, ""
+    
+    @staticmethod
+    def _validate_url_field(url: str) -> Tuple[bool, str]:
+        """Validate URL field with SSRF protection."""
+        if not url.startswith('https://'):
+            return False, "URL must use HTTPS protocol for security"
+        if 'localhost' in url or '127.0.0.1' in url:
+            logger.critical(f"SSRF attempt detected: {url}")
+            return False, "Invalid URL"
+        return True, ""
+    
+    @staticmethod
     def validate_business_logic(data: Dict[str, Any]) -> Tuple[bool, str]:
         """
         Validate business logic constraints.
         Implements plausibility checks.
         """
-        # Price must be positive
         if 'price' in data:
-            price = data['price']
-            if not isinstance(price, (int, float)) or price < 0:
-                return False, "Price must be a positive number"
-            
-            # Price should be reasonable (plausibility check)
-            if price > 1000000000:  # 1 billion
-                logger.warning(f"Suspicious price value: {price}")
-                return False, "Price value exceeds reasonable limit"
+            is_valid, error_msg = SecurityDesignPatterns._validate_price_field(data['price'])
+            if not is_valid:
+                return False, error_msg
         
-        # Name should have reasonable length
         if 'name' in data:
-            name = data['name']
-            if len(name) > 500:
-                return False, "Product name too long"
-            if len(name) < 2:
-                return False, "Product name too short"
+            is_valid, error_msg = SecurityDesignPatterns._validate_name_field(data['name'])
+            if not is_valid:
+                return False, error_msg
         
-        # URL validation - require HTTPS for security
         if 'url' in data:
-            url = data['url']
-            # Enforce HTTPS protocol for secure communication
-            if not url.startswith('https://'):
-                return False, "URL must use HTTPS protocol for security"
-            # Prevent SSRF
-            if 'localhost' in url or '127.0.0.1' in url:
-                logger.critical(f"SSRF attempt detected: {url}")
-                return False, "Invalid URL"
+            is_valid, error_msg = SecurityDesignPatterns._validate_url_field(data['url'])
+            if not is_valid:
+                return False, error_msg
         
         return True, ""
     
@@ -601,6 +618,38 @@ def require_api_token(required_permission: str = None):
     return decorator
 
 
+def _get_request_data(request):
+    """Extract data source based on request method."""
+    if request.method == 'GET':
+        return request.GET, None
+    
+    try:
+        import json
+        data = json.loads(request.body) if request.body else {}
+        return data, None
+    except json.JSONDecodeError:
+        return None, JsonResponse({
+            'error': 'Invalid JSON in request body'
+        }, status=400)
+
+
+def _validate_fields(validators: Dict[str, callable], data_source) -> Tuple[Dict, Dict]:
+    """Validate all fields and return errors and validated data."""
+    errors = {}
+    validated_data = {}
+    
+    for field_name, validator_func in validators.items():
+        value = data_source.get(field_name)
+        is_valid, error_msg, sanitized_value = validator_func(value)
+        
+        if not is_valid:
+            errors[field_name] = error_msg
+        elif sanitized_value is not None:
+            validated_data[field_name] = sanitized_value
+    
+    return errors, validated_data
+
+
 def validate_input(validators: Dict[str, callable]):
     """
     Decorator for input validation.
@@ -617,32 +666,11 @@ def validate_input(validators: Dict[str, callable]):
     def decorator(view_func):
         @wraps(view_func)
         def wrapped_view(request, *args, **kwargs):
-            errors = {}
-            validated_data = {}
+            data_source, error_response = _get_request_data(request)
+            if error_response:
+                return error_response
             
-            # Get data based on request method
-            if request.method == 'GET':
-                data_source = request.GET
-            else:
-                try:
-                    import json
-                    data_source = json.loads(request.body) if request.body else {}
-                except json.JSONDecodeError:
-                    return JsonResponse({
-                        'error': 'Invalid JSON in request body'
-                    }, status=400)
-            
-            # Validate each field
-            for field_name, validator_func in validators.items():
-                value = data_source.get(field_name)
-                is_valid, error_msg, sanitized_value = validator_func(value)
-                
-                if not is_valid:
-                    errors[field_name] = error_msg
-                else:
-                    # Only add to validated_data if value is not None (allows view to use its own defaults)
-                    if sanitized_value is not None:
-                        validated_data[field_name] = sanitized_value
+            errors, validated_data = _validate_fields(validators, data_source)
             
             if errors:
                 return JsonResponse({
@@ -650,9 +678,7 @@ def validate_input(validators: Dict[str, callable]):
                     'details': errors
                 }, status=400)
             
-            # Attach validated data to request
             request.validated_data = validated_data
-            
             return view_func(request, *args, **kwargs)
         
         return wrapped_view
