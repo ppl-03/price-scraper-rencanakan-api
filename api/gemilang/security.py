@@ -202,27 +202,28 @@ class AccessControlManager:
         Implements OWASP A01:2021 - Log access control failures.
         """
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-        # Sanitize user-controlled data to prevent log injection
+        # Sanitize all user-controlled data to prevent log injection
         user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')[:200]
         user_agent = ''.join(c if c.isprintable() else '' for c in user_agent)
         path = request.path[:200]
+        path = ''.join(c if c.isprintable() else '' for c in path)
         method = request.method
+        # Sanitize reason field (user-controlled)
+        safe_reason = str(reason)[:100] if reason else 'unknown'
+        safe_reason = ''.join(c if c.isprintable() else '' for c in safe_reason)
         
-        # Create log data with sanitized values
-        log_data = {
-            'timestamp': datetime.now().isoformat(),
-            'client_ip': client_ip,
-            'user_agent': user_agent,
-            'path': path,
-            'method': method,
-            'success': success,
-            'reason': reason
-        }
+        # Log with sanitized values - don't log raw user input
+        timestamp = datetime.now().isoformat()
         
         if success:
-            logger.info(f"Access granted: {log_data}")
+            logger.info(
+                f"Access granted - IP: {client_ip}, Path: {path}, Method: {method}, Time: {timestamp}"
+            )
         else:
-            logger.warning(f"Access denied: {log_data}")
+            logger.warning(
+                f"Access denied - IP: {client_ip}, Path: {path}, Method: {method}, "
+                f"Reason: {safe_reason}, Time: {timestamp}"
+            )
             # In production: Alert admins on repeated failures
             cls._check_for_attack_pattern(client_ip)
     

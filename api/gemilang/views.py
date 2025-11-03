@@ -173,6 +173,61 @@ def _validate_products_business_logic(products_data):
     return None
 
 
+def _handle_price_update_save(db_service, products_data):
+    """Handle database save with price update."""
+    save_result = db_service.save_with_price_update(products_data)
+    
+    if not save_result.get('success', False):
+        return JsonResponse({
+            'success': False,
+            'error': save_result.get('error', 'Failed to save products'),
+            'saved': 0,
+            'updated': 0,
+            'inserted': 0,
+            'anomalies': []
+        }, status=500)
+    
+    return JsonResponse({
+        'success': True,
+        'message': f"Updated {save_result['updated']} products, inserted {save_result['inserted']} new products",
+        'saved': save_result['updated'] + save_result['inserted'],
+        'updated': save_result['updated'],
+        'inserted': save_result['inserted'],
+        'anomalies': save_result.get('anomalies', []),
+        'anomaly_count': len(save_result.get('anomalies', []))
+    })
+
+
+def _handle_regular_save(db_service, products_data):
+    """Handle regular database save."""
+    save_result = db_service.save(products_data)
+    
+    if isinstance(save_result, tuple):
+        save_success, error_msg = save_result
+    else:
+        save_success = save_result
+        error_msg = 'Failed to save products to database'
+    
+    if save_success:
+        return JsonResponse({
+            'success': True,
+            'message': f"Successfully saved {len(products_data)} products",
+            'saved': len(products_data),
+            'updated': 0,
+            'inserted': len(products_data),
+            'anomalies': []
+        })
+    else:
+        return JsonResponse({
+            'success': False,
+            'error': error_msg,
+            'saved': 0,
+            'updated': 0,
+            'inserted': 0,
+            'anomalies': []
+        }, status=500)
+
+
 @require_http_methods(["POST"])
 @require_api_token(required_permission='write')
 @enforce_resource_limits
@@ -230,54 +285,9 @@ def scrape_and_save(request):
         db_service = GemilangDatabaseService()
         
         if params['use_price_update']:
-            save_result = db_service.save_with_price_update(products_data)
-            
-            if not save_result.get('success', False):
-                return JsonResponse({
-                    'success': False,
-                    'error': save_result.get('error', 'Failed to save products'),
-                    'saved': 0,
-                    'updated': 0,
-                    'inserted': 0,
-                    'anomalies': []
-                }, status=500)
-            
-            return JsonResponse({
-                'success': True,
-                'message': f"Updated {save_result['updated']} products, inserted {save_result['inserted']} new products",
-                'saved': save_result['updated'] + save_result['inserted'],
-                'updated': save_result['updated'],
-                'inserted': save_result['inserted'],
-                'anomalies': save_result.get('anomalies', []),
-                'anomaly_count': len(save_result.get('anomalies', []))
-            })
+            return _handle_price_update_save(db_service, products_data)
         else:
-            save_result = db_service.save(products_data)
-            
-            if isinstance(save_result, tuple):
-                save_success, error_msg = save_result
-            else:
-                save_success = save_result
-                error_msg = 'Failed to save products to database'
-            
-            if save_success:
-                return JsonResponse({
-                    'success': True,
-                    'message': f"Successfully saved {len(products_data)} products",
-                    'saved': len(products_data),
-                    'updated': 0,
-                    'inserted': len(products_data),
-                    'anomalies': []
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': error_msg,
-                    'saved': 0,
-                    'updated': 0,
-                    'inserted': 0,
-                    'anomalies': []
-                }, status=500)
+            return _handle_regular_save(db_service, products_data)
         
     except Exception as e:
         logger.error(f"Unexpected error in scrape_and_save: {type(e).__name__}")

@@ -297,7 +297,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for invalid_input, expected_error_part in invalid_inputs:
-            is_valid, error_msg, _ = InputValidator.validate_keyword(invalid_input)
+            is_valid, _, _ = InputValidator.validate_keyword(invalid_input)
             self.assertFalse(is_valid, f"Invalid input accepted: {invalid_input[:20]}...")
             print(f"✓ Invalid input rejected: {invalid_input[:30]}...")
     
@@ -628,7 +628,7 @@ class TestIntegratedSecurityScenarios(TestCase):
         # Attempt to send excessive parameters (parameter pollution)
         params = {f'param{i}': 'x' * 1000 for i in range(50)}
         request = RequestFactory().get('/api/test', params)
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request)
         self.assertFalse(is_valid)
         print("✓ Parameter pollution blocked")
         

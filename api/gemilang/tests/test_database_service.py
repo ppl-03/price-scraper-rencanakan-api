@@ -178,7 +178,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs"}
         ]
         service = GemilangDatabaseService()
-        success, _ = service.save(data)
+        _, _ = service.save(data)
         product = GemilangProduct.objects.first()
         self.assertIsNotNone(product.created_at)
         self.assertIsNotNone(product.updated_at)
