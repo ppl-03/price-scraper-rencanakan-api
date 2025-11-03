@@ -205,7 +205,7 @@ class TestDatabaseServiceSecurity(MySQLTestCase):
     def test_save_rejects_ssrf_localhost(self):
         service = GemilangDatabaseService()
         data = [
-            {"name": "Item 1", "price": 10000, "url": "http://localhost/admin", "unit": "pcs"}
+            {"name": "Item 1", "price": 10000, "url": "https://localhost/admin", "unit": "pcs"}
         ]
         success, error_msg = service.save(data)
         self.assertFalse(success)
@@ -214,7 +214,7 @@ class TestDatabaseServiceSecurity(MySQLTestCase):
     def test_save_rejects_ssrf_127(self):
         service = GemilangDatabaseService()
         data = [
-            {"name": "Item 1", "price": 10000, "url": "http://127.0.0.1/secret", "unit": "pcs"}
+            {"name": "Item 1", "price": 10000, "url": "https://127.0.0.1/secret", "unit": "pcs"}
         ]
         success, error_msg = service.save(data)
         self.assertFalse(success)
@@ -254,7 +254,7 @@ class TestDatabaseServiceSecurity(MySQLTestCase):
         ]
         success, error_msg = service.save(data)
         self.assertFalse(success)
-        self.assertIn("must start with http", error_msg)
+        self.assertIn("must use HTTPS protocol", error_msg)
     
     def test_save_rejects_long_unit(self):
         service = GemilangDatabaseService()

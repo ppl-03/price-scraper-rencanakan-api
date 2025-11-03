@@ -58,8 +58,9 @@ class GemilangDatabaseService:
             url = item.get("url")
             if not isinstance(url, str):
                 return False, f"Item {idx}: url must be a string"
-            if not url.startswith(('http://', 'https://')):
-                return False, f"Item {idx}: url must start with http:// or https://"
+            # Enforce HTTPS protocol for security
+            if not url.startswith('https://'):
+                return False, f"Item {idx}: url must use HTTPS protocol for security"
             if any(x in url.lower() for x in ['localhost', '127.0.0.1', '0.0.0.0']):
                 logger.critical(f"SSRF attempt detected: {url}")
                 return False, f"Item {idx}: invalid URL"
