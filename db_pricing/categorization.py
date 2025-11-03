@@ -108,6 +108,18 @@ class ProductCategorizer:
     
     CATEGORY_PERALATAN_KERJA = "Peralatan Kerja"
     
+    def _check_category_match(self, normalized: str, keywords: set, patterns: list, exclusions: set = None) -> bool:
+        """Helper method to check if a product matches a category."""
+        if exclusions and any(exclusion in normalized for exclusion in exclusions):
+            return False
+        
+        # Check patterns first (more specific)
+        if any(re.search(pattern, normalized) for pattern in patterns):
+            return True
+        
+        # Check keywords
+        return any(keyword in normalized for keyword in keywords)
+    
     def categorize(self, product_name: str) -> str | None:
         if not product_name:
             return None
@@ -115,41 +127,19 @@ class ProductCategorizer:
         normalized = product_name.lower().strip()
         
         # Check for Peralatan Kerja first
-        has_exclusion = any(exclusion in normalized for exclusion in self.PERALATAN_KERJA_EXCLUSIONS)
-        
-        if not has_exclusion:
-            # Check for specific patterns
-            has_pattern = any(re.search(pattern, normalized) for pattern in self.PERALATAN_KERJA_PATTERNS)
-            if has_pattern:
-                return self.CATEGORY_PERALATAN_KERJA
-            
-            # Check for keywords
-            has_keyword = any(keyword in normalized for keyword in self.PERALATAN_KERJA_KEYWORDS)
-            if has_keyword:
-                return self.CATEGORY_PERALATAN_KERJA
+        if self._check_category_match(normalized, self.PERALATAN_KERJA_KEYWORDS, 
+                                      self.PERALATAN_KERJA_PATTERNS, 
+                                      self.PERALATAN_KERJA_EXCLUSIONS):
+            return self.CATEGORY_PERALATAN_KERJA
         
         # Check for Tanah, Pasir, Batu, dan Semen
-        # Check exclusions first to avoid false positives
-        has_exclusion = any(exclusion in normalized for exclusion in self.TANAH_PASIR_BATU_SEMEN_EXCLUSIONS)
-        
-        if not has_exclusion:
-            # Check for specific patterns
-            has_pattern = any(re.search(pattern, normalized) for pattern in self.TANAH_PASIR_BATU_SEMEN_PATTERNS)
-            if has_pattern:
-                return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
-            
-            # Check for keywords
-            has_keyword = any(keyword in normalized for keyword in self.TANAH_PASIR_BATU_SEMEN_KEYWORDS)
-            if has_keyword:
-                return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
+        if self._check_category_match(normalized, self.TANAH_PASIR_BATU_SEMEN_KEYWORDS,
+                                      self.TANAH_PASIR_BATU_SEMEN_PATTERNS,
+                                      self.TANAH_PASIR_BATU_SEMEN_EXCLUSIONS):
+            return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
         
         # Check for Steel category
-        has_keyword = any(keyword in normalized for keyword in self.STEEL_KEYWORDS)
-        if has_keyword:
-            return self.CATEGORY_STEEL
-        
-        has_pattern = any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS)
-        if has_pattern and ('besi' in normalized or 'baja' in normalized or 'wire' in normalized):
+        if self._check_category_match(normalized, self.STEEL_KEYWORDS, self.STEEL_PATTERNS):
             return self.CATEGORY_STEEL
         
         return None
