@@ -44,7 +44,37 @@ class AlatBeratCategorizationTest(TestCase):
         # A product without heavy equipment keywords should not be categorized as Alat Berat just by diesel
         # But since diesel is in the keywords, it might match. Let's test with pure diesel
         result = self.categorizer.categorize("Diesel")
-        self.assertEqual(result, "Alat Berat")  
+        self.assertEqual(result, "Alat Berat")
+    
+    def test_alat_berat_pattern_match(self):
+        # Test alat berat regex pattern matching - crane
+        result = self.categorizer.categorize("crane hydraulic")
+        self.assertEqual(result, "Alat Berat")
+    
+    def test_alat_berat_pattern_bulldozer(self):
+        # Test alat berat regex pattern - bulldozer
+        result = self.categorizer.categorize("bulldozer heavy")
+        self.assertEqual(result, "Alat Berat")
+    
+    def test_alat_berat_pattern_drilling_rig(self):
+        # Test alat berat regex pattern - drilling rig
+        result = self.categorizer.categorize("drilling rig 200m")
+        self.assertEqual(result, "Alat Berat")
+    
+    def test_categorize_empty_list(self):
+        # Test batch categorization with empty list
+        results = self.categorizer.categorize_batch([])
+        self.assertEqual(results, [])
+    
+    def test_categorize_none_product_name(self):
+        # Test with None as product name
+        result = self.categorizer.categorize(None)
+        self.assertIsNone(result)
+    
+    def test_categorize_empty_string(self):
+        # Test with empty string
+        result = self.categorizer.categorize("")
+        self.assertIsNone(result)
 
     def test_bulk_positive_cases(self):
         positives = [
@@ -92,10 +122,10 @@ class AlatBeratAutoCategorizationIntegrationTest(TestCase):
 
     def test_categorize_mixed_products(self):
         products = [
-            GemilangProduct.objects.create(name="Excavator PC100", price=350000000, url="http://t/1", unit="unit"),
-            Mitra10Product.objects.create(name="Crane 10 Ton", price=250000000, url="http://t/2", unit="unit"),
-            DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="http://t/3", unit="kaleng"),
-            JuraganMaterialProduct.objects.create(name="Diesel Generator 50kVA", price=95000000, url="http://t/4", unit="unit"),
+            GemilangProduct.objects.create(name="Excavator PC100", price=350000000, url="https://t/1", unit="unit"),
+            Mitra10Product.objects.create(name="Crane 10 Ton", price=250000000, url="https://t/2", unit="unit"),
+            DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="https://t/3", unit="kaleng"),
+            JuraganMaterialProduct.objects.create(name="Diesel Generator 50kVA", price=95000000, url="https://t/4", unit="unit"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])

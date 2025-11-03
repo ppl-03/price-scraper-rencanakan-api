@@ -80,10 +80,10 @@ class SanitairAutoCategorizationIntegrationTest(TestCase):
 
     def test_categorize_mixed_products(self):
         products = [
-            GemilangProduct.objects.create(name="Closet Jongkok INA", price=350000, url="http://t/1", unit="unit"),
-            Mitra10Product.objects.create(name="Shower Set Minimalis", price=150000, url="http://t/2", unit="set"),
-            DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="http://t/3", unit="kaleng"),
-            JuraganMaterialProduct.objects.create(name="Kran Air Wastafel", price=95000, url="http://t/4", unit="unit"),
+            GemilangProduct.objects.create(name="Closet Jongkok INA", price=350000, url="https://t/1", unit="unit"),
+            Mitra10Product.objects.create(name="Shower Set Minimalis", price=150000, url="https://t/2", unit="set"),
+            DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="https://t/3", unit="kaleng"),
+            JuraganMaterialProduct.objects.create(name="Kran Air Wastafel", price=95000, url="https://t/4", unit="unit"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])
