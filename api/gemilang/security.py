@@ -503,7 +503,7 @@ class SecurityDesignPatterns:
         """Validate URL field with SSRF protection."""
         if not url.startswith('https://'):
             return False, "URL must use HTTPS protocol for security"
-        if 'localhost' in url or '127.0.0.1' in url:
+        if 'localhost' in url or '127.0.0.1' in url or '0.0.0.0' in url:
             logger.critical(f"SSRF attempt detected: {url}")
             return False, "Invalid URL"
         return True, ""

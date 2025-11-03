@@ -542,7 +542,7 @@ class TestA04InsecureDesign(TestCase):
         invalid_data = [{'name': 'Product', 'price': 1000, 'url': 'not-a-url', 'unit': 'pcs'}]
         success, error_msg = db_service.save(invalid_data)
         self.assertFalse(success)
-        self.assertIn('must start with http', error_msg)
+        self.assertIn('must use HTTPS protocol for security', error_msg)
         print("✓ Invalid URL format rejected")
 
 
