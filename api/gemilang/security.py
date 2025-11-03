@@ -500,11 +500,12 @@ class SecurityDesignPatterns:
             if len(name) < 2:
                 return False, "Product name too short"
         
-        # URL validation
+        # URL validation - require HTTPS for security
         if 'url' in data:
             url = data['url']
-            if not url.startswith(('http://', 'https://')):
-                return False, "Invalid URL format"
+            # Enforce HTTPS protocol for secure communication
+            if not url.startswith('https://'):
+                return False, "URL must use HTTPS protocol for security"
             # Prevent SSRF
             if 'localhost' in url or '127.0.0.1' in url:
                 logger.critical(f"SSRF attempt detected: {url}")

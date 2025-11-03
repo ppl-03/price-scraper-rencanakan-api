@@ -8,6 +8,7 @@ security controls are properly implemented according to OWASP guidelines.
 import unittest
 import json
 import time
+import os
 from unittest.mock import Mock, patch, MagicMock
 from django.test import TestCase, RequestFactory
 from django.http import JsonResponse
@@ -15,8 +16,12 @@ from django.core.cache import cache
 
 # Import security modules
 import sys
-import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Load test IP addresses from environment variables (RFC 1918 private addresses)
+TEST_IP_ALLOWED = os.getenv('TEST_IP_ALLOWED', '192.168.1.100')
+TEST_IP_DENIED = os.getenv('TEST_IP_DENIED', '10.0.0.1')
+TEST_IP_ATTACKER = os.getenv('TEST_IP_ATTACKER', '192.168.1.999')
 
 from .security import (
     RateLimiter,
@@ -164,11 +169,10 @@ class TestA01BrokenAccessControl(TestCase):
         """Test that access attempts are logged for monitoring"""
         print("\n[A01] Test: Access control logging")
         
-        # Test IP: RFC 1918 private address safe for logging tests
-        test_ip = '192.168.1.100'
+        # Use test IP from environment variable
         request = self.factory.get(
             '/api/gemilang/scrape/',
-            REMOTE_ADDR=test_ip
+            REMOTE_ADDR=TEST_IP_ALLOWED
         )
         
         with self.assertLogs('api.gemilang.security', level='WARNING') as cm:
@@ -178,7 +182,7 @@ class TestA01BrokenAccessControl(TestCase):
         
         # Verify log contains relevant information
         log_output = cm.output[0]
-        self.assertIn(test_ip, log_output)
+        self.assertIn(TEST_IP_ALLOWED, log_output)
         self.assertIn('Access denied', log_output)
         print("✓ Access attempts are logged")
     
@@ -186,15 +190,11 @@ class TestA01BrokenAccessControl(TestCase):
         """Test that IP whitelisting is enforced"""
         print("\n[A01] Test: IP whitelist enforcement")
         
-        # Create token with IP whitelist
-        # Test IP addresses: RFC 1918 private addresses safe for testing
-        test_allowed_ip = '192.168.1.100'  # Private IP for testing only
-        test_denied_ip = '10.0.0.1'  # Private IP for testing only
-        
+        # Create token with IP whitelist using environment variables
         AccessControlManager.API_TOKENS['restricted-token'] = {
             'name': 'Restricted Token',
             'permissions': ['read'],
-            'allowed_ips': [test_allowed_ip],  # Test whitelist entry
+            'allowed_ips': [TEST_IP_ALLOWED],  # Test whitelist entry from env
             'rate_limit': {'requests': 100, 'window': 60}
         }
         
@@ -202,7 +202,7 @@ class TestA01BrokenAccessControl(TestCase):
         request_allowed = self.factory.get(
             '/api/gemilang/scrape/',
             HTTP_X_API_TOKEN='restricted-token',
-            REMOTE_ADDR=test_allowed_ip  # Simulated whitelisted IP
+            REMOTE_ADDR=TEST_IP_ALLOWED  # Whitelisted IP from env
         )
         is_valid, error_msg, _ = AccessControlManager.validate_token(request_allowed)
         self.assertTrue(is_valid, "Request from whitelisted IP should be allowed")
@@ -212,7 +212,7 @@ class TestA01BrokenAccessControl(TestCase):
         request_denied = self.factory.get(
             '/api/gemilang/scrape/',
             HTTP_X_API_TOKEN='restricted-token',
-            REMOTE_ADDR=test_denied_ip  # Simulated non-whitelisted IP
+            REMOTE_ADDR=TEST_IP_DENIED  # Non-whitelisted IP from env
         )
         is_valid, error_msg, _ = AccessControlManager.validate_token(request_denied)
         self.assertFalse(is_valid, "Request from non-whitelisted IP should be denied")
@@ -554,8 +554,8 @@ class TestIntegratedSecurityScenarios(TestCase):
         print("\n[INTEGRATION] Scenario: Brute force attack simulation")
         
         rate_limiter = RateLimiter()
-        # Test IP: RFC 1918 private address for attack simulation
-        attacker_ip = "192.168.1.999"  # Invalid IP format for test purposes
+        # Use attacker IP from environment variable
+        attacker_ip = TEST_IP_ATTACKER
         
         # Simulate rapid invalid token attempts
         for attempt in range(15):
