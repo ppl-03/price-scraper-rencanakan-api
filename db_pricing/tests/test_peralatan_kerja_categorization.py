@@ -120,10 +120,10 @@ class PeralatanKerjaAutoCategorizationIntegrationTest(TestCase):
 
     def test_categorize_mixed_products(self):
         products = [
-            GemilangProduct.objects.create(name="Palu Besi 1kg", price=45000, url="http://t/1", unit="unit"),
-            Mitra10Product.objects.create(name="Bor Listrik Bosch", price=850000, url="http://t/2", unit="unit"),
-            DepoBangunanProduct.objects.create(name="Semen Gresik", price=65000, url="http://t/3", unit="sak"),
-            JuraganMaterialProduct.objects.create(name="Tang Kombinasi 8 inch", price=55000, url="http://t/4", unit="unit"),
+            GemilangProduct.objects.create(name="Palu Besi 1kg", price=45000, url="https://t/1", unit="unit"),
+            Mitra10Product.objects.create(name="Bor Listrik Bosch", price=850000, url="https://t/2", unit="unit"),
+            DepoBangunanProduct.objects.create(name="Semen Gresik", price=65000, url="https://t/3", unit="sak"),
+            JuraganMaterialProduct.objects.create(name="Tang Kombinasi 8 inch", price=55000, url="https://t/4", unit="unit"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])
@@ -135,10 +135,10 @@ class PeralatanKerjaAutoCategorizationIntegrationTest(TestCase):
 
     def test_categorize_all_tool_types(self):
         products = [
-            GemilangProduct.objects.create(name="Palu Konde", price=35000, url="http://t/1", unit="unit"),
-            Mitra10Product.objects.create(name="Gergaji Kayu", price=45000, url="http://t/2", unit="unit"),
-            DepoBangunanProduct.objects.create(name="Meteran 5m", price=25000, url="http://t/3", unit="unit"),
-            JuraganMaterialProduct.objects.create(name="Kunci Inggris", price=65000, url="http://t/4", unit="unit"),
+            GemilangProduct.objects.create(name="Palu Konde", price=35000, url="https://t/1", unit="unit"),
+            Mitra10Product.objects.create(name="Gergaji Kayu", price=45000, url="https://t/2", unit="unit"),
+            DepoBangunanProduct.objects.create(name="Meteran 5m", price=25000, url="https://t/3", unit="unit"),
+            JuraganMaterialProduct.objects.create(name="Kunci Inggris", price=65000, url="https://t/4", unit="unit"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])
