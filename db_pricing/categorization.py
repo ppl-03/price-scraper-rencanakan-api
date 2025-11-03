@@ -57,13 +57,78 @@ class ProductCategorizer:
     
     CATEGORY_TANAH_PASIR_BATU_SEMEN = "Tanah, Pasir, Batu, dan Semen"
     
+    # Peralatan Kerja Keywords
+    PERALATAN_KERJA_KEYWORDS = {
+        # Hand tools
+        'palu', 'obeng', 'tang', 'gergaji', 'pahat', 'tatah', 'kikir',
+        'kunci inggris', 'kunci ring', 'kunci pas', 'kunci sok',
+        'linggis', 'sekop', 'cangkul', 'garpu', 'sabit',
+        # Measuring tools
+        'meteran', 'waterpass', 'siku tukang', 'penggaris', 'jangka',
+        # Power tools
+        'bor', 'drill', 'gerinda', 'grinder', 'mesin potong',
+        'circular saw', 'jigsaw', 'router', 'planer', 'sander',
+        # Clamping tools
+        'ragum', 'klem', 'clamp',
+        # Construction tools
+        'roskam', 'sendok semen', 'cetok', 'jidar', 'unting-unting',
+        'benang tukang', 'timba cor', 'ember cat', 'trowel',
+        # Cutting tools
+        'gunting seng', 'pemotong', 'cutter', 'pisau roti',
+        # Other tools
+        'amplas tangan', 'gerinda tangan', 'hammer', 'wrench', 'pliers',
+        'saw', 'chisel', 'file', 'screwdriver', 'spanner',
+    }
+    
+    PERALATAN_KERJA_PATTERNS = [
+        r'\b(palu|hammer)\s+(besi|kayu|konde|godam)',
+        r'\b(obeng|screwdriver)\s+(plus|minus|set|ketok)',
+        r'\b(tang|pliers)\s+(potong|kombinasi|buaya|lancip)',
+        r'\b(gergaji|saw)\s+(kayu|besi|mesin|manual)',
+        r'\b(meteran|measure)\s+(gulung|dorong|laser|digital)',
+        r'\b(bor|drill)\s+(tangan|listrik|beton|kayu|impact|hammer)',
+        r'\b(gerinda|grinder)\s+(tangan|potong|poles)',
+        r'\b(pahat|chisel)\s+(kayu|beton|besi)',
+        r'\bkunci\s+(inggris|ring|pas|sok|l)',
+        r'\b(waterpass|level)\s+(aluminium|digital)',
+        r'\b(ragum|vice|vise)\s+meja',
+        r'\b(klem|clamp)\s+[fcg]',
+        r'\b(roskam|trowel|cetok)\s+(kayu|plastik|stainless)',
+        r'\b(gunting|scissors)\s+(seng|besi|kain)',
+        r'\b(sekop|cangkul|linggis)\s+(besi|taman|tanah)',
+        r'\bsendok\s+semen',  # sendok semen is a tool, not cement
+    ]
+    
+    # Exclusions to avoid false positives
+    PERALATAN_KERJA_EXCLUSIONS = {
+        'paku', 'mur', 'baut', 'sekrup', 'screw', 'nail', 'bolt', 'nut',
+        'besi beton', 'besi tulangan', 'pipa', 'kabel',
+        'cat tembok', 'keramik', 'closet', 'kran', 'pintu', 'engsel',
+    }
+    
+    CATEGORY_PERALATAN_KERJA = "Peralatan Kerja"
+    
     def categorize(self, product_name: str) -> str | None:
         if not product_name:
             return None
         
         normalized = product_name.lower().strip()
         
-        # Check for Tanah, Pasir, Batu, dan Semen first
+        # Check for Peralatan Kerja first
+        has_exclusion = any(exclusion in normalized for exclusion in self.PERALATAN_KERJA_EXCLUSIONS)
+        
+        if not has_exclusion:
+            # Check for specific patterns
+            has_pattern = any(re.search(pattern, normalized) for pattern in self.PERALATAN_KERJA_PATTERNS)
+            if has_pattern:
+                return self.CATEGORY_PERALATAN_KERJA
+            
+            # Check for keywords
+            has_keyword = any(keyword in normalized for keyword in self.PERALATAN_KERJA_KEYWORDS)
+            if has_keyword:
+                return self.CATEGORY_PERALATAN_KERJA
+        
+        # Check for Tanah, Pasir, Batu, dan Semen
         # Check exclusions first to avoid false positives
         has_exclusion = any(exclusion in normalized for exclusion in self.TANAH_PASIR_BATU_SEMEN_EXCLUSIONS)
         
