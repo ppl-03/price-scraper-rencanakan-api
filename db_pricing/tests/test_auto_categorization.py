@@ -123,6 +123,182 @@ class InteriorMaterialCategorizationTest(TestCase):
         self.assertIsNone(result)
 
 
+class PatternMatchingTest(TestCase):
+    
+    def setUp(self):
+        self.categorizer = ProductCategorizer()
+    
+    def test_steel_pattern_with_besi_keyword(self):
+        result = self.categorizer.categorize("Wire 10mm Besi")
+        self.assertEqual(result, "Baja dan Besi Tulangan")
+    
+    def test_steel_pattern_with_baja_keyword(self):
+        result = self.categorizer.categorize("Product 8x10 Baja")
+        self.assertEqual(result, "Baja dan Besi Tulangan")
+    
+    def test_steel_pattern_with_wire_keyword(self):
+        result = self.categorizer.categorize("Wire Mesh 5x5")
+        self.assertEqual(result, "Baja dan Besi Tulangan")
+    
+    def test_steel_pattern_without_keywords(self):
+        result = self.categorizer.categorize("Product 10mm")
+        self.assertIsNone(result)
+    
+    def test_steel_pattern_with_metal_keyword(self):
+        result = self.categorizer.categorize("Metal Sheet 10mm")
+        self.assertEqual(result, "Baja dan Besi Tulangan")
+    
+    def test_interior_keyword_without_steel_or_exclusion(self):
+        result = self.categorizer.categorize("Dinding Premium")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_lantai(self):
+        result = self.categorizer.categorize("Lantai Premium")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_flooring(self):
+        result = self.categorizer.categorize("Flooring Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_tile(self):
+        result = self.categorizer.categorize("Tile Premium")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_ubin(self):
+        result = self.categorizer.categorize("Ubin Lantai")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_plafon(self):
+        result = self.categorizer.categorize("Plafon Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_gypsum(self):
+        result = self.categorizer.categorize("Gypsum Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_keramik(self):
+        result = self.categorizer.categorize("Keramik Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_granit(self):
+        result = self.categorizer.categorize("Granit Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_marmer(self):
+        result = self.categorizer.categorize("Marmer Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_parket(self):
+        result = self.categorizer.categorize("Parket Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_vinyl(self):
+        result = self.categorizer.categorize("Vinyl Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_laminate(self):
+        result = self.categorizer.categorize("Laminate Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_only_without_keyword(self):
+        result = self.categorizer.categorize("Material Plafon")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_gypsum_only(self):
+        result = self.categorizer.categorize("Product Gypsum")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_not_in_pattern_ceiling(self):
+        result = self.categorizer.categorize("Ceiling Material")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_not_in_pattern_glue(self):
+        result = self.categorizer.categorize("Glue Product")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_word_boundary(self):
+        result = self.categorizer.categorize("abc xyz 123")
+        self.assertIsNone(result)
+    
+    def test_interior_pattern_exact_match(self):
+        result = self.categorizer.categorize("plafon")
+        self.assertEqual(result, "Material Interior")
+
+
+class ExclusionLogicTest(TestCase):
+    
+    def setUp(self):
+        self.categorizer = ProductCategorizer()
+    
+    def test_interior_keyword_line_67_ceiling(self):
+        result = self.categorizer.categorize("ceiling premium")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_line_67_tiles(self):
+        result = self.categorizer.categorize("tiles collection")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_line_67_paint(self):
+        result = self.categorizer.categorize("paint berkualitas")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_keyword_line_67_glue(self):
+        result = self.categorizer.categorize("glue kuat")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_line_75_exact_plafon(self):
+        result = self.categorizer.categorize("jual plafon murah")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_line_75_exact_keramik(self):
+        result = self.categorizer.categorize("jual keramik murah")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_interior_pattern_line_75_tapeta(self):
+        result = self.categorizer.categorize("jual tapeta premium murah")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_pasir_beton_not_steel(self):
+        result = self.categorizer.categorize("Pasir Beton Berkualitas")
+        self.assertIsNone(result)
+    
+    def test_semen_with_interior_keyword(self):
+        result = self.categorizer.categorize("Semen Cat Dinding")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_pasir_with_keramik(self):
+        result = self.categorizer.categorize("Pasir Keramik")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_cat_product(self):
+        result = self.categorizer.categorize("Cat Tembok Putih")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_lem_product(self):
+        result = self.categorizer.categorize("Lem Kayu Super")
+        self.assertEqual(result, "Material Interior")
+    
+    def test_empty_string(self):
+        result = self.categorizer.categorize("")
+        self.assertIsNone(result)
+    
+    def test_none_input(self):
+        result = self.categorizer.categorize(None)
+        self.assertIsNone(result)
+    
+    def test_exclusion_without_interior_keyword(self):
+        result = self.categorizer.categorize("Pasir Cuci Berkualitas")
+        self.assertIsNone(result)
+    
+    def test_pattern_only_no_match(self):
+        result = self.categorizer.categorize("Product 10mm Generic")
+        self.assertIsNone(result)
+    
+    def test_no_keywords_no_patterns(self):
+        result = self.categorizer.categorize("Pipa PVC Generic")
+        self.assertIsNone(result)
+
+
 class AutoCategorizationIntegrationTest(TestCase):
     
     def setUp(self):
@@ -130,10 +306,10 @@ class AutoCategorizationIntegrationTest(TestCase):
     
     def test_categorize_gemilang_products(self):
         products = [
-            GemilangProduct.objects.create(name="Besi Beton 10mm", price=95000, url="http://test.com/1", unit="batang"),
-            GemilangProduct.objects.create(name="Semen Portland", price=65000, url="http://test.com/2", unit="sak"),
-            GemilangProduct.objects.create(name="Wiremesh M8", price=120000, url="http://test.com/3", unit="lembar"),
-            GemilangProduct.objects.create(name="Keramik Lantai 40x40", price=45000, url="http://test.com/4", unit="dus"),
+            GemilangProduct.objects.create(name="Besi Beton 10mm", price=95000, url="https://test.com/1", unit="batang"),
+            GemilangProduct.objects.create(name="Semen Portland", price=65000, url="https://test.com/2", unit="sak"),
+            GemilangProduct.objects.create(name="Wiremesh M8", price=120000, url="https://test.com/3", unit="lembar"),
+            GemilangProduct.objects.create(name="Keramik Lantai 40x40", price=45000, url="https://test.com/4", unit="dus"),
         ]
         
         results = self.categorizer.categorize_batch([p.name for p in products])
@@ -145,9 +321,9 @@ class AutoCategorizationIntegrationTest(TestCase):
     
     def test_categorize_mitra10_products(self):
         products = [
-            Mitra10Product.objects.create(name="Baja Ringan 0.75mm", price=35000, url="http://test.com/1", unit="batang"),
-            Mitra10Product.objects.create(name="Pipa PVC 3 inch", price=85000, url="http://test.com/2", unit="batang"),
-            Mitra10Product.objects.create(name="Plafon Gypsum", price=55000, url="http://test.com/3", unit="lembar"),
+            Mitra10Product.objects.create(name="Baja Ringan 0.75mm", price=35000, url="https://test.com/1", unit="batang"),
+            Mitra10Product.objects.create(name="Pipa PVC 3 inch", price=85000, url="https://test.com/2", unit="batang"),
+            Mitra10Product.objects.create(name="Plafon Gypsum", price=55000, url="https://test.com/3", unit="lembar"),
         ]
         
         results = self.categorizer.categorize_batch([p.name for p in products])
@@ -171,3 +347,96 @@ class AutoCategorizationIntegrationTest(TestCase):
         self.assertIsNone(results[3])
         self.assertEqual(results[4], "Material Interior")
         self.assertIsNone(results[5])
+
+
+class AutoCategorizationServiceTest(TestCase):
+    
+    def setUp(self):
+        from db_pricing.auto_categorization_service import AutoCategorizationService
+        self.service = AutoCategorizationService()
+    
+    def test_categorize_products_gemilang(self):
+        p1 = GemilangProduct.objects.create(name="Besi Beton 10mm", price=95000, url="https://test.com/1", unit="batang")
+        p2 = GemilangProduct.objects.create(name="Semen Portland", price=65000, url="https://test.com/2", unit="sak")
+        p3 = GemilangProduct.objects.create(name="Keramik Lantai", price=45000, url="https://test.com/3", unit="dus")
+        
+        result = self.service.categorize_products('gemilang', [p1.id, p2.id, p3.id])
+        
+        self.assertEqual(result['total'], 3)
+        self.assertEqual(result['categorized'], 2)
+        self.assertEqual(result['uncategorized'], 1)
+        
+        p1.refresh_from_db()
+        p2.refresh_from_db()
+        p3.refresh_from_db()
+        
+        self.assertEqual(p1.category, "Baja dan Besi Tulangan")
+        self.assertIsNone(p2.category)
+        self.assertEqual(p3.category, "Material Interior")
+    
+    def test_categorize_products_mitra10(self):
+        p1 = Mitra10Product.objects.create(name="Hollow Galvanis", price=35000, url="https://test.com/1", unit="batang")
+        p2 = Mitra10Product.objects.create(name="Plafon Gypsum", price=55000, url="https://test.com/2", unit="lembar")
+        
+        result = self.service.categorize_products('mitra10', [p1.id, p2.id])
+        
+        self.assertEqual(result['total'], 2)
+        self.assertEqual(result['categorized'], 2)
+        self.assertEqual(result['uncategorized'], 0)
+    
+    def test_categorize_products_depobangunan(self):
+        p1 = DepoBangunanProduct.objects.create(name="Wiremesh M8", price=120000, url="https://test.com/1", unit="lembar")
+        
+        result = self.service.categorize_products('depobangunan', [p1.id])
+        
+        self.assertEqual(result['total'], 1)
+        self.assertEqual(result['categorized'], 1)
+    
+    def test_categorize_products_juragan_material(self):
+        p1 = JuraganMaterialProduct.objects.create(name="Baja Ringan", price=35000, url="https://test.com/1", unit="batang", location="Jakarta")
+        
+        result = self.service.categorize_products('juragan_material', [p1.id])
+        
+        self.assertEqual(result['total'], 1)
+        self.assertEqual(result['categorized'], 1)
+    
+    def test_categorize_products_unknown_vendor(self):
+        with self.assertRaises(ValueError) as context:
+            self.service.categorize_products('unknown_vendor', [1, 2, 3])
+        
+        self.assertIn("Unknown vendor", str(context.exception))
+    
+    def test_categorize_all_products_gemilang(self):
+        GemilangProduct.objects.create(name="Besi Beton 10mm", price=95000, url="https://test.com/1", unit="batang")
+        GemilangProduct.objects.create(name="Semen Portland", price=65000, url="https://test.com/2", unit="sak")
+        GemilangProduct.objects.create(name="Keramik Lantai", price=45000, url="https://test.com/3", unit="dus")
+        GemilangProduct.objects.create(name="Hollow Galvanis", price=85000, url="https://test.com/4", unit="batang")
+        
+        result = self.service.categorize_all_products('gemilang')
+        
+        self.assertEqual(result['total'], 4)
+        self.assertEqual(result['categorized'], 3)
+        self.assertEqual(result['uncategorized'], 1)
+    
+    def test_categorize_all_products_mitra10(self):
+        Mitra10Product.objects.create(name="Wiremesh M8", price=120000, url="https://test.com/1", unit="lembar")
+        Mitra10Product.objects.create(name="Plafon Gypsum", price=55000, url="https://test.com/2", unit="lembar")
+        
+        result = self.service.categorize_all_products('mitra10')
+        
+        self.assertEqual(result['total'], 2)
+        self.assertEqual(result['categorized'], 2)
+        self.assertEqual(result['uncategorized'], 0)
+    
+    def test_categorize_all_products_unknown_vendor(self):
+        with self.assertRaises(ValueError) as context:
+            self.service.categorize_all_products('invalid_vendor')
+        
+        self.assertIn("Unknown vendor", str(context.exception))
+    
+    def test_categorize_all_products_empty_database(self):
+        result = self.service.categorize_all_products('gemilang')
+        
+        self.assertEqual(result['total'], 0)
+        self.assertEqual(result['categorized'], 0)
+        self.assertEqual(result['uncategorized'], 0)

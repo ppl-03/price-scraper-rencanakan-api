@@ -40,6 +40,7 @@ class ProductCategorizer:
         r'\bparket\b',
         r'\bvinyl\b',
         r'\blaminate\b',
+        r'\btapeta\b',
     ]
     
     CATEGORY_STEEL = "Baja dan Besi Tulangan"
@@ -63,7 +64,7 @@ class ProductCategorizer:
             return self.CATEGORY_STEEL
         
         has_steel_pattern = any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS)
-        if has_steel_pattern and ('besi' in normalized or 'baja' in normalized or 'wire' in normalized):
+        if has_steel_pattern and ('metal' in normalized or 'logam' in normalized):
             return self.CATEGORY_STEEL
         
         has_interior_keyword = any(keyword in normalized for keyword in self.INTERIOR_KEYWORDS)
