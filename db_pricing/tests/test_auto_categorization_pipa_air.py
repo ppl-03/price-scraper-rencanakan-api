@@ -112,9 +112,9 @@ class PipaAirIntegrationTest(TestCase):
     
     def test_categorize_gemilang_pipa_products(self):
         products = [
-            GemilangProduct.objects.create(name="Pipa PVC 3 inch", price=45000, url="http://test.com/1", unit="batang"),
-            GemilangProduct.objects.create(name="Semen Portland", price=65000, url="http://test.com/2", unit="sak"),
-            GemilangProduct.objects.create(name="Elbow PVC 20mm", price=5000, url="http://test.com/3", unit="pcs"),
+            GemilangProduct.objects.create(name="Pipa PVC 3 inch", price=45000, url="https://test.com/1", unit="batang"),
+            GemilangProduct.objects.create(name="Semen Portland", price=65000, url="https://test.com/2", unit="sak"),
+            GemilangProduct.objects.create(name="Elbow PVC 20mm", price=5000, url="https://test.com/3", unit="pcs"),
         ]
         
         results = self.categorizer.categorize_batch([p.name for p in products])
@@ -125,9 +125,9 @@ class PipaAirIntegrationTest(TestCase):
     
     def test_categorize_mitra10_pipa_products(self):
         products = [
-            Mitra10Product.objects.create(name="Ball Valve 1 inch", price=35000, url="http://test.com/1", unit="pcs"),
-            Mitra10Product.objects.create(name="Cat Kayu", price=85000, url="http://test.com/2", unit="kaleng"),
-            Mitra10Product.objects.create(name="Pralon 1/2 inch", price=15000, url="http://test.com/3", unit="batang"),
+            Mitra10Product.objects.create(name="Ball Valve 1 inch", price=35000, url="https://test.com/1", unit="pcs"),
+            Mitra10Product.objects.create(name="Cat Kayu", price=85000, url="https://test.com/2", unit="kaleng"),
+            Mitra10Product.objects.create(name="Pralon 1/2 inch", price=15000, url="https://test.com/3", unit="batang"),
         ]
         
         results = self.categorizer.categorize_batch([p.name for p in products])
