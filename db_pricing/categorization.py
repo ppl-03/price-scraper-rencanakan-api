@@ -170,23 +170,18 @@ class ProductCategorizer:
                 return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
         
         # Check for Steel category
-        has_keyword = any(keyword in normalized for keyword in self.STEEL_KEYWORDS)
-        if has_keyword:
         has_exclusion = any(exclusion in normalized for exclusion in self.STEEL_EXCLUSIONS)
-        if has_exclusion:
-            has_interior_keyword = any(keyword in normalized for keyword in self.INTERIOR_KEYWORDS)
-            if has_interior_keyword:
-                return self.CATEGORY_INTERIOR
-            return None
         
-        has_steel_keyword = any(keyword in normalized for keyword in self.STEEL_KEYWORDS)
-        if has_steel_keyword:
-            return self.CATEGORY_STEEL
+        if not has_exclusion:
+            has_steel_keyword = any(keyword in normalized for keyword in self.STEEL_KEYWORDS)
+            if has_steel_keyword:
+                return self.CATEGORY_STEEL
+            
+            has_steel_pattern = any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS)
+            if has_steel_pattern and ('besi' in normalized or 'baja' in normalized or 'wire' in normalized or 'metal' in normalized or 'logam' in normalized):
+                return self.CATEGORY_STEEL
         
-        has_steel_pattern = any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS)
-        if has_steel_pattern and ('metal' in normalized or 'logam' in normalized):
-            return self.CATEGORY_STEEL
-        
+        # Check for Interior category
         has_interior_keyword = any(keyword in normalized for keyword in self.INTERIOR_KEYWORDS)
         if has_interior_keyword:
             return self.CATEGORY_INTERIOR
@@ -199,3 +194,4 @@ class ProductCategorizer:
     
     def categorize_batch(self, product_names: list[str]) -> list[str | None]:
         return [self.categorize(name) for name in product_names]
+
