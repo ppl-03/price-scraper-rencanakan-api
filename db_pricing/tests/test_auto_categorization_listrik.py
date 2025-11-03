@@ -77,10 +77,10 @@ class ListrikAutoCategorizationIntegrationTest(TestCase):
     
     def test_categorize_mixed_products(self):
         products = [
-            GemilangProduct.objects.create(name="Kabel NYY 3x2.5mm", price=150000, url="http://t/1", unit="meter"),
-            Mitra10Product.objects.create(name="Saklar Engkel Broco", price=15000, url="http://t/2", unit="pcs"),
-            DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="http://t/3", unit="kaleng"),
-            JuraganMaterialProduct.objects.create(name="MCB Schneider 16A", price=35000, url="http://t/4", unit="pcs"),
+            GemilangProduct.objects.create(name="Kabel NYY 3x2.5mm", price=150000, url="https://t/1", unit="meter"),
+            Mitra10Product.objects.create(name="Saklar Engkel Broco", price=15000, url="https://t/2", unit="pcs"),
+            DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="https://t/3", unit="kaleng"),
+            JuraganMaterialProduct.objects.create(name="MCB Schneider 16A", price=35000, url="https://t/4", unit="pcs"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])
