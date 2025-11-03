@@ -191,3 +191,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
 AUTH_USER_MODEL = 'auth.User'
+
+# Test Configuration
+# Test IP addresses from .env (RFC 1918 private addresses for testing only)
+TEST_IP_ALLOWED = env.str('TEST_IP_ALLOWED')
+TEST_IP_DENIED = env.str('TEST_IP_DENIED')
+TEST_IP_ATTACKER = env.str('TEST_IP_ATTACKER')

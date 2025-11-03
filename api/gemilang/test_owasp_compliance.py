@@ -13,15 +13,17 @@ from unittest.mock import Mock, patch, MagicMock
 from django.test import TestCase, RequestFactory
 from django.http import JsonResponse
 from django.core.cache import cache
+from django.conf import settings
 
 # Import security modules
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Load test IP addresses from environment variables (RFC 1918 private addresses)
-TEST_IP_ALLOWED = os.getenv('TEST_IP_ALLOWED', '192.168.1.100')
-TEST_IP_DENIED = os.getenv('TEST_IP_DENIED', '10.0.0.1')
-TEST_IP_ATTACKER = os.getenv('TEST_IP_ATTACKER', '192.168.1.999')
+# Load test IP addresses from Django settings (configured from .env file)
+# These are RFC 1918 private addresses for testing only
+TEST_IP_ALLOWED = settings.TEST_IP_ALLOWED
+TEST_IP_DENIED = settings.TEST_IP_DENIED
+TEST_IP_ATTACKER = settings.TEST_IP_ATTACKER
 
 from .security import (
     RateLimiter,
