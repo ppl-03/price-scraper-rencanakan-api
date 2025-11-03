@@ -17,7 +17,7 @@ class TestGemilangAPI(TestCase):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertIn('error', data)
-        self.assertEqual(data['error'], 'Keyword parameter is required')
+        self.assertIn('Validation failed', data['error'])
         
     @patch('api.gemilang.views.create_gemilang_scraper')
     def test_gemilang_scrape_success(self, mock_create_scraper):
@@ -107,7 +107,9 @@ class TestGemilangAPI(TestCase):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertIn('error', data)
-        self.assertEqual(data['error'], 'Page parameter must be a valid integer')
+        self.assertEqual(data['error'], 'Validation failed')
+        self.assertIn('details', data)
+        self.assertIn('page', data['details'])
         
     @patch('api.gemilang.views.create_gemilang_scraper')
     def test_gemilang_scrape_exception_handling(self, mock_create_scraper):
@@ -130,13 +132,13 @@ class TestGemilangAPI(TestCase):
         response = self.client.get('/api/gemilang/scrape/', {'keyword': ''})
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
-        self.assertEqual(data['error'], 'Keyword parameter is required')
+        self.assertIn('Validation failed', data['error'])
         
     def test_whitespace_only_keyword_returns_400(self):
         response = self.client.get('/api/gemilang/scrape/', {'keyword': '   '})
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
-        self.assertEqual(data['error'], 'Keyword parameter is required')
+        self.assertIn('Validation failed', data['error'])
         
     @patch('api.gemilang.views.create_gemilang_scraper')
     def test_negative_page_parameter(self, mock_create_scraper):
@@ -150,12 +152,10 @@ class TestGemilangAPI(TestCase):
             'page': '-1'
         })
         
-        self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_products.assert_called_once_with(
-            keyword='test',
-            sort_by_price=True,
-            page=-1
-        )
+        # Negative page values now fail validation (security requirement)
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
         
     @patch('api.gemilang.views.create_gemilang_scraper')
     def test_sort_by_price_variations(self, mock_create_scraper):
@@ -165,17 +165,17 @@ class TestGemilangAPI(TestCase):
         mock_create_scraper.return_value = mock_scraper
         
         test_cases = [
-            ('1', True),
-            ('yes', True),
-            ('True', True),
-            ('false', False),
-            ('0', False),
-            ('no', False),
-            ('invalid', False),
-            ('', False)
+            ('1', True, 200),
+            ('yes', True, 200),
+            ('True', True, 200),
+            ('false', False, 200),
+            ('0', False, 200),
+            ('no', False, 200),
+            ('invalid', False, 400),  # Invalid values now fail validation
+            ('', False, 400)  # Empty values now fail validation
         ]
         
-        for sort_value, expected in test_cases:
+        for sort_value, expected, expected_status in test_cases:
             with self.subTest(sort_value=sort_value, expected=expected):
                 mock_scraper.reset_mock()
                 response = self.client.get('/api/gemilang/scrape/', {
@@ -183,12 +183,13 @@ class TestGemilangAPI(TestCase):
                     'sort_by_price': sort_value
                 })
                 
-                self.assertEqual(response.status_code, 200)
-                mock_scraper.scrape_products.assert_called_once_with(
-                    keyword='test',
-                    sort_by_price=expected,
-                    page=0
-                )
+                self.assertEqual(response.status_code, expected_status)
+                if expected_status == 200:
+                    mock_scraper.scrape_products.assert_called_once_with(
+                        keyword='test',
+                        sort_by_price=expected,
+                        page=0
+                    )
                 
     @patch('api.gemilang.views.create_gemilang_scraper')
     def test_keyword_with_leading_trailing_spaces(self, mock_create_scraper):
@@ -306,8 +307,10 @@ class TestGemilangLocationAPI(TestCase):
         
         response = self.client.get('/api/gemilang/locations/', {'timeout': 'invalid'})
         
-        self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_locations.assert_called_once_with(timeout=30)
+        # Invalid timeout now fails validation (security requirement)
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
         
     @patch('api.gemilang.views.create_gemilang_location_scraper')
     def test_gemilang_locations_exception_handling(self, mock_create_scraper):
@@ -359,8 +362,10 @@ class TestGemilangLocationAPI(TestCase):
         
         response = self.client.get('/api/gemilang/locations/', {'timeout': '999999'})
         
-        self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_locations.assert_called_once_with(timeout=999999)
+        # Large timeout values now fail validation (max is 120)
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
 
     @patch('api.gemilang.views.create_gemilang_location_scraper')
     def test_gemilang_locations_negative_timeout(self, mock_create_scraper):

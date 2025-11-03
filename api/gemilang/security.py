@@ -342,7 +342,11 @@ class InputValidator:
         Validate boolean input.
         """
         if value is None:
-            return True, "", False  # Default to False
+            return True, "", None  # Return None to allow view to set default
+        
+        if value == '':
+            # Empty string is invalid, not a missing value
+            return False, f"{field_name} must be a boolean value", None
         
         if isinstance(value, bool):
             return True, "", value
@@ -635,7 +639,9 @@ def validate_input(validators: Dict[str, callable]):
                 if not is_valid:
                     errors[field_name] = error_msg
                 else:
-                    validated_data[field_name] = sanitized_value
+                    # Only add to validated_data if value is not None (allows view to use its own defaults)
+                    if sanitized_value is not None:
+                        validated_data[field_name] = sanitized_value
             
             if errors:
                 return JsonResponse({

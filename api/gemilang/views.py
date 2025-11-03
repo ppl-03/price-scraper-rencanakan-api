@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 @enforce_resource_limits
 @validate_input({
     'keyword': lambda x: InputValidator.validate_keyword(x or '', max_length=100),
-    'page': lambda x: InputValidator.validate_integer(
-        int(x) if x else 0, 
-        'page', 
-        min_value=0, 
-        max_value=100
+    'page': lambda x: (
+        InputValidator.validate_integer(int(x), 'page', min_value=0, max_value=100) 
+        if x and str(x).lstrip('-').isdigit() 
+        else InputValidator.validate_integer(0, 'page', min_value=0, max_value=100) if not x
+        else (False, 'page must be a valid integer', None)
     ),
     'sort_by_price': lambda x: InputValidator.validate_boolean(x, 'sort_by_price')
 })
@@ -70,11 +70,11 @@ def scrape_products(request):
 
 @require_http_methods(["GET"])
 @validate_input({
-    'timeout': lambda x: InputValidator.validate_integer(
-        int(x) if x else 30,
-        'timeout',
-        min_value=0,
-        max_value=120
+    'timeout': lambda x: (
+        InputValidator.validate_integer(int(x), 'timeout', min_value=0, max_value=120)
+        if x and str(x).lstrip('-').isdigit()
+        else InputValidator.validate_integer(30, 'timeout', min_value=0, max_value=120) if not x
+        else (False, 'timeout must be a valid integer', None)
     )
 })
 def gemilang_locations_view(request):
@@ -104,7 +104,9 @@ def gemilang_locations_view(request):
     except Exception as e:
         logger.error(f"Unexpected error in locations endpoint: {type(e).__name__}")
         return JsonResponse({
-            'error': 'Internal server error occurred'
+            'success': False,
+            'locations': [],
+            'error_message': f'Unexpected error: {type(e).__name__}'
         }, status=500)
 
 

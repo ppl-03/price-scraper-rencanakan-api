@@ -18,7 +18,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from security import (
+from .security import (
     RateLimiter,
     AccessControlManager,
     InputValidator,
@@ -28,7 +28,7 @@ from security import (
     validate_input,
     enforce_resource_limits,
 )
-from database_service_secure import SecureGemilangDatabaseService
+from .database_service import GemilangDatabaseService
 
 
 class TestA01BrokenAccessControl(TestCase):
@@ -331,7 +331,7 @@ class TestA03InjectionPrevention(TestCase):
             'unit': 'pcs'
         }]
         
-        db_service = SecureGemilangDatabaseService()
+        db_service = GemilangDatabaseService()
         
         # This should fail validation before reaching the database
         success, error_msg = db_service.save(test_data)
@@ -512,7 +512,7 @@ class TestA04InsecureDesign(TestCase):
         """Test comprehensive database input validation"""
         print("\n[A04] Test: Comprehensive database validation")
         
-        db_service = SecureGemilangDatabaseService()
+        db_service = GemilangDatabaseService()
         
         # Missing required fields
         invalid_data = [{'name': 'Product'}]

@@ -62,8 +62,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
         self.assertEqual(len(result.products), 0)
         
         service = GemilangDatabaseService()
-        save_result = service.save([])
-        self.assertFalse(save_result)
+        success, error_msg = service.save([])
+        self.assertFalse(success)
         self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_scrape_invalid_html_and_no_save(self):
@@ -76,8 +76,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
         
         if not result.success or len(result.products) == 0:
             service = GemilangDatabaseService()
-            save_result = service.save([])
-            self.assertFalse(save_result)
+            success, error_msg = service.save([])
+            self.assertFalse(success)
             self.assertEqual(GemilangProduct.objects.count(), 0)
 
     def test_scrape_multiple_keywords_and_save(self):
@@ -234,8 +234,8 @@ class TestGemilangEndToEnd(MySQLTestCase):
         self.assertEqual(len(result.products), 0)
         
         service = GemilangDatabaseService()
-        save_result = service.save([])
-        self.assertFalse(save_result)
+        success, error_msg = service.save([])
+        self.assertFalse(success)
 
     def test_scrape_and_save_idempotency(self):
         scraper = create_gemilang_scraper()
