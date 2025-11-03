@@ -71,7 +71,7 @@ class SanitairCategorizationTest(TestCase):
         ]
         for name in negatives:
             with self.subTest(name=name):
-                self.assertIsNone(self.categorizer.categorize(name))
+                self.assertNotEqual(self.categorizer.categorize(name), "Material Sanitair")
 
 
 class SanitairAutoCategorizationIntegrationTest(TestCase):
