@@ -246,6 +246,28 @@ class ProductCategorizer:
     
     CATEGORY_LISTRIK = "Material Listrik"
     
+    # Alat Berat (Heavy Equipment)
+    ALAT_BERAT_KEYWORDS = {
+        'crane', 'bulldozer', 'drilling rig', 'truck', 'excavator',
+        'compactor', 'roller', 'diesel', 'backhoe', 'loader',
+        'grader', 'vibrator', 'palu', 'jackhammer', 'pneumatic',
+        'genset', 'alat berat', 'heavy equipment', 'mesin berat'
+    }
+    
+    ALAT_BERAT_PATTERNS = [
+        r'\bcrane\b',
+        r'\bbulldozer\b',
+        r'\bdrilling\s*rig\b',
+        r'\btrucking\b|\btruck\b',
+        r'\bexcavator\b',
+        r'\bcompactor\b',
+        r'\broller\b',
+        r'\bdiesel\b',
+        r'\bbackhoe\b',
+        r'\bloader\b',
+    ]
+    
+    CATEGORY_ALAT_BERAT = "Alat Berat"
     def _check_sanitair(self, normalized: str) -> bool:
         """Check if product matches Sanitair category."""
         if any(keyword in normalized for keyword in self.SANITAIR_KEYWORDS):
@@ -361,6 +383,12 @@ class ProductCategorizer:
         if self._check_listrik(normalized):
             return self.CATEGORY_LISTRIK
 
+        # Alat Berat detection
+        if any(keyword in normalized for keyword in self.ALAT_BERAT_KEYWORDS):
+            return self.CATEGORY_ALAT_BERAT
+        if any(re.search(pattern, normalized) for pattern in self.ALAT_BERAT_PATTERNS):
+            return self.CATEGORY_ALAT_BERAT
+        
         return None
 
     def categorize_batch(self, product_names: list[str]) -> list[str | None]:
