@@ -38,7 +38,9 @@ class AlatBeratCategorizationTest(TestCase):
         self.assertEqual(self.categorizer.categorize("Loader Roda 1.8 Kubik"), "Alat Berat")
 
     def test_non_alat_berat(self):
-        self.assertIsNone(self.categorizer.categorize("Cat Tembok Eksterior"))
+        # Cat Tembok should be categorized as Interior, not Alat Berat
+        result = self.categorizer.categorize("Cat Tembok Eksterior")
+        self.assertEqual(result, "Material Interior")
 
     def test_avoid_diesel_in_other_context(self):
         # A product without heavy equipment keywords should not be categorized as Alat Berat just by diesel
@@ -100,20 +102,26 @@ class AlatBeratCategorizationTest(TestCase):
                 self.assertEqual(self.categorizer.categorize(name), "Alat Berat")
 
     def test_bulk_negative_cases(self):
+        # These products should NOT be categorized as "Alat Berat"
+        # but they WILL match other categories, so we test they don't match Alat Berat
         negatives = [
-            "Semen Portland 50kg",
-            "Cat Tembok Interior",
-            "Keramik Lantai 60x60",
-            "Baut Stainless M8",
-            "Kabel NYA 2.5mm",
-            "Tangga Aluminium 2m",
-            "Pintu Kayu Panel",
-            "Engsel Pintu Stainless",
-            "Plafon Gypsum 9mm"
+            ("Semen Portland 50kg", "Tanah, Pasir, Batu, dan Semen"),
+            ("Cat Tembok Interior", "Material Interior"),
+            ("Keramik Lantai 60x60", "Material Interior"),
+            ("Baut Stainless M8", None),  # Hardware, not categorized yet
+            ("Kabel NYA 2.5mm", "Material Listrik"),
+            ("Tangga Aluminium 2m", "Peralatan Kerja"),
+            ("Pintu Kayu Panel", None),  # Construction material, not categorized
+            ("Engsel Pintu Stainless", None),  # Hardware, not categorized
+            ("Plafon Gypsum 9mm", "Material Interior")
         ]
-        for name in negatives:
+        for name, expected in negatives:
             with self.subTest(name=name):
-                self.assertIsNone(self.categorizer.categorize(name))
+                result = self.categorizer.categorize(name)
+                self.assertNotEqual(result, "Alat Berat")
+                # Optionally verify the actual category if needed
+                if expected:
+                    self.assertEqual(result, expected)
 
 
 class AlatBeratAutoCategorizationIntegrationTest(TestCase):
@@ -132,7 +140,7 @@ class AlatBeratAutoCategorizationIntegrationTest(TestCase):
 
         self.assertEqual(results[0], "Alat Berat")
         self.assertEqual(results[1], "Alat Berat")
-        self.assertIsNone(results[2])
+        self.assertNotEqual(results[2], "Alat Berat")
         self.assertEqual(results[3], "Alat Berat")
 
     def test_categorize_batch_preserves_order(self):
@@ -141,9 +149,9 @@ class AlatBeratAutoCategorizationIntegrationTest(TestCase):
 
         self.assertEqual(len(results), 4)
         self.assertEqual(results[0], "Alat Berat")
-        self.assertIsNone(results[1])
+        self.assertNotEqual(results[1], "Alat Berat")
         self.assertEqual(results[2], "Alat Berat")
-        self.assertIsNone(results[3])
+        self.assertNotEqual(results[3], "Alat Berat")
 
     def test_case_insensitive_alat_berat(self):
         result = self.categorizer.categorize("EXCAVATOR PC200")

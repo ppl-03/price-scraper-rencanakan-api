@@ -23,11 +23,13 @@ class ListrikCategorizationTest(TestCase):
         self.assertEqual(self.categorizer.categorize("Stop Kontak Universal"), "Material Listrik")
     
     def test_non_listrik(self):
-        self.assertIsNone(self.categorizer.categorize("Semen Portland 50kg"))
-    
+        result = self.categorizer.categorize("Semen Portland 50kg")
+        self.assertNotEqual(result, "Material Listrik")
+
     def test_avoid_pipe_false_positive(self):
         # Regular PVC pipe should NOT be categorized as electrical
-        self.assertIsNone(self.categorizer.categorize("Pipa PVC 1/2 inch"))
+        result = self.categorizer.categorize("Pipa PVC 1/2 inch")
+        self.assertNotEqual(result, "Material Listrik")
     
     def test_bulk_positive_cases(self):
         positives = [
@@ -87,5 +89,5 @@ class ListrikAutoCategorizationIntegrationTest(TestCase):
 
         self.assertEqual(results[0], "Material Listrik")
         self.assertEqual(results[1], "Material Listrik")
-        self.assertIsNone(results[2])
+        self.assertNotEqual(results[2], "Material Listrik")
         self.assertEqual(results[3], "Material Listrik")

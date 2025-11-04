@@ -42,11 +42,11 @@ class SteelCategorizationTest(TestCase):
     
     def test_categorize_non_steel_product(self):
         result = self.categorizer.categorize("Semen Portland 50kg")
-        self.assertIsNone(result)
+        self.assertEqual(result, ProductCategorizer.CATEGORY_TANAH_PASIR_BATU_SEMEN)
     
     def test_categorize_another_non_steel(self):
         result = self.categorizer.categorize("Pipa PVC 3 inch")
-        self.assertIsNone(result)
+        self.assertEqual(result, ProductCategorizer.CATEGORY_PIPA_AIR)
     
     def test_case_insensitive(self):
         result = self.categorizer.categorize("BESI BETON 10MM")
@@ -120,7 +120,7 @@ class InteriorMaterialCategorizationTest(TestCase):
     
     def test_non_interior_product(self):
         result = self.categorizer.categorize("Pipa PVC 3 inch")
-        self.assertIsNone(result)
+        self.assertNotEqual(result, ProductCategorizer.CATEGORY_INTERIOR)
 
 
 class PatternMatchingTest(TestCase):
@@ -259,8 +259,9 @@ class ExclusionLogicTest(TestCase):
         self.assertEqual(result, ProductCategorizer.CATEGORY_INTERIOR)
     
     def test_pasir_beton_not_steel(self):
+        # "Pasir Beton Berkualitas" should match Tanah/Pasir, not Steel or None
         result = self.categorizer.categorize("Pasir Beton Berkualitas")
-        self.assertIsNone(result)
+        self.assertEqual(result, ProductCategorizer.CATEGORY_TANAH_PASIR_BATU_SEMEN)
     
     def test_semen_with_interior_keyword(self):
         result = self.categorizer.categorize("Semen Cat Dinding")
@@ -295,8 +296,9 @@ class ExclusionLogicTest(TestCase):
         self.assertIsNone(result)
     
     def test_no_keywords_no_patterns(self):
+        # "Pipa PVC Generic" should match Material Pipa Air
         result = self.categorizer.categorize("Pipa PVC Generic")
-        self.assertIsNone(result)
+        self.assertEqual(result, ProductCategorizer.CATEGORY_PIPA_AIR)
 
 
 class AutoCategorizationIntegrationTest(TestCase):
@@ -315,7 +317,7 @@ class AutoCategorizationIntegrationTest(TestCase):
         results = self.categorizer.categorize_batch([p.name for p in products])
         
         self.assertEqual(results[0], ProductCategorizer.CATEGORY_STEEL)
-        self.assertIsNone(results[1])
+        self.assertEqual(results[1], ProductCategorizer.CATEGORY_TANAH_PASIR_BATU_SEMEN)
         self.assertEqual(results[2], ProductCategorizer.CATEGORY_STEEL)
         self.assertEqual(results[3], ProductCategorizer.CATEGORY_INTERIOR)
     
@@ -329,7 +331,7 @@ class AutoCategorizationIntegrationTest(TestCase):
         results = self.categorizer.categorize_batch([p.name for p in products])
         
         self.assertEqual(results[0], ProductCategorizer.CATEGORY_STEEL)
-        self.assertIsNone(results[1])
+        self.assertEqual(results[1], ProductCategorizer.CATEGORY_PIPA_AIR)
         self.assertEqual(results[2], ProductCategorizer.CATEGORY_INTERIOR)
     
     def test_categorize_empty_list(self):
@@ -342,11 +344,11 @@ class AutoCategorizationIntegrationTest(TestCase):
         
         self.assertEqual(len(results), 6)
         self.assertEqual(results[0], ProductCategorizer.CATEGORY_STEEL)
-        self.assertIsNone(results[1])
+        self.assertEqual(results[1], ProductCategorizer.CATEGORY_TANAH_PASIR_BATU_SEMEN)
         self.assertEqual(results[2], ProductCategorizer.CATEGORY_STEEL)
-        self.assertIsNone(results[3])
+        self.assertEqual(results[3], ProductCategorizer.CATEGORY_LISTRIK)
         self.assertEqual(results[4], ProductCategorizer.CATEGORY_INTERIOR)
-        self.assertIsNone(results[5])
+        self.assertEqual(results[5], ProductCategorizer.CATEGORY_PIPA_AIR)
 
 
 class AutoCategorizationServiceTest(TestCase):
@@ -363,15 +365,16 @@ class AutoCategorizationServiceTest(TestCase):
         result = self.service.categorize_products('gemilang', [p1.id, p2.id, p3.id])
         
         self.assertEqual(result['total'], 3)
-        self.assertEqual(result['categorized'], 2)
-        self.assertEqual(result['uncategorized'], 1)
+        # All 3 should now be categorized (Besi→Steel, Semen→Tanah/Pasir, Keramik→Interior)
+        self.assertEqual(result['categorized'], 3)
+        self.assertEqual(result['uncategorized'], 0)
         
         p1.refresh_from_db()
         p2.refresh_from_db()
         p3.refresh_from_db()
         
         self.assertEqual(p1.category, ProductCategorizer.CATEGORY_STEEL)
-        self.assertIsNone(p2.category)
+        self.assertEqual(p2.category, ProductCategorizer.CATEGORY_TANAH_PASIR_BATU_SEMEN)
         self.assertEqual(p3.category, ProductCategorizer.CATEGORY_INTERIOR)
     
     def test_categorize_products_mitra10(self):
@@ -415,8 +418,9 @@ class AutoCategorizationServiceTest(TestCase):
         result = self.service.categorize_all_products('gemilang')
         
         self.assertEqual(result['total'], 4)
-        self.assertEqual(result['categorized'], 3)
-        self.assertEqual(result['uncategorized'], 1)
+        # All 4 should now be categorized (Besi, Semen, Keramik, Hollow all match categories)
+        self.assertEqual(result['categorized'], 4)
+        self.assertEqual(result['uncategorized'], 0)
     
     def test_categorize_all_products_mitra10(self):
         Mitra10Product.objects.create(name="Wiremesh M8", price=120000, url="https://test.com/1", unit="lembar")

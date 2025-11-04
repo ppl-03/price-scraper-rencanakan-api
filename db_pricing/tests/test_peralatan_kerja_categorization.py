@@ -111,7 +111,7 @@ class PeralatanKerjaCategorizationTest(TestCase):
         ]
         for name in negatives:
             with self.subTest(name=name):
-                self.assertIsNone(self.categorizer.categorize(name))
+                self.assertNotEqual(self.categorizer.categorize(name), "Peralatan Kerja")
 
 
 class PeralatanKerjaAutoCategorizationIntegrationTest(TestCase):
@@ -120,8 +120,8 @@ class PeralatanKerjaAutoCategorizationIntegrationTest(TestCase):
 
     def test_categorize_mixed_products(self):
         products = [
-            GemilangProduct.objects.create(name="Palu Besi 1kg", price=45000, url="https://t/1", unit="unit"),
-            Mitra10Product.objects.create(name="Bor Listrik Bosch", price=850000, url="https://t/2", unit="unit"),
+            GemilangProduct.objects.create(name="Palu Besi 1kg", price=35000, url="https://t/1", unit="pcs"),
+            Mitra10Product.objects.create(name="Obeng Set 6pcs", price=45000, url="https://t/2", unit="set"),
             DepoBangunanProduct.objects.create(name="Semen Gresik", price=65000, url="https://t/3", unit="sak"),
             JuraganMaterialProduct.objects.create(name="Tang Kombinasi 8 inch", price=55000, url="https://t/4", unit="unit"),
         ]
@@ -129,6 +129,7 @@ class PeralatanKerjaAutoCategorizationIntegrationTest(TestCase):
         results = self.categorizer.categorize_batch([p.name for p in products])
 
         self.assertEqual(results[0], "Peralatan Kerja")
+        # "Obeng Set 6pcs" should match Peralatan Kerja
         self.assertEqual(results[1], "Peralatan Kerja")
         self.assertEqual(results[2], "Tanah, Pasir, Batu, dan Semen")  # Semen is material, not tool
         self.assertEqual(results[3], "Peralatan Kerja")

@@ -250,7 +250,7 @@ class ProductCategorizer:
     ALAT_BERAT_KEYWORDS = {
         'crane', 'bulldozer', 'drilling rig', 'truck', 'excavator',
         'compactor', 'roller', 'diesel', 'backhoe', 'loader',
-        'grader', 'vibrator', 'palu', 'jackhammer', 'pneumatic',
+        'grader', 'vibrator', 'jackhammer', 'pneumatic',
         'genset', 'alat berat', 'heavy equipment', 'mesin berat'
     }
     
@@ -268,8 +268,20 @@ class ProductCategorizer:
     ]
     
     CATEGORY_ALAT_BERAT = "Alat Berat"
+    
+    def _check_alat_berat(self, normalized: str) -> bool:
+        """Check if product matches Alat Berat (Heavy Equipment) category."""
+        if any(re.search(pattern, normalized) for pattern in self.ALAT_BERAT_PATTERNS):
+            return True
+
+        if any(keyword in normalized for keyword in self.ALAT_BERAT_KEYWORDS):
+            return True
+        
+        return False
+    
     def _check_sanitair(self, normalized: str) -> bool:
         """Check if product matches Sanitair category."""
+        # Sanitair has priority over Interior for bathroom fixtures
         if any(keyword in normalized for keyword in self.SANITAIR_KEYWORDS):
             return True
         if any(re.search(pattern, normalized) for pattern in self.SANITAIR_PATTERNS):
@@ -283,6 +295,11 @@ class ProductCategorizer:
         if any(exclusion in normalized for exclusion in self.PERALATAN_KERJA_EXCLUSIONS):
             return False
         
+        # Exclude pipe-related products (e.g., "saddle clamp" is a pipe fitting, not a tool)
+        pipe_indicators = {'pipa', 'pipe', 'pvc', 'ppr', 'hdpe', 'pralon', 'saddle'}
+        if any(indicator in normalized for indicator in pipe_indicators):
+            return False
+        
         if any(re.search(pattern, normalized) for pattern in self.PERALATAN_KERJA_PATTERNS):
             return True
         
@@ -292,14 +309,20 @@ class ProductCategorizer:
         return False
     
     def _check_tanah_pasir_batu_semen(self, normalized: str) -> bool:
-        """Check if product matches Tanah, Pasir, Batu, dan Semen category."""
+        """Check if product matches Tanah, Pasir, Batu, dan Semen category.
+        
+        This category requires specific pattern matches (not just bare keywords)
+        to avoid false positives.
+        """
         if any(exclusion in normalized for exclusion in self.TANAH_PASIR_BATU_SEMEN_EXCLUSIONS):
             return False
         
         if any(re.search(pattern, normalized) for pattern in self.TANAH_PASIR_BATU_SEMEN_PATTERNS):
             return True
         
-        if any(keyword in normalized for keyword in self.TANAH_PASIR_BATU_SEMEN_KEYWORDS):
+        # Also accept standalone specific terms that are unambiguous
+        standalone_terms = {'semen', 'kerikil', 'sirtu', 'agregat'}
+        if any(term in normalized for term in standalone_terms):
             return True
         
         return False
@@ -307,6 +330,12 @@ class ProductCategorizer:
     def _check_steel(self, normalized: str) -> bool:
         """Check if product matches Steel category."""
         if any(exclusion in normalized for exclusion in self.STEEL_EXCLUSIONS):
+            return False
+        
+        # If this product has Peralatan Kerja keywords, don't match as steel
+        # This prevents "Palu Besi" from being categorized as steel
+        tool_indicators = {'palu', 'obeng', 'tang', 'gergaji', 'sekop', 'linggis', 'siku tukang', 'kikir', 'bor', 'gerinda', 'kunci'}
+        if any(tool in normalized for tool in tool_indicators):
             return False
         
         if any(keyword in normalized for keyword in self.STEEL_KEYWORDS):
@@ -321,7 +350,17 @@ class ProductCategorizer:
     
     def _check_interior(self, normalized: str) -> bool:
         """Check if product matches Interior category."""
-        if any(keyword in normalized for keyword in self.INTERIOR_KEYWORDS):
+        # Special handling for "lem"/"glue": only Interior if NOT pipe-related
+        # Check this BEFORE general keyword matching to avoid false positives
+        if 'lem' in normalized or 'glue' in normalized:
+            # If it has pipe context (pvc, pipa, pralon), NOT Interior
+            if any(pipe_term in normalized for pipe_term in ('pvc', 'pipa', 'pralon')):
+                return False
+            # Otherwise, it's an interior glue
+            return True
+        
+        interior_keywords_excluding_glue = self.INTERIOR_KEYWORDS - {'lem', 'glue'}
+        if any(keyword in normalized for keyword in interior_keywords_excluding_glue):
             return True
         
         if any(re.search(pattern, normalized) for pattern in self.INTERIOR_PATTERNS):
@@ -331,10 +370,29 @@ class ProductCategorizer:
     
     def _check_pipa_air(self, normalized: str) -> bool:
         """Check if product matches Pipa Air category."""
-        if any(keyword in normalized for keyword in self.PIPA_AIR_KEYWORDS):
+        # Special handling for "fitting": electrical fitting vs pipe fitting
+        # Check this BEFORE general keyword matching
+        if 'fitting' in normalized:
+            # If it has electrical context (lampu, listrik), NOT Pipa Air
+            if 'lampu' in normalized or 'listrik' in normalized:
+                return False
+            # Otherwise, it's a pipe fitting
             return True
         
         if any(re.search(pattern, normalized) for pattern in self.PIPA_AIR_PATTERNS):
+            return True
+        
+        # Check keywords (excluding fitting which we already handled)
+        pipa_keywords_excluding_fitting = self.PIPA_AIR_KEYWORDS - {'fitting'}
+        if any(keyword in normalized for keyword in pipa_keywords_excluding_fitting):
+            return True
+        
+        # "saddle" in pipe context (or standalone)
+        if 'saddle' in normalized:
+            return True
+        
+        # "lem" with pipe context (lem pvc, lem pipa)
+        if 'lem' in normalized and ('pvc' in normalized or 'pipa' in normalized or 'pralon' in normalized):
             return True
         
         return False
@@ -342,52 +400,87 @@ class ProductCategorizer:
 
     def _check_listrik(self, normalized: str) -> bool:
         """Check if product matches Material Listrik category."""
-        # Check keywords and indicators (Reduce false positives)
-        if any(keyword in normalized for keyword in self.LISTRIK_KEYWORDS):
-            electrical_indicators = {
-                'kabel', 'cable', 'saklar', 'switch', 'mcb', 'listrik', 
-                'electric', 'lampu', 'lamp', 'fitting', 'volt', 'watt', 
-                'ampere', 'stop kontak', 'outlet', 'colokan'
-            }
-            if any(indicator in normalized for indicator in electrical_indicators):
-                return True
+        
         if any(re.search(pattern, normalized) for pattern in self.LISTRIK_PATTERNS):
             return True
+        
+        
+        electrical_indicators = {
+            'kabel', 'cable', 'saklar', 'switch', 'mcb', 'listrik', 
+            'electric', 'elektrik', 'lampu', 'lamp', 'volt', 'watt', 
+            'ampere', 'stop kontak', 'outlet', 'colokan'
+        }
+        
+        # "pipa conduit" or "conduit elektrik" -> Listrik
+        if 'conduit' in normalized and ('elektrik' in normalized or 'listrik' in normalized or 'kabel' in normalized):
+            return True
+        
+        # "fitting lampu" -> Listrik
+        if 'fitting' in normalized and ('lampu' in normalized or 'listrik' in normalized or 'e27' in normalized or 'e14' in normalized):
+            return True
+        
+        # "isolasi listrik" -> Listrik
+        if 'isolasi' in normalized and 'listrik' in normalized:
+            return True
+        
+        # Check keywords with indicators
+        if any(keyword in normalized for keyword in self.LISTRIK_KEYWORDS):
+            if any(indicator in normalized for indicator in electrical_indicators):
+                return True
+        
         return False
 
     def categorize(self, product_name: str) -> str | None:
+        """Categorize a single product name.
+
+        Uses strict priority-based categorization:
+        1. Sanitair (highest priority - bathroom fixtures)
+        2. Alat Berat (heavy equipment/machinery)
+        3. Peralatan Kerja (hand/power tools)
+        4. Tanah, Pasir, Batu, Semen (construction bulk materials)
+        5. Steel (structural materials)
+        6. Interior (finishing materials)
+        7. Pipa Air (plumbing)
+        8. Listrik (electrical - lowest priority)
+
+        Special override: Electrical conduit/isolasi with explicit electrical context
+        overrides Pipa Air/Interior even though they have "pipa"/"isolasi" keywords.
+
+        Returns the first matching category or None.
+        """
         if not product_name:
             return None
 
         normalized = product_name.lower().strip()
 
-        # Check categories in priority order
+        # Override check: Electrical conduit/isolasi with explicit electrical context
+        # should be categorized as Listrik, not Pipa Air or Interior
+        electrical_override = (
+            ('conduit' in normalized and ('elektrik' in normalized or 'listrik' in normalized)) or
+            ('isolasi' in normalized and 'listrik' in normalized)
+        )
+
+        # Return first match (strict priority)
+        # But check electrical override first
+        if electrical_override and self._check_listrik(normalized):
+            return self.CATEGORY_LISTRIK
+        
         if self._check_sanitair(normalized):
             return self.CATEGORY_SANITAIR
-
+        if self._check_alat_berat(normalized):
+            return self.CATEGORY_ALAT_BERAT
         if self._check_peralatan_kerja(normalized):
             return self.CATEGORY_PERALATAN_KERJA
-
         if self._check_tanah_pasir_batu_semen(normalized):
             return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
-
         if self._check_steel(normalized):
             return self.CATEGORY_STEEL
-
         if self._check_interior(normalized):
             return self.CATEGORY_INTERIOR
-
         if self._check_pipa_air(normalized):
             return self.CATEGORY_PIPA_AIR
-
         if self._check_listrik(normalized):
             return self.CATEGORY_LISTRIK
-
-        # Alat Berat detection
-        if any(keyword in normalized for keyword in self.ALAT_BERAT_KEYWORDS):
-            return self.CATEGORY_ALAT_BERAT
-        if any(re.search(pattern, normalized) for pattern in self.ALAT_BERAT_PATTERNS):
-            return self.CATEGORY_ALAT_BERAT
         
         return None
 
