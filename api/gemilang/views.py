@@ -1,73 +1,43 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.middleware.csrf import get_token
-from .factory import create_gemilang_scraper, create_gemilang_location_scraper
-from .database_service import GemilangDatabaseService
 import json
 import logging
 
+from .factory import create_gemilang_scraper, create_gemilang_location_scraper
+from .database_service import GemilangDatabaseService
+from .security import (
+    require_api_token,
+    validate_input,
+    enforce_resource_limits,
+    InputValidator,
+    SecurityDesignPatterns,
+)
+
 logger = logging.getLogger(__name__)
 
-API_TOKENS = {
-    'dev-token-12345': {
-        'name': 'Development Token',
-        'allowed_ips': [],
-        'created': '2024-01-01',
-        'expires': None
-    },
-    'legacy-api-token-67890': {
-        'name': 'Legacy Client Token',
-        'allowed_ips': [],
-        'created': '2024-01-01',
-        'expires': None
-    }
-}
 
-def _validate_api_token(request) -> tuple[bool, str]:
-    token = request.headers.get('X-API-Token') or request.headers.get('Authorization', '').replace('Bearer ', '')
-    
-    if not token:
-        return False, 'API token required'
-    
-    if token not in API_TOKENS:
-        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-        logger.warning(f"Invalid API token attempt from {client_ip}")
-        return False, 'Invalid API token'
-    
-    token_info = API_TOKENS[token]
-    client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-    allowed_ips = token_info.get('allowed_ips', [])
-    
-    if allowed_ips and client_ip not in allowed_ips:
-        logger.warning(f"IP {client_ip} not allowed for token {token_info['name']}")
-        return False, 'IP not authorized'
-    
-    logger.info(f"Valid API token used from {client_ip}: {token_info['name']}")
-    return True, ''
+def _validate_page_param(x):
+    """Helper function to validate page parameter."""
+    if not x:
+        return InputValidator.validate_integer(0, 'page', min_value=0, max_value=100)
+    if str(x).lstrip('-').isdigit():
+        return InputValidator.validate_integer(int(x), 'page', min_value=0, max_value=100)
+    return (False, 'page must be a valid integer', None)
 
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
+@validate_input({
+    'keyword': lambda x: InputValidator.validate_keyword(x or '', max_length=100),
+    'page': _validate_page_param,
+    'sort_by_price': lambda x: InputValidator.validate_boolean(x, 'sort_by_price')
+})
 def scrape_products(request):
     try:
-        keyword = request.GET.get('keyword')
-        if not keyword or not keyword.strip():
-            return JsonResponse({
-                'error': 'Keyword parameter is required'
-            }, status=400)
-        
-        keyword = keyword.strip()
-        
-        sort_by_price_param = request.GET.get('sort_by_price', 'true').lower()
-        sort_by_price = sort_by_price_param in ['true', '1', 'yes']
-        
-        page_param = request.GET.get('page', '0')
-        try:
-            page = int(page_param)
-        except ValueError:
-            return JsonResponse({
-                'error': 'Page parameter must be a valid integer'
-            }, status=400)
+        validated_data = request.validated_data
+        keyword = validated_data.get('keyword')
+        sort_by_price = validated_data.get('sort_by_price', True)
+        page = validated_data.get('page', 0)
         
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
@@ -96,29 +66,33 @@ def scrape_products(request):
         return JsonResponse(response_data)
         
     except Exception as e:
-        logger.error(f"Unexpected error in Gemilang scraper: {str(e)}")
+        logger.error(f"Unexpected error in scraper: {type(e).__name__}")
         return JsonResponse({
             'error': 'Internal server error occurred'
         }, status=500)
 
 
-class LocationRequestHandler:
-    
-    DEFAULT_TIMEOUT = 30
-    
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-    
-    def parse_timeout(self, request) -> int:
-        timeout_param = request.GET.get('timeout', str(self.DEFAULT_TIMEOUT))
-        try:
-            timeout = int(timeout_param)
-            return max(0, timeout)
-        except (ValueError, TypeError):
-            self.logger.warning(f"Invalid timeout parameter: {timeout_param}, using default")
-            return self.DEFAULT_TIMEOUT
-    
-    def format_locations_response(self, result) -> dict:
+def _validate_timeout_param(x):
+    """Helper function to validate timeout parameter."""
+    if not x:
+        return InputValidator.validate_integer(30, 'timeout', min_value=0, max_value=120)
+    if str(x).lstrip('-').isdigit():
+        return InputValidator.validate_integer(int(x), 'timeout', min_value=0, max_value=120)
+    return (False, 'timeout must be a valid integer', None)
+
+
+@require_http_methods(["GET"])
+@validate_input({
+    'timeout': _validate_timeout_param
+})
+def gemilang_locations_view(request):
+    try:
+        validated_data = request.validated_data
+        timeout = validated_data.get('timeout', 30)
+        
+        scraper = create_gemilang_location_scraper()
+        result = scraper.scrape_locations(timeout=timeout)
+        
         locations_data = [
             {
                 'name': location.name,
@@ -127,72 +101,151 @@ class LocationRequestHandler:
             for location in result.locations
         ]
         
-        return {
+        response_data = {
             'success': result.success,
             'locations': locations_data,
             'error_message': result.error_message
         }
-    
-    def create_error_response(self, error_message: str) -> dict:
-        return {
-            'success': False,
-            'locations': [],
-            'error_message': error_message
-        }
-
-
-@require_http_methods(["GET"])
-def gemilang_locations_view(request):
-    handler = LocationRequestHandler()
-    
-    try:
-        timeout = handler.parse_timeout(request)
         
-        scraper = create_gemilang_location_scraper()
-        result = scraper.scrape_locations(timeout=timeout)
-        
-        response_data = handler.format_locations_response(result)
         return JsonResponse(response_data)
         
     except Exception as e:
-        error_message = f"Unexpected error: {str(e)}"
-        handler.logger.error(f"Unexpected error in Gemilang location scraper: {str(e)}")
-        
-        response_data = handler.create_error_response(error_message)
-        return JsonResponse(response_data, status=500)
+        logger.error(f"Unexpected error in locations endpoint: {type(e).__name__}")
+        return JsonResponse({
+            'success': False,
+            'locations': [],
+            'error_message': f'Unexpected error: {type(e).__name__}'
+        }, status=500)
+
+
+def _parse_request_body(request):
+    """Parse and return JSON body or error response."""
+    try:
+        return json.loads(request.body), None
+    except json.JSONDecodeError:
+        return None, JsonResponse({'error': 'Invalid JSON in request body'}, status=400)
+
+
+def _validate_scrape_params(body):
+    """Validate all scrape and save parameters."""
+    keyword = body.get('keyword')
+    is_valid, error_msg, sanitized_keyword = InputValidator.validate_keyword(
+        keyword or '', max_length=100
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    page = body.get('page', 0)
+    is_valid, error_msg, validated_page = InputValidator.validate_integer(
+        page, 'page', min_value=0, max_value=100
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    sort_by_price = body.get('sort_by_price', True)
+    is_valid, error_msg, validated_sort = InputValidator.validate_boolean(
+        sort_by_price, 'sort_by_price'
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    use_price_update = body.get('use_price_update', False)
+    is_valid, error_msg, validated_update = InputValidator.validate_boolean(
+        use_price_update, 'use_price_update'
+    )
+    if not is_valid:
+        return None, JsonResponse({'error': error_msg}, status=400)
+    
+    return {
+        'keyword': sanitized_keyword,
+        'page': validated_page,
+        'sort_by_price': validated_sort,
+        'use_price_update': validated_update
+    }, None
+
+
+def _validate_products_business_logic(products_data):
+    """Validate business logic for all products."""
+    for idx, product in enumerate(products_data):
+        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product)
+        if not is_valid:
+            return JsonResponse({'error': f'Product {idx}: {error_msg}'}, status=400)
+    return None
+
+
+def _handle_price_update_save(db_service, products_data):
+    """Handle database save with price update."""
+    save_result = db_service.save_with_price_update(products_data)
+    
+    if not save_result.get('success', False):
+        return JsonResponse({
+            'success': False,
+            'error': save_result.get('error', 'Failed to save products'),
+            'saved': 0,
+            'updated': 0,
+            'inserted': 0,
+            'anomalies': []
+        }, status=500)
+    
+    return JsonResponse({
+        'success': True,
+        'message': f"Updated {save_result['updated']} products, inserted {save_result['inserted']} new products",
+        'saved': save_result['updated'] + save_result['inserted'],
+        'updated': save_result['updated'],
+        'inserted': save_result['inserted'],
+        'anomalies': save_result.get('anomalies', []),
+        'anomaly_count': len(save_result.get('anomalies', []))
+    })
+
+
+def _handle_regular_save(db_service, products_data):
+    """Handle regular database save."""
+    save_result = db_service.save(products_data)
+    
+    if isinstance(save_result, tuple):
+        save_success, error_msg = save_result
+    else:
+        save_success = save_result
+        error_msg = 'Failed to save products to database'
+    
+    if save_success:
+        return JsonResponse({
+            'success': True,
+            'message': f"Successfully saved {len(products_data)} products",
+            'saved': len(products_data),
+            'updated': 0,
+            'inserted': len(products_data),
+            'anomalies': []
+        })
+    else:
+        return JsonResponse({
+            'success': False,
+            'error': error_msg,
+            'saved': 0,
+            'updated': 0,
+            'inserted': 0,
+            'anomalies': []
+        }, status=500)
 
 
 @require_http_methods(["POST"])
+@require_api_token(required_permission='write')
+@enforce_resource_limits
 def scrape_and_save(request):
-    # Validate API token - if valid token is present, we trust the request
-    is_valid, error_message = _validate_api_token(request)
-    if not is_valid:
-        return JsonResponse({'error': error_message}, status=401)
-    
     try:
-        body = json.loads(request.body)
-        keyword = body.get('keyword')
+        body, error_response = _parse_request_body(request)
+        if error_response:
+            return error_response
         
-        if not keyword or not keyword.strip():
-            return JsonResponse({
-                'error': 'Keyword parameter is required'
-            }, status=400)
-        
-        keyword = keyword.strip()
-        sort_by_price = body.get('sort_by_price', True)
-        page = body.get('page', 0)
-        use_price_update = body.get('use_price_update', False)
-        
-        if not isinstance(page, int):
-            return JsonResponse({
-                'error': 'Page parameter must be an integer'
-            }, status=400)
+        params, error_response = _validate_scrape_params(body)
+        if error_response:
+            return error_response
         
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
-            keyword=keyword,
-            sort_by_price=sort_by_price,
-            page=page
+            keyword=params['keyword'],
+            sort_by_price=params['sort_by_price'],
+            page=params['page']
         )
         
         if not result.success:
@@ -225,46 +278,19 @@ def scrape_and_save(request):
                 'anomalies': []
             })
         
+        error_response = _validate_products_business_logic(products_data)
+        if error_response:
+            return error_response
+        
         db_service = GemilangDatabaseService()
         
-        if use_price_update:
-            save_result = db_service.save_with_price_update(products_data)
-            return JsonResponse({
-                'success': save_result['success'],
-                'message': f"Updated {save_result['updated']} products, inserted {save_result['inserted']} new products",
-                'saved': save_result['updated'] + save_result['inserted'],
-                'updated': save_result['updated'],
-                'inserted': save_result['inserted'],
-                'anomalies': save_result['anomalies'],
-                'anomaly_count': len(save_result['anomalies'])
-            })
+        if params['use_price_update']:
+            return _handle_price_update_save(db_service, products_data)
         else:
-            save_success = db_service.save(products_data)
-            if save_success:
-                return JsonResponse({
-                    'success': True,
-                    'message': f"Successfully saved {len(products_data)} products",
-                    'saved': len(products_data),
-                    'updated': 0,
-                    'inserted': len(products_data),
-                    'anomalies': []
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Failed to save products to database',
-                    'saved': 0,
-                    'updated': 0,
-                    'inserted': 0,
-                    'anomalies': []
-                }, status=500)
+            return _handle_regular_save(db_service, products_data)
         
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'error': 'Invalid JSON in request body'
-        }, status=400)
     except Exception as e:
-        logger.error(f"Unexpected error in scrape_and_save: {str(e)}")
+        logger.error(f"Unexpected error in scrape_and_save: {type(e).__name__}")
         return JsonResponse({
             'error': 'Internal server error occurred'
         }, status=500)
