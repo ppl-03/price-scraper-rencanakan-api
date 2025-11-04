@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class LocationScraperConfiguration:
     
-    def __init__(self, base_url: str, default_timeout: int = 30):
+    def __init__(self, base_url: str, default_timeout: int = 60):
         self.base_url = base_url
         self.default_timeout = default_timeout
     
@@ -25,11 +25,11 @@ class LocationScraperConfiguration:
 
 class ScrapingResultBuilder:
     
-    def __init__(self, url: str):
-        self._url = url
+    def __init__(self):
         self._locations = []
         self._success = False
         self._error_message = None
+        self._attempts_made = 1
     
     def with_success(self, locations: List[Location]) -> 'ScrapingResultBuilder':
         self._locations = locations or []
@@ -48,26 +48,26 @@ class ScrapingResultBuilder:
             locations=self._locations,
             success=self._success,
             error_message=self._error_message,
-            url=self._url
+            attempts_made=self._attempts_made
         )
 
 
 class ErrorHandler:
     
     @staticmethod
-    def handle_http_error(error: HttpClientError, url: str) -> LocationScrapingResult:
+    def handle_http_error(error: HttpClientError) -> LocationScrapingResult:
         logger.error(f"HTTP client error during location scraping: {str(error)}")
-        return ScrapingResultBuilder(url).with_error(str(error)).build()
+        return ScrapingResultBuilder().with_error(str(error)).build()
     
     @staticmethod
-    def handle_parser_error(error: HtmlParserError, url: str) -> LocationScrapingResult:
+    def handle_parser_error(error: HtmlParserError) -> LocationScrapingResult:
         logger.error(f"HTML parser error during location scraping: {str(error)}")
-        return ScrapingResultBuilder(url).with_error(str(error)).build()
+        return ScrapingResultBuilder().with_error(str(error)).build()
     
     @staticmethod
-    def handle_generic_error(error: Exception, url: str) -> LocationScrapingResult:
+    def handle_generic_error(error: Exception) -> LocationScrapingResult:
         logger.error(f"Unexpected error during location scraping: {str(error)}")
-        return ScrapingResultBuilder(url).with_error(str(error)).build()
+        return ScrapingResultBuilder().with_error(str(error)).build()
 
 
 class LocationDataValidator:
@@ -82,7 +82,7 @@ class LocationDataValidator:
     
     @staticmethod
     def validate_timeout(timeout: Optional[int]) -> int:
-        return max(0, timeout) if timeout is not None else 30
+        return max(0, timeout) if timeout is not None else 60
 
 
 class GemilangLocationScraper(ILocationScraper):
@@ -101,7 +101,11 @@ class GemilangLocationScraper(ILocationScraper):
         self._error_handler = error_handler or ErrorHandler()
         self._validator = validator or LocationDataValidator()
     
-    def scrape_locations(self, timeout: int = 30) -> LocationScrapingResult:
+    def scrape_locations_batch(self, timeout: Optional[int] = None) -> LocationScrapingResult:
+        """Scrape location data from the Gemilang website (implements ILocationScraper interface)"""
+        return self.scrape_locations(timeout if timeout is not None else 60)
+    
+    def scrape_locations(self, timeout: int = 60) -> LocationScrapingResult:
         timeout = self._validator.validate_timeout(timeout)
         url = self._config.get_base_url()
         
@@ -109,14 +113,14 @@ class GemilangLocationScraper(ILocationScraper):
             html_content = self._fetch_html_content(url, timeout)
             locations = self._parse_locations(html_content)
             
-            return self._create_success_result(locations, url)
+            return self._create_success_result(locations)
             
         except HttpClientError as e:
-            return self._error_handler.handle_http_error(e, url)
+            return self._error_handler.handle_http_error(e)
         except HtmlParserError as e:
-            return self._error_handler.handle_parser_error(e, url)
+            return self._error_handler.handle_parser_error(e)
         except Exception as e:
-            return self._error_handler.handle_generic_error(e, url)
+            return self._error_handler.handle_generic_error(e)
     
     def _fetch_html_content(self, url: str, timeout: int) -> str:
         html_content = self._http_client.get(url, timeout=timeout)
@@ -134,5 +138,5 @@ class GemilangLocationScraper(ILocationScraper):
         
         return locations
     
-    def _create_success_result(self, locations: List[Location], url: str) -> LocationScrapingResult:
-        return ScrapingResultBuilder(url).with_success(locations).build()
+    def _create_success_result(self, locations: List[Location]) -> LocationScrapingResult:
+        return ScrapingResultBuilder().with_success(locations).build()

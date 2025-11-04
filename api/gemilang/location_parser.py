@@ -2,6 +2,7 @@ import logging
 import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
+from html import unescape
 
 from api.interfaces import ILocationParser, Location, HtmlParserError
 
@@ -61,8 +62,17 @@ class HtmlElementExtractor:
                 logger.debug("No store-location div found in item")
                 return None
             
-            self._convert_br_to_newlines(address_div)
-            text = address_div.get_text()
+            # Replace <br> tags with newlines before extracting text
+            for br in address_div.find_all('br'):
+                br.replace_with('\n')
+            
+            # Get text and handle HTML entities
+            text = address_div.get_text(strip=False)
+            text = unescape(text)
+            
+            # Clean up excessive whitespace while preserving newlines
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            text = '\n'.join(lines)
             
             if not self._text_cleaner.is_valid_text(text):
                 logger.debug("Address text is empty or invalid")
@@ -159,7 +169,7 @@ class GemilangLocationParser(ILocationParser):
                 store_name = self._element_extractor.extract_store_name(item)
                 if store_name:
                     names.append(store_name)
-                    
+                
                 address = self._element_extractor.extract_address(item)
                 if address:
                     addresses.append(address)
@@ -168,24 +178,35 @@ class GemilangLocationParser(ILocationParser):
                 logger.warning(f"Failed to extract data from item: {str(e)}")
                 continue
         
+        # Pair up names and addresses
         min_count = min(len(names), len(addresses))
         for i in range(min_count):
-            locations.append(self._create_location(names[i], addresses[i]))
+            try:
+                location = self._create_location(names[i], addresses[i])
+                if location:
+                    locations.append(location)
+            except Exception as e:
+                logger.warning(f"Failed to create location: {str(e)}")
+                continue
         
         return locations
     
     def _extract_location_from_item(self, item) -> Optional[Location]:
-        store_name = self._element_extractor.extract_store_name(item)
-        if not store_name:
-            logger.debug("Store name extraction failed")
-            return None
+        try:
+            store_name = self._element_extractor.extract_store_name(item)
+            if not store_name:
+                logger.debug("Store name extraction failed")
+                return None
+                
+            address = self._element_extractor.extract_address(item)
+            if not address:
+                logger.debug("Address extraction failed")
+                return None
             
-        address = self._element_extractor.extract_address(item)
-        if not address:
-            logger.debug("Address extraction failed")
+            return self._create_location(store_name, address)
+        except Exception as e:
+            logger.warning(f"Failed to extract location from item: {str(e)}")
             return None
-        
-        return self._create_location(store_name, address)
     
     def _create_location(self, store_name: str, address: str) -> Location:
-        return Location(store_name=store_name, address=address)
+        return Location(name=store_name, code=address)

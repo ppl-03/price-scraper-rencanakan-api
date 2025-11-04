@@ -382,3 +382,115 @@ class TestMitra10HTMLParser(TestCase):
             with self.subTest(name=name):
                 slug = self.parser._generate_slug(name)
                 self.assertEqual(slug, expected_slug)
+
+    def test_safe_extraction_mixin_safe_extract(self):
+        """Test SafeExtractionMixin safe_extract method"""
+        def successful_operation():
+            return "success"
+        
+        result = self.parser.safe_extract(successful_operation, "test operation")
+        self.assertEqual(result, "success")
+
+    def test_safe_extraction_mixin_safe_extract_with_exception(self):
+        """Test SafeExtractionMixin safe_extract handles exceptions"""
+        def failing_operation():
+            raise ValueError("Test error")
+        
+        result = self.parser.safe_extract(failing_operation, "test operation")
+        self.assertIsNone(result)
+
+    def test_safe_extraction_mixin_safe_extract_with_default(self):
+        """Test SafeExtractionMixin safe_extract_with_default method"""
+        def successful_operation():
+            return "success"
+        
+        result = self.parser.safe_extract_with_default(successful_operation, "default", "test operation")
+        self.assertEqual(result, "success")
+
+    def test_safe_extraction_mixin_safe_extract_with_default_on_exception(self):
+        """Test SafeExtractionMixin safe_extract_with_default returns default on exception"""
+        def failing_operation():
+            raise ValueError("Test error")
+        
+        result = self.parser.safe_extract_with_default(failing_operation, "default_value", "test operation")
+        self.assertEqual(result, "default_value")
+
+    def test_safe_extraction_mixin_safe_extract_with_default_when_none(self):
+        """Test SafeExtractionMixin safe_extract_with_default returns default when None"""
+        def none_operation():
+            return None
+        
+        result = self.parser.safe_extract_with_default(none_operation, "default_value", "test operation")
+        self.assertEqual(result, "default_value")
+
+    def test_parse_with_fallback_success(self):
+        """Test _parse_with_fallback successfully parses with html.parser"""
+        html = self._create_product_html(name="Test Product", price="IDR 25,000", url="/test")
+        products = self.parser._parse_with_fallback(html, Exception("Original error"))
+        self.assertEqual(len(products), 1)
+
+    def test_parse_with_fallback_failure(self):
+        """Test _parse_with_fallback raises HtmlParserError on failure"""
+        from api.mitra10.html_parser import HtmlParserError
+        with unittest.mock.patch('api.mitra10.html_parser.BeautifulSoup', side_effect=Exception("Parser error")):
+            with self.assertRaises(HtmlParserError):
+                self.parser._parse_with_fallback("<html></html>", Exception("Original"))
+
+    def test_parse_product_details_valid(self):
+        """Test parse_product_details with valid HTML"""
+        html = '''
+        <html>
+            <body>
+                <h1 class="product-title">Test Product</h1>
+                <span class="price__final">Rp 50,000</span>
+                <div class="specifications">Unit: 5 kg</div>
+            </body>
+        </html>
+        '''
+        product = self.parser.parse_product_details(html, "/test-product")
+        self.assertIsNotNone(product)
+        self.assertEqual(product.name, "Test Product")
+        self.assertEqual(product.price, 50000)
+        self.assertEqual(product.url, "/test-product")
+
+    def test_parse_product_details_empty_html(self):
+        """Test parse_product_details with empty HTML"""
+        product = self.parser.parse_product_details("", "/test")
+        self.assertIsNone(product)
+
+    def test_parse_product_details_missing_name(self):
+        """Test parse_product_details when product name is missing"""
+        html = '''
+        <html>
+            <body>
+                <span class="price__final">Rp 50,000</span>
+            </body>
+        </html>
+        '''
+        product = self.parser.parse_product_details(html)
+        self.assertIsNone(product)
+
+    def test_parse_product_details_invalid_price(self):
+        """Test parse_product_details with invalid price"""
+        html = '''
+        <html>
+            <body>
+                <h1 class="product-title">Test Product</h1>
+                <span class="price__final">Invalid Price</span>
+            </body>
+        </html>
+        '''
+        product = self.parser.parse_product_details(html)
+        self.assertIsNone(product)
+
+    def test_has_lxml_available(self):
+        """Test _has_lxml when lxml is available"""
+        has_lxml = self.parser._has_lxml()
+        # This will depend on the environment, but we just test it doesn't crash
+        self.assertIsInstance(has_lxml, bool)
+
+    def test_has_lxml_not_available(self):
+        """Test _has_lxml when lxml is not available"""
+        with unittest.mock.patch('builtins.__import__', side_effect=ImportError):
+            has_lxml = self.parser._has_lxml()
+            self.assertFalse(has_lxml)

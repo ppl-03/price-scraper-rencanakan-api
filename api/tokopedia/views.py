@@ -2,6 +2,41 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from typing import Optional, Tuple
 from .factory import create_tokopedia_scraper
+import re
+
+# Constants
+DEFAULT_LIMIT = '20'
+DEFAULT_PAGE = '0'
+DEFAULT_SORT_BY_PRICE = 'true'
+MAX_LIMIT = 1000
+MIN_LIMIT = 1
+MIN_PAGE = 0
+MIN_PRICE = 0
+MAX_QUERY_LENGTH = 200  # Maximum allowed query length
+
+
+def _sanitize_string(value: str, max_length: int = MAX_QUERY_LENGTH) -> str:
+    """
+    Sanitize user input string to prevent injection attacks
+    
+    Args:
+        value: Input string to sanitize
+        max_length: Maximum allowed length
+        
+    Returns:
+        Sanitized string
+    """
+    if not value:
+        return ""
+    
+    # Trim to max length
+    sanitized = value[:max_length]
+    
+    # Remove any control characters and strip whitespace
+    sanitized = ''.join(char for char in sanitized if char.isprintable() or char.isspace())
+    sanitized = sanitized.strip()
+    
+    return sanitized
 
 
 def _create_error_response(error_message: str, status: int = 400) -> JsonResponse:
@@ -16,7 +51,7 @@ def _create_error_response(error_message: str, status: int = 400) -> JsonRespons
 
 def _validate_query_parameter(request) -> Tuple[Optional[str], Optional[JsonResponse]]:
     """
-    Validate and extract query parameter from request
+    Validate and extract query parameter from request with sanitization
     
     Returns:
         Tuple of (query_string, error_response)
@@ -28,26 +63,56 @@ def _validate_query_parameter(request) -> Tuple[Optional[str], Optional[JsonResp
     if query is None:
         return None, _create_error_response('Query parameter is required')
     
-    if not query.strip():
+    # Sanitize the query to prevent injection attacks
+    sanitized_query = _sanitize_string(query)
+    
+    if not sanitized_query:
         return None, _create_error_response('Query parameter cannot be empty')
     
-    return query.strip(), None
+    return sanitized_query, None
 
 
-def _parse_boolean_parameter(request, param_name: str, default: str = 'true') -> bool:
+def _parse_boolean_parameter(request, param_name: str, default: str = DEFAULT_SORT_BY_PRICE) -> bool:
     """Parse a boolean parameter from request"""
     param_value = request.GET.get(param_name, default).lower()
     return param_value in ['true', '1', 'yes']
+
+
+def _validate_integer_range(value: int, param_name: str, min_value: Optional[int], 
+                           max_value: Optional[int]) -> Optional[JsonResponse]:
+    """Validate integer is within allowed range"""
+    if min_value is not None and value < min_value:
+        return _create_error_response(f'{param_name} must be at least {min_value}')
+    if max_value is not None and value > max_value:
+        return _create_error_response(f'{param_name} must not exceed {max_value}')
+    return None
+
+
+def _parse_default_value(default: str, min_value: Optional[int], 
+                         max_value: Optional[int]) -> Optional[int]:
+    """Parse and clamp default value"""
+    try:
+        value = int(default)
+        if min_value is not None and value < min_value:
+            value = min_value
+        if max_value is not None and value > max_value:
+            value = max_value
+        return value
+    except ValueError:
+        return None
 
 
 def _parse_integer_parameter(
     request, 
     param_name: str, 
     default: Optional[str] = None, 
-    required: bool = False
+    required: bool = False,
+    min_value: Optional[int] = None,
+    max_value: Optional[int] = None
 ) -> Tuple[Optional[int], Optional[JsonResponse]]:
     """
-    Parse an integer parameter from request
+    Parse an integer parameter from request with optional range validation
+    Sanitizes input to prevent injection attacks
     
     Returns:
         Tuple of (integer_value, error_response)
@@ -59,16 +124,26 @@ def _parse_integer_parameter(
     if param_value is None:
         if required:
             return None, _create_error_response(f'{param_name} parameter is required')
-        # Use default if provided, otherwise return None
         if default is not None:
-            try:
-                return int(default), None
-            except ValueError:
-                return None, None
+            value = _parse_default_value(default, min_value, max_value)
+            return value, None
         return None, None
     
+    # Sanitize parameter value to prevent injection
+    sanitized_value = _sanitize_string(param_value, max_length=20)
+    
+    # Validate it contains only digits (and optional minus sign)
+    if not re.match(r'^-?\d+$', sanitized_value):
+        return None, _create_error_response(
+            f'{param_name} parameter must be a valid integer'
+        )
+    
     try:
-        return int(param_value), None
+        value = int(sanitized_value)
+        error = _validate_integer_range(value, param_name, min_value, max_value)
+        if error:
+            return None, error
+        return value, None
     except ValueError:
         return None, _create_error_response(
             f'{param_name} parameter must be a valid integer'
@@ -76,25 +151,40 @@ def _parse_integer_parameter(
 
 
 def _format_scrape_result(result) -> dict:
-    """Format scraper result into response dictionary"""
+    """Format scraper result into response dictionary.
+
+    Ensures all product fields are JSON-serializable. In particular, avoid
+    leaking MagicMock instances (from tests) into the JSON encoder which would
+    raise a serialization error and cause a 500 response.
+    """
+
+    def _safe_value(value):
+        # Allow only primitive JSON types; coerce everything else to None
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        return None
+
+    products = []
+    for product in result.products:
+        products.append({
+            'name': _safe_value(getattr(product, 'name', None)),
+            'price': _safe_value(getattr(product, 'price', None)),
+            'url': _safe_value(getattr(product, 'url', None)),
+            'location': _safe_value(getattr(product, 'location', None)),
+            'unit': _safe_value(getattr(product, 'unit', None)),
+        })
+
     return {
-        'success': result.success,
-        'products': [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url
-            }
-            for product in result.products
-        ],
-        'url': result.url,
-        'error_message': result.error_message
+        'success': bool(getattr(result, 'success', False)),
+        'products': products,
+        'url': _safe_value(getattr(result, 'url', '')),
+        'error_message': _safe_value(getattr(result, 'error_message', None)),
     }
 
 
 @require_http_methods(["GET"])
 def scrape_products(request):
-    """Scrape products with basic parameters (query, sort, page)"""
+    """Scrape products with basic parameters (query, sort, page, limit)"""
     try:
         # Validate query parameter
         query, error = _validate_query_parameter(request)
@@ -102,10 +192,17 @@ def scrape_products(request):
             return error
         
         # Parse sort_by_price parameter
-        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', 'true')
+        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', DEFAULT_SORT_BY_PRICE)
         
         # Parse page parameter
-        page, error = _parse_integer_parameter(request, 'page', '0')
+        page, error = _parse_integer_parameter(request, 'page', DEFAULT_PAGE, min_value=MIN_PAGE)
+        if error:
+            return error
+        
+        # Parse optional limit parameter (default to 20 products, max 1000 for security)
+        limit, error = _parse_integer_parameter(
+            request, 'limit', default=DEFAULT_LIMIT, required=False, min_value=MIN_LIMIT, max_value=MAX_LIMIT
+        )
         if error:
             return error
         
@@ -114,7 +211,8 @@ def scrape_products(request):
         result = scraper.scrape_products(
             keyword=query,
             sort_by_price=sort_by_price,
-            page=page
+            page=page,
+            limit=limit
         )
         
         # Format and return response
@@ -129,7 +227,7 @@ def scrape_products(request):
 
 @require_http_methods(["GET"])
 def scrape_products_with_filters(request):
-    """Scrape products with advanced filters (price range, location)"""
+    """Scrape products with advanced filters (price range, location, limit)"""
     try:
         # Validate query parameter
         query, error = _validate_query_parameter(request)
@@ -137,24 +235,32 @@ def scrape_products_with_filters(request):
             return error
         
         # Parse sort_by_price parameter
-        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', 'true')
+        sort_by_price = _parse_boolean_parameter(request, 'sort_by_price', DEFAULT_SORT_BY_PRICE)
         
         # Parse page parameter
-        page, error = _parse_integer_parameter(request, 'page', '0')
+        page, error = _parse_integer_parameter(request, 'page', DEFAULT_PAGE, min_value=MIN_PAGE)
         if error:
             return error
         
         # Parse optional price filter parameters
-        min_price, error = _parse_integer_parameter(request, 'min_price', required=False)
+        min_price, error = _parse_integer_parameter(request, 'min_price', required=False, min_value=MIN_PRICE)
         if error:
             return error
         
-        max_price, error = _parse_integer_parameter(request, 'max_price', required=False)
+        max_price, error = _parse_integer_parameter(request, 'max_price', required=False, min_value=MIN_PRICE)
         if error:
             return error
         
-        # Get location parameter (string, no validation needed)
-        location = request.GET.get('location')
+        # Parse optional limit parameter (default to 20 products, max 1000 for security)
+        limit, error = _parse_integer_parameter(
+            request, 'limit', default=DEFAULT_LIMIT, required=False, min_value=MIN_LIMIT, max_value=MAX_LIMIT
+        )
+        if error:
+            return error
+        
+        # Get location parameter (string, sanitize for safety)
+        location_raw = request.GET.get('location')
+        location = _sanitize_string(location_raw, max_length=50) if location_raw else None
         
         # Perform scraping with filters
         scraper = create_tokopedia_scraper()
@@ -164,7 +270,8 @@ def scrape_products_with_filters(request):
             page=page,
             min_price=min_price,
             max_price=max_price,
-            location=location
+            location=location,
+            limit=limit
         )
         
         # Format and return response

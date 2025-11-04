@@ -5,10 +5,11 @@ from typing import Dict, Any
 
 @dataclass
 class ScraperConfig:
-    request_timeout: int = 30
+    request_timeout: int = 300  # Increased from 30 to 60 seconds for heavy sites
     max_retries: int = 3
     retry_delay: float = 1.0
-    user_agent: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    # Updated User-Agent to modern Chrome 120 for better compatibility (especially Tokopedia)
+    user_agent: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     
     requests_per_minute: int = 60
     min_request_interval: float = 1.0
@@ -34,7 +35,7 @@ class ScraperConfig:
     @classmethod
     def from_environment(cls) -> 'ScraperConfig':
         return cls(
-            request_timeout=int(os.getenv('SCRAPER_REQUEST_TIMEOUT', '30')),
+            request_timeout=int(os.getenv('SCRAPER_REQUEST_TIMEOUT', '300')),
             max_retries=int(os.getenv('SCRAPER_MAX_RETRIES', '3')),
             retry_delay=float(os.getenv('SCRAPER_RETRY_DELAY', '1.0')),
             user_agent=os.getenv('SCRAPER_USER_AGENT', cls.user_agent),

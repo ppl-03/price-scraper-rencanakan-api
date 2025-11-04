@@ -40,7 +40,7 @@ class TestTokopediaPriceScraper(TestCase):
         self.assertIsInstance(scraper.html_parser, TokopediaHtmlParser)
         # TokopediaPriceScraper uses BaseHttpClient as default (not BatchPlaywrightClient)
         # due to HTTP/2 issues with Tokopedia
-        from api.core import BaseHttpClient
+        from api.tokopedia_core import BaseHttpClient
         self.assertIsInstance(scraper.http_client, BaseHttpClient)
 
     def test_scraper_initialization_with_custom_components(self):
@@ -105,7 +105,7 @@ class TestTokopediaPriceScraper(TestCase):
             max_price=100000,
             location_ids=[174, 175, 176, 177, 178, 179]  # Jakarta location IDs
         )
-        mock_http_client.get.assert_called_once_with(test_url)
+        mock_http_client.get.assert_called_once_with(test_url, timeout=60)
         mock_html_parser.parse_products.assert_called_once_with(self.sample_html)
 
     def test_scrape_products_with_filters_unknown_location(self):
@@ -453,7 +453,161 @@ class TestScraperIntegration(TestCase):
             max_price=None,
             location_ids=None
         )
+    
+    def test_scrape_with_limit_multiple_pages(self):
+        """Test _scrape_with_limit fetches multiple pages"""
+        mock_http_client = Mock(spec=IHttpClient)
+        mock_url_builder = Mock()
+        mock_html_parser = Mock(spec=IHtmlParser)
+        
+        # First page returns 5 products, second page returns 5, third returns 3
+        products_page1 = [Product(f"Product {i}", 1000, f"url{i}") for i in range(5)]
+        products_page2 = [Product(f"Product {i}", 1000, f"url{i}") for i in range(5, 10)]
+        products_page3 = [Product(f"Product {i}", 1000, f"url{i}") for i in range(10, 13)]
+        
+        mock_url_builder.build_search_url_with_filters.return_value = "test_url"
+        mock_http_client.get.return_value = self.sample_html
+        mock_html_parser.parse_products.side_effect = [products_page1, products_page2, products_page3]
+        
+        scraper = TokopediaPriceScraper(
+            http_client=mock_http_client,
+            url_builder=mock_url_builder,
+            html_parser=mock_html_parser
+        )
+        
+        # Request 12 products (should fetch 3 pages)
+        result = scraper.scrape_products_with_filters(keyword="semen", limit=12)
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 12)
+        self.assertEqual(mock_http_client.get.call_count, 3)
+    
+    def test_scrape_with_limit_stops_when_no_products(self):
+        """Test _scrape_with_limit stops when page returns no products"""
+        mock_http_client = Mock(spec=IHttpClient)
+        mock_url_builder = Mock()
+        mock_html_parser = Mock(spec=IHtmlParser)
+        
+        # First page returns products, second page returns empty
+        products_page1 = [Product(f"Product {i}", 1000, f"url{i}") for i in range(5)]
+        
+        mock_url_builder.build_search_url_with_filters.return_value = "test_url"
+        mock_http_client.get.return_value = self.sample_html
+        mock_html_parser.parse_products.side_effect = [products_page1, []]  # Empty on page 2
+        
+        scraper = TokopediaPriceScraper(
+            http_client=mock_http_client,
+            url_builder=mock_url_builder,
+            html_parser=mock_html_parser
+        )
+        
+        # Request 20 products but should stop at 5 when no more products found
+        result = scraper.scrape_products_with_filters(keyword="semen", limit=20)
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 5)
+        self.assertEqual(mock_http_client.get.call_count, 2)  # Tried 2 pages
+    
+    def test_scrape_with_limit_handles_exception(self):
+        """Test _scrape_with_limit handles exception during multi-page fetch"""
+        mock_http_client = Mock(spec=IHttpClient)
+        mock_url_builder = Mock()
+        mock_html_parser = Mock(spec=IHtmlParser)
+        
+        # First page succeeds, second raises exception
+        products_page1 = [Product(f"Product {i}", 1000, f"url{i}") for i in range(5)]
+        
+        mock_url_builder.build_search_url_with_filters.return_value = "test_url"
+        mock_http_client.get.side_effect = [self.sample_html, Exception("Network error")]
+        mock_html_parser.parse_products.return_value = products_page1
+        
+        scraper = TokopediaPriceScraper(
+            http_client=mock_http_client,
+            url_builder=mock_url_builder,
+            html_parser=mock_html_parser
+        )
+        
+        with patch('api.tokopedia.scraper.logger') as mock_logger:
+            result = scraper.scrape_products_with_filters(keyword="semen", limit=20)
+            
+            # Should return products from first page only
+            self.assertTrue(result.success)
+            self.assertEqual(len(result.products), 5)
+            
+            # Should log error
+            mock_logger.error.assert_called()
+    
+    def test_scrape_with_limit_trims_to_exact_limit(self):
+        """Test _scrape_with_limit trims results to exact limit"""
+        mock_http_client = Mock(spec=IHttpClient)
+        mock_url_builder = Mock()
+        mock_html_parser = Mock(spec=IHtmlParser)
+        
+        # First page returns 8 products
+        products_page1 = [Product(f"Product {i}", 1000, f"url{i}") for i in range(8)]
+        
+        mock_url_builder.build_search_url_with_filters.return_value = "test_url"
+        mock_http_client.get.return_value = self.sample_html
+        mock_html_parser.parse_products.return_value = products_page1
+        
+        scraper = TokopediaPriceScraper(
+            http_client=mock_http_client,
+            url_builder=mock_url_builder,
+            html_parser=mock_html_parser
+        )
+        
+        # Request only 5 products (should trim 8 to 5)
+        result = scraper.scrape_products_with_filters(keyword="semen", limit=5)
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 5)
+        self.assertEqual(result.products[0].name, "Product 0")
+        self.assertEqual(result.products[4].name, "Product 4")
+    
+    def test_scrape_products_with_limit_delegation(self):
+        """Test scrape_products properly delegates to scrape_products_with_filters with limit (line 77)"""
+        mock_http_client = Mock(spec=IHttpClient)
+        mock_url_builder = Mock()
+        mock_html_parser = Mock(spec=IHtmlParser)
+        
+        # Return enough products to satisfy the limit in one page
+        products = [Product(f"Product {i}", 1000, f"url{i}") for i in range(15)]
+        
+        mock_url_builder.build_search_url_with_filters.return_value = "test_url"
+        mock_http_client.get.return_value = self.sample_html
+        mock_html_parser.parse_products.return_value = products
+        
+        scraper = TokopediaPriceScraper(
+            http_client=mock_http_client,
+            url_builder=mock_url_builder,
+            html_parser=mock_html_parser
+        )
+        
+        # Call scrape_products with limit parameter (with enough products in first page)
+        result = scraper.scrape_products(
+            keyword="semen",
+            sort_by_price=False,
+            page=1,
+            limit=10
+        )
+        
+        # Should delegate to scrape_products_with_filters and only need one page
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 10)  # Trimmed to limit
+        
+        # Should be called once per page (limit is satisfied from first page)
+        mock_url_builder.build_search_url_with_filters.assert_called_with(
+            keyword="semen",
+            sort_by_price=False,
+            page=1,
+            min_price=None,
+            max_price=None,
+            location_ids=None
+        )
 
 
 if __name__ == '__main__':
     unittest.main()
+
+
+

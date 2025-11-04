@@ -168,9 +168,22 @@ class TestJuraganMaterialProfiler(TestCase):
     @patch('api.juragan_material.utils.juraganmaterial_profiler.create_juraganmaterial_scraper')
     def test_multiple_scraper_creation(self, mock_create):
         """Test creating multiple scrapers."""
+        from api.interfaces import ScrapingResult, Product
+        
         mock_scraper1 = Mock()
+        mock_scraper1.scrape_products.return_value = ScrapingResult(
+            success=True, products=[], error_message="", url="test.com"
+        )
         mock_scraper2 = Mock()
+        mock_scraper2.scrape_products.return_value = ScrapingResult(
+            success=True, products=[], error_message="", url="test.com"
+        )
         mock_create.side_effect = [mock_scraper1, mock_scraper2]
+        
+        # Trigger scraper creation by instantiating profiler and calling _create_scraper
+        profiler = self.profiler
+        profiler._create_scraper()  # First call
+        profiler._create_scraper()  # Second call
         
         self.assertEqual(mock_create.call_count, 2)
 

@@ -75,9 +75,10 @@ class TestTokopediaHtmlParser(TestCase):
         """Test parser initialization with default price cleaner"""
         parser = TokopediaHtmlParser()
         self.assertIsInstance(parser.price_cleaner, TokopediaPriceCleaner)
-        self.assertEqual(parser._product_selector, 'a[data-testid="lnkProductContainer"]')
-        self.assertEqual(parser._name_selector, 'span.css-20kt3o')
-        self.assertEqual(parser._price_selector, 'span.css-o5uqv')
+        # Check selectors config
+        self.assertEqual(parser.selectors.PRODUCT_CONTAINER, 'a[data-testid="lnkProductContainer"]')
+        self.assertEqual(parser.selectors.PRODUCT_NAME_PRIMARY, 'span.css-20kt3o')
+        self.assertEqual(parser.selectors.PRICE_PRIMARY, 'span.css-o5uqv')
 
     def test_parser_initialization_with_custom_price_cleaner(self):
         """Test parser initialization with custom price cleaner"""
@@ -281,13 +282,13 @@ class TestTokopediaHtmlParser(TestCase):
 
     def test_html_parser_with_different_selectors(self):
         """Test that parser uses correct CSS selectors"""
-        # Verify selectors are set correctly
-        self.assertEqual(self.parser._product_selector, 'a[data-testid="lnkProductContainer"]')
-        self.assertEqual(self.parser._name_selector, 'span.css-20kt3o')
-        self.assertEqual(self.parser._price_selector, 'span.css-o5uqv')
-        self.assertEqual(self.parser._link_selector, 'a[data-testid="lnkProductContainer"]')
-        self.assertEqual(self.parser._image_selector, 'img')
-        self.assertEqual(self.parser._description_selector, 'div[data-testid="divProductWrapper"]')
+        # Verify selectors are set correctly in the config
+        self.assertEqual(self.parser.selectors.PRODUCT_CONTAINER, 'a[data-testid="lnkProductContainer"]')
+        self.assertEqual(self.parser.selectors.PRODUCT_NAME_PRIMARY, 'span.css-20kt3o')
+        self.assertEqual(self.parser.selectors.PRICE_PRIMARY, 'span.css-o5uqv')
+        self.assertEqual(self.parser.selectors.PRODUCT_CONTAINER, 'a[data-testid="lnkProductContainer"]')
+        self.assertEqual(self.parser.selectors.PRODUCT_IMAGE, 'img')
+        self.assertEqual(self.parser.selectors.PRODUCT_WRAPPER, 'div[data-testid="divProductWrapper"]')
 
     def test_extract_all_products_no_containers(self):
         """Test _extract_all_products when no product containers are found"""
@@ -808,9 +809,151 @@ class TestTokopediaHtmlParserIntegration(TestCase):
             
             # Verify BeautifulSoup was called with lxml parser
             mock_bs.assert_called_once_with(html, 'lxml')
+    
+    def test_try_text_selector_deprecated_method(self):
+        """Test deprecated _try_text_selector method (line 131)"""
+        html = self._create_product_html(name="Test Product", price="Rp50.000", url="/product/test")
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        # Test the deprecated method still works
+        result = self.parser._try_text_selector(item, 'span.css-20kt3o')
+        self.assertEqual(result, "Test Product")
+    
+    def test_extract_product_name_from_image_alt_fallback(self):
+        """Test product name extraction from image alt when other selectors fail (lines 146-153)"""
+        # Create HTML with NO name in usual selectors and NO span elements, only image alt
+        # Price is completely outside divProductWrapper
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <div data-testid="divProductWrapper">
+                <img alt="Product Name from Alt" src="/image.jpg">
+            </div>
+            <div class="price-container">
+                <span class="css-o5uqv">Rp50.000</span>
+            </div>
+        </a>
+        '''
+        
+        # Mock price cleaner to avoid price parsing issues
+        with patch.object(self.parser.price_cleaner, 'clean_price', return_value=50000), \
+             patch.object(self.parser.price_cleaner, 'validate_price', return_value=True):
+            
+            products = self.parser.parse_products(html)
+            
+            # Should extract name from image alt attribute
+            self.assertEqual(len(products), 1)
+            self.assertEqual(products[0].name, "Product Name from Alt")
+            self.assertEqual(products[0].price, 50000)
+    
+    def test_try_image_alt_selector_with_alt_text(self):
+        """Test _try_image_alt_selector when image has alt text (lines 146-153)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <img alt="Product Image Alt Text" src="/image.jpg">
+            <span class="css-20kt3o">Test Product</span>
+            <span class="css-o5uqv">Rp50.000</span>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        result = self.parser._try_image_alt_selector(item)
+        self.assertEqual(result, "Product Image Alt Text")
+    
+    def test_try_image_alt_selector_no_image(self):
+        """Test _try_image_alt_selector when no image exists (lines 146-153)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <span class="css-20kt3o">Test Product</span>
+            <span class="css-o5uqv">Rp50.000</span>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        result = self.parser._try_image_alt_selector(item)
+        self.assertIsNone(result)
+    
+    def test_try_image_alt_selector_image_without_alt(self):
+        """Test _try_image_alt_selector when image has no alt attribute (lines 146-153)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/test">
+            <img src="/image.jpg">
+            <span class="css-20kt3o">Test Product</span>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        result = self.parser._try_image_alt_selector(item)
+        self.assertIsNone(result)
+    
+    def test_extract_product_url_with_relative_path(self):
+        """Test _extract_product_url with relative path starting with / (line 148)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="/product/semen-gresik">
+            <div data-testid="divProductWrapper"></div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        url = self.parser._extract_product_url(item)
+        self.assertEqual(url, "https://www.tokopedia.com/product/semen-gresik")
+    
+    def test_extract_product_url_with_full_url(self):
+        """Test _extract_product_url with full URL starting with http (line 150)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="https://www.tokopedia.com/product/semen-gresik">
+            <div data-testid="divProductWrapper"></div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        url = self.parser._extract_product_url(item)
+        self.assertEqual(url, "https://www.tokopedia.com/product/semen-gresik")
+    
+    def test_extract_product_url_with_relative_without_slash(self):
+        """Test _extract_product_url with relative path without leading slash (line 152)"""
+        html = '''
+        <a class="css-54k5sq" data-testid="lnkProductContainer" href="product/semen-gresik">
+            <div data-testid="divProductWrapper"></div>
+        </a>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        item = soup.select_one('a[data-testid="lnkProductContainer"]')
+        
+        url = self.parser._extract_product_url(item)
+        self.assertEqual(url, "https://www.tokopedia.com/product/semen-gresik")
+    
+    def test_extract_unit_from_name_with_empty_name(self):
+        """Test _extract_unit_from_name with empty name (line 208)"""
+        result = self.parser._extract_unit_from_name("")
+        self.assertIsNone(result)
+        
+        result = self.parser._extract_unit_from_name(None)
+        self.assertIsNone(result)
+    
+    def test_extract_unit_from_name_with_exception(self):
+        """Test _extract_unit_from_name when extractor raises exception (lines 213-215)"""
+        parser = TokopediaHtmlParser()
+        
+        # Mock the unit parser's extractor to raise an exception
+        with patch.object(parser.unit_parser.extractor, 'extract_unit', side_effect=Exception("test error")):
+            result = parser._extract_unit_from_name("Semen 50kg")
+            self.assertIsNone(result)
+    
+    def test_extract_unit_from_name_with_valid_name(self):
+        """Test _extract_unit_from_name with valid product name"""
+        result = self.parser._extract_unit_from_name("Semen 50kg")
+        self.assertIsNotNone(result)
 
 
 if __name__ == '__main__':
     unittest.main()
+
+
 
 

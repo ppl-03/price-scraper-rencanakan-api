@@ -56,14 +56,14 @@ class TestGemilangLocationParser(TestCase):
         self.assertEqual(len(locations), 2)
         
         location1 = locations[0]
-        self.assertEqual(location1.store_name, "GEMILANG - BANJARMASIN KM")
+        self.assertEqual(location1.name, "GEMILANG - BANJARMASIN KM")
         expected_address1 = "Jl. Kampung Melayu Darat 39A Rt.8\nBanjarmasin, Kalimantan Selatan\nIndonesia"
-        self.assertEqual(location1.address, expected_address1)
+        self.assertEqual(location1.code, expected_address1)
         
         location2 = locations[1]
-        self.assertEqual(location2.store_name, "GEMILANG - JAKARTA PUSAT")
+        self.assertEqual(location2.name, "GEMILANG - JAKARTA PUSAT")
         expected_address2 = "Jl. Veteran No. 123\nJakarta Pusat, DKI Jakarta\nIndonesia"
-        self.assertEqual(location2.address, expected_address2)
+        self.assertEqual(location2.code, expected_address2)
 
     def test_parse_empty_html(self):
         locations = self.parser.parse_locations("")
@@ -121,7 +121,7 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_with_whitespace)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "GEMILANG - TEST STORE")
+        self.assertEqual(locations[0].name, "GEMILANG - TEST STORE")
 
     def test_extract_address_with_br_tags(self):
         html_with_br = """
@@ -141,7 +141,7 @@ class TestGemilangLocationParser(TestCase):
         locations = self.parser.parse_locations(html_with_br)
         self.assertEqual(len(locations), 1)
         expected_address = "Jl. Test Street 123\nTest City, Test Province\nIndonesia"
-        self.assertEqual(locations[0].address, expected_address)
+        self.assertEqual(locations[0].code, expected_address)
 
     def test_parse_html_raises_error_on_critical_failure(self):
         invalid_html = "<div class='invalid'><malformed>html"
@@ -181,9 +181,9 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_special_chars)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "GEMILANG - STORE & CO.")
+        self.assertEqual(locations[0].name, "GEMILANG - STORE & CO.")
         expected_address = "Jl. Raya No. 123/A-B\nKota (Special), Provinsi\nIndonesia"
-        self.assertEqual(locations[0].address, expected_address)
+        self.assertEqual(locations[0].code, expected_address)
 
     def test_parse_locations_with_nested_elements(self):
         html_nested = """
@@ -203,7 +203,7 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_nested)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "GEMILANG - NESTED STORE")
+        self.assertEqual(locations[0].name, "GEMILANG - NESTED STORE")
 
     def test_parse_locations_with_multiple_br_tags(self):
         html_multiple_br = """
@@ -222,7 +222,7 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_multiple_br)
         self.assertEqual(len(locations), 1)
-        address_lines = locations[0].address.split('\n')
+        address_lines = locations[0].code.split('\n')
         filtered_lines = [line.strip() for line in address_lines if line.strip()]
         self.assertGreaterEqual(len(filtered_lines), 3)
 
@@ -243,7 +243,7 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_unicode)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "GEMILANG - TÔKÔ SPÉCIÀL")
+        self.assertEqual(locations[0].name, "GEMILANG - TÔKÔ SPÉCIÀL")
 
     def test_parse_locations_with_empty_store_location_div(self):
         html_empty_div = """
@@ -308,8 +308,8 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_entities)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "GEMILANG - STORE & CO.")
-        self.assertIn("Jl. Test <Street>", locations[0].address)
+        self.assertEqual(locations[0].name, "GEMILANG - STORE & CO.")
+        self.assertIn("Jl. Test <Street>", locations[0].code)
 
     def test_parse_locations_with_mixed_content(self):
         html_mixed = """
@@ -332,7 +332,7 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_mixed)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "GEMILANG - MIXED STORE")
+        self.assertEqual(locations[0].name, "GEMILANG - MIXED STORE")
 
     def test_parse_locations_with_no_data_id(self):
         html_no_data_id = """
@@ -351,7 +351,7 @@ class TestGemilangLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_no_data_id)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "GEMILANG - NO DATA ID")
+        self.assertEqual(locations[0].name, "GEMILANG - NO DATA ID")
 
     def test_parse_large_number_of_locations(self):
         location_items = []
@@ -374,8 +374,8 @@ class TestGemilangLocationParser(TestCase):
         html_large = f"<html><body>{''.join(location_items)}</body></html>"
         locations = self.parser.parse_locations(html_large)
         self.assertEqual(len(locations), 100)
-        self.assertEqual(locations[0].store_name, "GEMILANG - STORE 0")
-        self.assertEqual(locations[99].store_name, "GEMILANG - STORE 99")
+        self.assertEqual(locations[0].name, "GEMILANG - STORE 0")
+        self.assertEqual(locations[99].name, "GEMILANG - STORE 99")
 
     def test_parse_locations_performance_with_malformed_html(self):
         malformed_large = "<div class='info-store'>" * 1000 + "<a href='#'>" * 500
@@ -482,8 +482,8 @@ class TestGemilangLocationParser(TestCase):
 
     def test_gemilang_location_parser_create_location(self):
         location = self.parser._create_location("Test Store", "Test Address")
-        self.assertEqual(location.store_name, "Test Store")
-        self.assertEqual(location.address, "Test Address")
+        self.assertEqual(location.name, "Test Store")
+        self.assertEqual(location.code, "Test Address")
 
     def test_html_element_extractor_remove_img_tags(self):
         from api.gemilang.location_parser import HtmlElementExtractor, TextCleaner
@@ -667,15 +667,15 @@ class TestGemilangLocationParser(TestCase):
         parser = GemilangLocationParser()
         
         class MockItem:
-            def find(self, tag, class_=None):
+            def find(self, tag, class_=None, **kwargs):
                 if class_ == 'location_click':
                     mock_link = type('MockLink', (), {})()
-                    mock_link.get_text = lambda strip=False: "Test Store"
+                    mock_link.get_text = lambda **kw: "Test Store"
                     return mock_link
                 elif class_ == 'store-location':
                     mock_div = type('MockDiv', (), {})()
-                    mock_div.get_text = lambda: "Test Address"
-                    mock_div.find_all = lambda tag: []
+                    mock_div.get_text = lambda **kw: "Test Address"
+                    mock_div.find_all = lambda *args, **kwargs: []
                     return mock_div
                 return None
         
@@ -683,8 +683,8 @@ class TestGemilangLocationParser(TestCase):
         location = parser._extract_location_from_item(item)
         
         self.assertIsNotNone(location)
-        self.assertEqual(location.store_name, "Test Store")
-        self.assertEqual(location.address, "Test Address")
+        self.assertEqual(location.name, "Test Store")
+        self.assertEqual(location.code, "Test Address")
 
     def test_parser_configuration_has_lxml_success_path(self):
         from api.gemilang.location_parser import ParserConfiguration
@@ -775,27 +775,27 @@ class TestGemilangLocationParser(TestCase):
         parser = GemilangLocationParser()
         
         class MockGoodItem:
-            def find(self, tag, class_=None):
+            def find(self, tag, class_=None, **kwargs):
                 if class_ == 'location_click':
                     mock_link = type('MockLink', (), {})()
-                    mock_link.get_text = lambda strip=False: "Good Store"
+                    mock_link.get_text = lambda **kw: "Good Store"
                     return mock_link
                 elif class_ == 'store-location':
                     mock_div = type('MockDiv', (), {})()
-                    mock_div.get_text = lambda: "Good Address"
-                    mock_div.find_all = lambda tag: []
+                    mock_div.get_text = lambda **kw: "Good Address"
+                    mock_div.find_all = lambda *args, **kwargs: []
                     return mock_div
                 return None
         
         class MockBadItem:
-            def find(self, tag, class_=None):
+            def find(self, tag, class_=None, **kwargs):
                 raise AttributeError("Bad item error")
         
         items = [MockBadItem(), MockGoodItem()]
         locations = parser._extract_locations_from_items(items)
         
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].store_name, "Good Store")
+        self.assertEqual(locations[0].name, "Good Store")
 
     def test_extract_locations_loop_exception_handling(self):
         from api.gemilang.location_parser import GemilangLocationParser, HtmlElementExtractor
@@ -816,3 +816,4 @@ class TestGemilangLocationParser(TestCase):
         locations = parser._extract_locations_from_items(items)
         
         self.assertEqual(len(locations), 0)
+

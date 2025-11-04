@@ -5,20 +5,54 @@ from bs4 import BeautifulSoup
 
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import TokopediaPriceCleaner
+from .location_scraper import get_location_scraper
+from .config import TokopediaSelectors, TokopediaUrlConfig
+from .unit_parser import TokopediaUnitParser
 
 logger = logging.getLogger(__name__)
 
 
 class TokopediaHtmlParser(IHtmlParser):
+    """
+    Optimized HTML parser for Tokopedia product pages.
     
-    def __init__(self, price_cleaner: TokopediaPriceCleaner = None):
+    Follows SOLID principles with dependency injection for configuration:
+    - Uses injected TokopediaSelectors for CSS selectors
+    - Uses injected TokopediaUrlConfig for URL generation
+    - Depends on interfaces, not concrete implementations
+    
+    Optimizations:
+    - Pre-compiled regex patterns for slug generation
+    - Efficient CSS selectors with minimal traversals
+    - Early validation to skip invalid products
+    - lxml parser as primary (fastest BeautifulSoup backend)
+    """
+    
+    # Pre-compile regex patterns for better performance (class-level)
+    _SLUG_PATTERN = re.compile(r'[^a-z0-9\-]')
+    _PRICE_PREFIX_PATTERN = re.compile(r'^(Rp|IDR|rp|idr)')
+    
+    def __init__(self, 
+                 price_cleaner: TokopediaPriceCleaner = None,
+                 location_scraper = None,
+                 selectors: TokopediaSelectors = None,
+                 url_config: TokopediaUrlConfig = None,
+                 unit_parser: TokopediaUnitParser = None):
+        """
+        Initialize HTML parser with optional dependencies.
+        
+        Args:
+            price_cleaner: Custom price cleaner (uses default if None)
+            location_scraper: Custom location scraper (uses singleton if None)
+            selectors: Custom CSS selectors configuration (uses defaults if None)
+            url_config: Custom URL configuration (uses defaults if None)
+            unit_parser: Custom unit parser (uses default if None)
+        """
         self.price_cleaner = price_cleaner or TokopediaPriceCleaner()
-        self._product_selector = 'a[data-testid="lnkProductContainer"]'
-        self._name_selector = 'span.css-20kt3o'
-        self._link_selector = 'a[data-testid="lnkProductContainer"]'
-        self._price_selector = 'span.css-o5uqv'
-        self._image_selector = 'img'
-        self._description_selector = 'div[data-testid="divProductWrapper"]'
+        self.location_scraper = location_scraper or get_location_scraper()
+        self.selectors = selectors or TokopediaSelectors()
+        self.url_config = url_config or TokopediaUrlConfig()
+        self.unit_parser = unit_parser or TokopediaUnitParser()
     
     def parse_products(self, html_content: str) -> List[Product]:
         if not html_content:
@@ -41,7 +75,7 @@ class TokopediaHtmlParser(IHtmlParser):
             raise HtmlParserError(f"Failed to parse HTML: {str(original_error)}")
     
     def _extract_all_products(self, soup: BeautifulSoup) -> List[Product]:
-        product_items = soup.select(self._product_selector)
+        product_items = soup.select(self.selectors.PRODUCT_CONTAINER)
         logger.info(f"Found {len(product_items)} product items in HTML")
         
         products = []
@@ -61,24 +95,40 @@ class TokopediaHtmlParser(IHtmlParser):
             return None
     
     def _extract_product_from_item(self, item) -> Optional[Product]:
+        """
+        Extract product from item with optimized validation.
+        Returns None early if product is invalid to avoid unnecessary processing.
+        """
+        # Extract name first (cheapest operation)
         name = self._extract_product_name(item)
         if not name:
             return None
         
-        # Generate URL from product name slug when name exists
-        # But check if the name looks like a price (starts with 'Rp' or 'IDR')
-        # If so, use 'unknown' as fallback since it's not a valid product name
-        if name.startswith(('Rp', 'IDR', 'rp', 'idr')):
-            url = "https://www.tokopedia.com/product/unknown"
+        # Early validation: check if name looks like a price (optimization)
+        if self._PRICE_PREFIX_PATTERN.match(name):
+            url = self.url_config.get_unknown_url()
         else:
             slug = self._generate_slug(name)
-            url = f"https://www.tokopedia.com/product/{slug}"
+            url = self.url_config.get_product_url(slug)
         
+        # Extract and validate price (more expensive operation, do after name check)
         price = self._extract_product_price(item)
         if not self.price_cleaner.validate_price(price):
             return None
         
-        return Product(name=name, price=price, url=url)
+        # Extract location information (optional field)
+        location = self.location_scraper.extract_location_from_product_item(item)
+        
+        # Extract unit information from product item (optional field)
+        # First try to extract from product name (fast path)
+        unit = self._extract_unit_from_name(name)
+        
+        # If not found in name, try full item HTML (slower but more thorough)
+        if not unit:
+            item_html = str(item)
+            unit = self.unit_parser.parse_unit(item_html)
+        
+        return Product(name=name, price=price, url=url, location=location, unit=unit)
     
     def _extract_product_name(self, item) -> Optional[str]:
         name = self._try_primary_name_selector(item)
@@ -88,10 +138,10 @@ class TokopediaHtmlParser(IHtmlParser):
         return self._try_fallback_name_selectors(item)
     
     def _try_primary_name_selector(self, item) -> Optional[str]:
-        return self._extract_text_from_selector(item, self._name_selector)
+        return self._extract_text_from_selector(item, self.selectors.PRODUCT_NAME_PRIMARY)
     
     def _try_fallback_name_selectors(self, item) -> Optional[str]:
-        name = self._extract_text_from_selector(item, 'div[data-testid="divProductWrapper"] span')
+        name = self._extract_text_from_selector(item, self.selectors.PRODUCT_NAME_FALLBACK)
         if name:
             return name
         
@@ -117,34 +167,66 @@ class TokopediaHtmlParser(IHtmlParser):
         return None
     
     def _extract_product_url(self, item) -> str:
-        link = item.select_one(self._link_selector)
+        """
+        Extract product URL with optimized string operations.
+        Uses injected url_config for URL generation.
+        """
+        # Check if item itself is the link, or find link inside
+        link = item if item.get('href') else item.select_one(self.selectors.PRODUCT_CONTAINER)
         if link and link.get('href'):
             href = link.get('href', '')
-            # Make sure it's a full URL
+            # Efficient URL construction based on href format
             if href.startswith('/'):
-                return f"https://www.tokopedia.com{href}"
+                return f"{self.url_config.url}{href}"
             elif href.startswith('http'):
                 return href
             else:
-                return f"https://www.tokopedia.com/{href}"
+                return f"{self.url_config.url}/{href}"
         
-        name_element = item.select_one(self._name_selector)
+        # Fallback: generate URL from product name
+        name_element = item.select_one(self.selectors.PRODUCT_NAME_PRIMARY)
         if name_element:
             name = name_element.get_text(strip=True)
             if name:
                 slug = self._generate_slug(name)
-                return f"https://www.tokopedia.com/product/{slug}"
+                return self.url_config.get_product_url(slug)
         
-        return "https://www.tokopedia.com/product/unknown"
+        return self.url_config.get_unknown_url()
+    
+    def _extract_unit_from_name(self, name: str) -> Optional[str]:
+        """
+        Extract unit from product name using fast pattern matching.
+        Checks if product name contains unit keywords.
+        
+        Args:
+            name: Product name to check
+            
+        Returns:
+            Unit string (e.g., 'M', 'KG', 'PCS') or None
+        """
+        if not name:
+            return None
+        
+        try:
+            # Use the unit parser's extractor for fast matching
+            return self.unit_parser.extractor.extract_unit(name)
+        except Exception as e:
+            logger.warning(f"Error extracting unit from name '{name}': {str(e)}")
+            return None
     
     def _generate_slug(self, name: str) -> str:
+        """
+        Generate URL-safe slug from product name.
+        Uses pre-compiled regex pattern for better performance.
+        """
+        # Efficient slug generation with minimal operations
         slug = name.lower().replace(' ', '-').replace('(', '').replace(')', '')
-        slug = re.sub(r'[^a-z0-9\-]', '', slug)
+        slug = self._SLUG_PATTERN.sub('', slug)
         return slug
     
     def _extract_product_price(self, item) -> int:
         # Try primary price selector
-        price_element = item.select_one(self._price_selector)
+        price_element = item.select_one(self.selectors.PRICE_PRIMARY)
         if price_element:
             price = self._try_clean_price(price_element.get_text(strip=True))
             if price:
