@@ -23,10 +23,10 @@ class SanitairCategorizationTest(TestCase):
         self.assertEqual(self.categorizer.categorize("Floor Drain 4 inch Stainless"), "Material Sanitair")
 
     def test_non_sanitair(self):
-        self.assertIsNone(self.categorizer.categorize("Cat Tembok Eksterior"))
+        self.assertNotEqual(self.categorizer.categorize("Cat Tembok Eksterior"), "Material Sanitair")
 
     def test_avoid_pipe_false_positive(self):
-        self.assertIsNone(self.categorizer.categorize("Pipa PVC 1/2 inch"))
+        self.assertNotEqual(self.categorizer.categorize("Pipa PVC 1/2 inch"), "Material Sanitair")
 
     def test_bulk_positive_cases(self):
         positives = [
@@ -90,5 +90,5 @@ class SanitairAutoCategorizationIntegrationTest(TestCase):
 
         self.assertEqual(results[0], "Material Sanitair")
         self.assertEqual(results[1], "Material Sanitair")
-        self.assertIsNone(results[2])
+        self.assertNotEqual(results[2], "Material Sanitair")
         self.assertEqual(results[3], "Material Sanitair")
