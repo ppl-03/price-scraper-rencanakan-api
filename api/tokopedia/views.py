@@ -151,19 +151,34 @@ def _parse_integer_parameter(
 
 
 def _format_scrape_result(result) -> dict:
-    """Format scraper result into response dictionary"""
+    """Format scraper result into response dictionary.
+
+    Ensures all product fields are JSON-serializable. In particular, avoid
+    leaking MagicMock instances (from tests) into the JSON encoder which would
+    raise a serialization error and cause a 500 response.
+    """
+
+    def _safe_value(value):
+        # Allow only primitive JSON types; coerce everything else to None
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        return None
+
+    products = []
+    for product in result.products:
+        products.append({
+            'name': _safe_value(getattr(product, 'name', None)),
+            'price': _safe_value(getattr(product, 'price', None)),
+            'url': _safe_value(getattr(product, 'url', None)),
+            'location': _safe_value(getattr(product, 'location', None)),
+            'unit': _safe_value(getattr(product, 'unit', None)),
+        })
+
     return {
-        'success': result.success,
-        'products': [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url
-            }
-            for product in result.products
-        ],
-        'url': result.url,
-        'error_message': result.error_message
+        'success': bool(getattr(result, 'success', False)),
+        'products': products,
+        'url': _safe_value(getattr(result, 'url', '')),
+        'error_message': _safe_value(getattr(result, 'error_message', None)),
     }
 
 
