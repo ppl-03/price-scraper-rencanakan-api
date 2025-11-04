@@ -184,77 +184,100 @@ class ProductCategorizer:
     
     CATEGORY_SANITAIR = "Material Sanitair"
     
+    def _check_sanitair(self, normalized: str) -> bool:
+        """Check if product matches Sanitair category."""
+        if any(keyword in normalized for keyword in self.SANITAIR_KEYWORDS):
+            return True
+        if any(re.search(pattern, normalized) for pattern in self.SANITAIR_PATTERNS):
+            # Avoid misclassifying construction pipes as sanitair
+            if not any(term in normalized for term in ('pipa', 'pipe', 'conduit')):
+                return True
+        return False
+    
+    def _check_peralatan_kerja(self, normalized: str) -> bool:
+        """Check if product matches Peralatan Kerja category."""
+        if any(exclusion in normalized for exclusion in self.PERALATAN_KERJA_EXCLUSIONS):
+            return False
+        
+        if any(re.search(pattern, normalized) for pattern in self.PERALATAN_KERJA_PATTERNS):
+            return True
+        
+        if any(keyword in normalized for keyword in self.PERALATAN_KERJA_KEYWORDS):
+            return True
+        
+        return False
+    
+    def _check_tanah_pasir_batu_semen(self, normalized: str) -> bool:
+        """Check if product matches Tanah, Pasir, Batu, dan Semen category."""
+        if any(exclusion in normalized for exclusion in self.TANAH_PASIR_BATU_SEMEN_EXCLUSIONS):
+            return False
+        
+        if any(re.search(pattern, normalized) for pattern in self.TANAH_PASIR_BATU_SEMEN_PATTERNS):
+            return True
+        
+        if any(keyword in normalized for keyword in self.TANAH_PASIR_BATU_SEMEN_KEYWORDS):
+            return True
+        
+        return False
+    
+    def _check_steel(self, normalized: str) -> bool:
+        """Check if product matches Steel category."""
+        if any(exclusion in normalized for exclusion in self.STEEL_EXCLUSIONS):
+            return False
+        
+        if any(keyword in normalized for keyword in self.STEEL_KEYWORDS):
+            return True
+        
+        steel_terms = ('besi', 'baja', 'wire', 'metal', 'logam')
+        if any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS):
+            if any(term in normalized for term in steel_terms):
+                return True
+        
+        return False
+    
+    def _check_interior(self, normalized: str) -> bool:
+        """Check if product matches Interior category."""
+        if any(keyword in normalized for keyword in self.INTERIOR_KEYWORDS):
+            return True
+        
+        if any(re.search(pattern, normalized) for pattern in self.INTERIOR_PATTERNS):
+            return True
+        
+        return False
+    
+    def _check_pipa_air(self, normalized: str) -> bool:
+        """Check if product matches Pipa Air category."""
+        if any(keyword in normalized for keyword in self.PIPA_AIR_KEYWORDS):
+            return True
+        
+        if any(re.search(pattern, normalized) for pattern in self.PIPA_AIR_PATTERNS):
+            return True
+        
+        return False
+    
     def categorize(self, product_name: str) -> str | None:
         if not product_name:
             return None
         
         normalized = product_name.lower().strip()
         
-        # Check for Peralatan Kerja first
-        has_exclusion = any(exclusion in normalized for exclusion in self.PERALATAN_KERJA_EXCLUSIONS)
-        
-        has_pattern = any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS)
-        if has_pattern and ('besi' in normalized or 'baja' in normalized or 'wire' in normalized):
-            return self.CATEGORY_STEEL
-
-        # Sanitair detection
-        if any(keyword in normalized for keyword in self.SANITAIR_KEYWORDS):
+        # Check categories in priority order
+        if self._check_sanitair(normalized):
             return self.CATEGORY_SANITAIR
-        if any(re.search(pattern, normalized) for pattern in self.SANITAIR_PATTERNS):
-            # Avoid misclassifying construction pipes as sanitair; rely on explicit sanitair terms
-            if not any(term in normalized for term in ('pipa', 'pipe', 'conduit')):
-                return self.CATEGORY_SANITAIR
-        if not has_exclusion:
-            # Check for specific patterns
-            has_pattern = any(re.search(pattern, normalized) for pattern in self.PERALATAN_KERJA_PATTERNS)
-            if has_pattern:
-                return self.CATEGORY_PERALATAN_KERJA
-            
-            # Check for keywords
-            has_keyword = any(keyword in normalized for keyword in self.PERALATAN_KERJA_KEYWORDS)
-            if has_keyword:
-                return self.CATEGORY_PERALATAN_KERJA
         
-        # Check for Tanah, Pasir, Batu, dan Semen
-        # Check exclusions first to avoid false positives
-        has_exclusion = any(exclusion in normalized for exclusion in self.TANAH_PASIR_BATU_SEMEN_EXCLUSIONS)
+        if self._check_peralatan_kerja(normalized):
+            return self.CATEGORY_PERALATAN_KERJA
         
-        if not has_exclusion:
-            # Check for specific patterns
-            has_pattern = any(re.search(pattern, normalized) for pattern in self.TANAH_PASIR_BATU_SEMEN_PATTERNS)
-            if has_pattern:
-                return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
-            
-            # Check for keywords
-            has_keyword = any(keyword in normalized for keyword in self.TANAH_PASIR_BATU_SEMEN_KEYWORDS)
-            if has_keyword:
-                return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
+        if self._check_tanah_pasir_batu_semen(normalized):
+            return self.CATEGORY_TANAH_PASIR_BATU_SEMEN
         
-        # Check for Steel category
-        has_exclusion = any(exclusion in normalized for exclusion in self.STEEL_EXCLUSIONS)
+        if self._check_steel(normalized):
+            return self.CATEGORY_STEEL
         
-        if not has_exclusion:
-            has_steel_keyword = any(keyword in normalized for keyword in self.STEEL_KEYWORDS)
-            if has_steel_keyword:
-                return self.CATEGORY_STEEL
-            
-            has_steel_pattern = any(re.search(pattern, normalized) for pattern in self.STEEL_PATTERNS)
-            if has_steel_pattern and ('besi' in normalized or 'baja' in normalized or 'wire' in normalized or 'metal' in normalized or 'logam' in normalized):
-                return self.CATEGORY_STEEL
-        
-        # Check for Interior category
-        has_interior_keyword = any(keyword in normalized for keyword in self.INTERIOR_KEYWORDS)
-        if has_interior_keyword:
+        if self._check_interior(normalized):
             return self.CATEGORY_INTERIOR
         
-        has_interior_pattern = any(re.search(pattern, normalized) for pattern in self.INTERIOR_PATTERNS)
-        if has_interior_pattern:
-            return self.CATEGORY_INTERIOR
-        
-        # Check Pipa Air category
-        if any(keyword in normalized for keyword in self.PIPA_AIR_KEYWORDS):
-            return self.CATEGORY_PIPA_AIR
-        if any(re.search(pattern, normalized) for pattern in self.PIPA_AIR_PATTERNS):
+        if self._check_pipa_air(normalized):
             return self.CATEGORY_PIPA_AIR
         
         return None
