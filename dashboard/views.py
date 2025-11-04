@@ -31,6 +31,8 @@ from api.mitra10.url_builder import Mitra10UrlBuilder
 from api.tokopedia.factory import create_tokopedia_scraper
 from api.tokopedia.url_builder import TokopediaUrlBuilder
 from api.tokopedia.scraper import TOKOPEDIA_LOCATION_IDS
+from api.tokopedia.location_scraper import TokopediaLocationScraper
+from api.tokopedia.unit_parser import TokopediaUnitParser
 
 # Playwright fallback (optional at runtime)
 HAS_PLAYWRIGHT = False
@@ -1038,6 +1040,64 @@ def _try_alternative_mitra10_urls(keyword: str):
 
 
 # ---------------- Tokopedia helpers + fallback ----------------
+def _extract_tokopedia_product_unit(url: str) -> str:
+    """Extract product unit from Tokopedia product detail page."""
+    try:
+        if not url:
+            return ""
+
+        # Handle relative URLs
+        if url.startswith('/'):
+            url = f"https://www.tokopedia.com{url}"
+
+        # Fetch product detail page
+        html = _human_get(url)
+        if not html:
+            return ""
+
+        # Use Tokopedia's unit parser to extract unit from detail page
+        unit_parser = TokopediaUnitParser()
+
+        # Try to extract unit from the detail page HTML
+        unit = unit_parser.parse_unit(html)
+        return unit or ""
+
+    except Exception:
+        return ""
+
+
+def _extract_tokopedia_product_unit_from_name(name: str) -> str:
+    """Extract product unit from Tokopedia product name."""
+    try:
+        if not name:
+            return ""
+
+        # Use Tokopedia's unit parser to extract unit from product name
+        unit_parser = TokopediaUnitParser()
+
+        # Try to extract unit from the product name
+        unit = unit_parser._extract_unit_from_name(name)
+        return unit or ""
+
+    except Exception:
+        return ""
+
+
+def _extract_tokopedia_product_location(card) -> str:
+    """Extract product location from Tokopedia product card using location scraper."""
+    try:
+        if not card:
+            return ""
+
+        # Use Tokopedia's location scraper to extract location from product item
+        location_scraper = TokopediaLocationScraper()
+        location = location_scraper.extract_location_from_product_item(card)
+        return location or ""
+
+    except Exception:
+        return ""
+
+
 def _extract_tokopedia_product_name(card) -> str | None:
     """Extract product name from Tokopedia card."""
     # Try primary selector
@@ -1266,7 +1326,24 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
 
         href = _extract_tokopedia_product_link(card)
 
-        out.append({"item": name, "value": price, "source": TOKOPEDIA_SOURCE, "url": href})
+        # Extract location from product card
+        location = _extract_tokopedia_product_location(card)
+
+        # Extract unit from product name first (faster)
+        unit = _extract_tokopedia_product_unit_from_name(name)
+
+        # If no unit found from name, try extracting from detail page
+        if not unit and href:
+            unit = _extract_tokopedia_product_unit(href)
+
+        out.append({
+            "item": name, 
+            "value": price, 
+            "unit": unit,
+            "location": location,
+            "source": TOKOPEDIA_SOURCE, 
+            "url": href
+        })
 
     return out
 
