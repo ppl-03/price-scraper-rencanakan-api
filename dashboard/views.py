@@ -1775,24 +1775,47 @@ def _collect_vendor_locations(request, prices: list[dict]) -> dict:
     # Tokopedia locations
     tokopedia_has_prices = any(p.get("source") == TOKOPEDIA_SOURCE for p in prices)
     if tokopedia_has_prices:
-        tokopedia_locations = _get_tokopedia_locations()
+        tokopedia_locations = _get_tokopedia_locations(prices)
         if tokopedia_locations:
             locations_data[TOKOPEDIA_SOURCE] = tokopedia_locations
 
     return locations_data
 
 
-def _get_tokopedia_locations() -> list[dict]:
-    """Get predefined Tokopedia location data."""
+def _get_tokopedia_locations(prices: list[dict]) -> list[dict]:
+    """Get Tokopedia location data from product prices."""
     tokopedia_locations = []
-    for location_name, location_ids in TOKOPEDIA_LOCATION_IDS.items():
-        # Format location name for display
-        display_name = location_name.replace('_', ' ').title()
-        tokopedia_locations.append({
-            "store_name": f"Tokopedia {display_name}",
-            "address": f"Area ID: {', '.join(map(str, location_ids))}",
-            "source": TOKOPEDIA_SOURCE
-        })
+    unique_locations = set()
+
+    # Extract unique locations from Tokopedia products
+    for price in prices:
+        if price.get("source") == TOKOPEDIA_SOURCE and price.get("location"):
+            location = price.get("location").strip()
+            if location and location not in unique_locations:
+                unique_locations.add(location)
+                tokopedia_locations.append({
+                    "store_name": f"Tokopedia {location}",
+                    "address": location,
+                    "source": TOKOPEDIA_SOURCE
+                })
+
+    # If no locations found in products, provide fallback locations based on search filters
+    if not tokopedia_locations:
+        fallback_locations = [
+            {"name": "Jakarta", "description": "DKI Jakarta area"},
+            {"name": "Jabodetabek", "description": "Greater Jakarta area"}, 
+            {"name": "Bandung", "description": "Bandung area"},
+            {"name": "Medan", "description": "Medan area"},
+            {"name": "Surabaya", "description": "Surabaya area"}
+        ]
+        
+        for loc_data in fallback_locations:
+            tokopedia_locations.append({
+                "store_name": f"Tokopedia {loc_data['name']}",
+                "address": loc_data["description"],
+                "source": TOKOPEDIA_SOURCE
+            })
+
     return tokopedia_locations
 
 
