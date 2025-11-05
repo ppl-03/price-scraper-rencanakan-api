@@ -199,7 +199,7 @@ def get_page_data_smart(request, region, page, per_page):
         logger.error(f"Error in smart pagination: {str(e)}", exc_info=True)
         # Fallback to traditional method if smart pagination fails
         logger.info("Falling back to traditional pagination method")
-        return get_page_data_filtered(request, region, '', '', '', page, per_page, 'item_number', 'asc')
+        return get_page_data_filtered(region, '', '', '', page, per_page, 'item_number', 'asc')
 
 
 def scrape_government_page(region, page, per_page):
@@ -555,7 +555,7 @@ def generate_mock_hspk_data(region, total_items=387):
     return mock_items
 
 
-def get_page_data_filtered(request, region, search_query, category, price_range, page, per_page, sort_by, sort_order):
+def get_page_data_filtered(region, search_query, category, price_range, page, per_page, sort_by, sort_order):
     try:
         # Check cache for all region data
         cache = get_cache()

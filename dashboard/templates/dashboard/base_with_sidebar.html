@@ -45,6 +45,30 @@
             height: auto;
         }
 
+        .sidebar-logo img[alt]:after {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+        }
+
+        .logo-fallback {
+            display: none;
+        }
+
+        .sidebar-logo img:not([src]), 
+        .sidebar-logo img[src=""] {
+            display: none;
+        }
+
+        .sidebar-logo:has(img:not([src])) .logo-fallback,
+        .sidebar-logo:has(img[src=""]) .logo-fallback {
+            display: block;
+        }
+
         .sidebar-logo .logo-icon {
             width: 40px;
             height: 40px;
@@ -165,10 +189,9 @@
                 {% load static %}
                 <!-- Rencanakan Logo -->
                 <img src="{% static 'dashboard/images/rencanakan_logo.png' %}" 
-                     alt="Rencanakan" 
-                     onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
+                     alt="Rencanakan">
                 <!-- Fallback if image doesn't load -->
-                <div id="logo-fallback" style="display: none;">
+                <div class="logo-fallback">
                     <div class="logo-icon">
                         <i class="fas fa-cube"></i>
                     </div>
