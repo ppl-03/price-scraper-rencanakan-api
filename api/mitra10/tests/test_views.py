@@ -2,6 +2,7 @@ import json
 from django.test import TestCase, RequestFactory
 from unittest.mock import patch, MagicMock
 from api.mitra10 import views
+from api.views import get_csrf_token
 from django.http import JsonResponse
 import json
 
@@ -12,7 +13,18 @@ class TestMitra10Views(TestCase):
         self.factory = RequestFactory()
         # API token for authenticated requests
         self.valid_token = "dev-token-12345"
-        self.auth_headers = {'HTTP_X_API_TOKEN': self.valid_token}
+        
+        # Get CSRF token from the existing endpoint
+        csrf_request = self.factory.get('/api/csrf-token/')
+        csrf_response = get_csrf_token(csrf_request)
+        csrf_data = json.loads(csrf_response.content)
+        self.csrf_token = csrf_data['csrf_token']
+        
+        # Include both API token and CSRF token in headers
+        self.auth_headers = {
+            'HTTP_X_API_TOKEN': self.valid_token,
+            'HTTP_X_CSRFTOKEN': self.csrf_token
+        }
 
     def test_scrape_products_missing_query(self):
         request = self.factory.get("/api/mitra10/products")
