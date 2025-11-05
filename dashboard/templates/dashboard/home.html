@@ -215,16 +215,22 @@
           Filter & Pencarian
         </h6>
         
-        <!-- Row 1: Text filter and Vendor -->
+        <!-- Row 1: Text filter, Vendor, and Category -->
         <div class="row g-3 mb-3">
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label for="filterInput" class="form-label small text-muted">Filter Hasil</label>
             <input id="filterInput" type="text" class="form-control" placeholder="Ketik untuk memfilter hasil...">
           </div>
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label for="vendorSelect" class="form-label small text-muted">Vendor</label>
             <select id="vendorSelect" class="form-select">
               <option value="">Semua vendor</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label for="categorySelect" class="form-label small text-muted">Kategori</label>
+            <select id="categorySelect" class="form-select">
+              <option value="">Semua kategori</option>
             </select>
           </div>
         </div>
@@ -284,10 +290,11 @@
           <thead>
             <tr>
               <th style="width:5%">No.</th>
-              <th class="th-sort" data-key="item" style="width:35%">Nama Produk</th>
-              <th class="th-sort price-align-right" data-key="price" style="width:15%">Harga</th>
-              <th style="width:8%">Unit</th>
-              <th class="th-sort" data-key="vendor" style="width:15%">Vendor</th>
+              <th class="th-sort" data-key="item" style="width:28%">Nama Produk</th>
+              <th class="th-sort" data-key="category" style="width:13%">Kategori</th>
+              <th class="th-sort price-align-right" data-key="price" style="width:12%">Harga</th>
+              <th style="width:7%">Unit</th>
+              <th class="th-sort" data-key="vendor" style="width:13%">Vendor</th>
               <th class="th-sort" data-key="location" style="width:22%">Lokasi</th>
             </tr>
           </thead>
@@ -296,6 +303,7 @@
               <tr>
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
+                <td class="c-category">{{ r.category|default:"Lainnya" }}</td>
                 <td class="c-price price-align-right">{{ r.value }}</td>
                 <td class="c-unit">{{ r.unit|default:"—" }}</td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
@@ -323,7 +331,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="6" class="empty-state">
+                <td colspan="7" class="empty-state">
                   <div class="empty-state-icon">Tidak ada data</div>
                   <h5>Belum ada data harga</h5>
                   <p class="mb-0">Gunakan form pencarian di atas untuk mulai mencari harga produk</p>
@@ -458,6 +466,7 @@
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
       const data = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
+      const category = tr.querySelector(".c-category")?.textContent?.trim() || "Lainnya";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
         const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
@@ -481,7 +490,7 @@
       // Normalize empty unit to dash
       const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
       
-      return { item, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
+      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
     });
 
     // Populate vendor dropdown (for…of)
@@ -491,6 +500,15 @@
       const opt = document.createElement("option");
       opt.value = v; opt.textContent = v;
       vendorSelect.appendChild(opt);
+    }
+    
+    // Populate category dropdown (for…of)
+    const categorySelect = document.getElementById("categorySelect");
+    const uniqueCategories = [...new Set(data.map(d => d.category).filter(Boolean))].sort();
+    for (const c of uniqueCategories) {
+      const opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      categorySelect.appendChild(opt);
     }
 
     // Populate location dropdown with vendor grouping and submenus
@@ -626,12 +644,14 @@
     function applyFilters() {
       const q = (filterInput.value || "").toLowerCase();
       const v = vendorSelect.value || "";
+      const c = categorySelect.value || "";
       const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
       return data.filter(d => {
-        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q);
+        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q) || d.category.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
+        const cm = !c || d.category === c;
         
         // Enhanced location matching: check both primary location and all locations
         let lm = !l || d.location === l;
@@ -641,7 +661,7 @@
         
         const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
                    (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
-        return qmatch && vm && lm && pm;
+        return qmatch && vm && cm && lm && pm;
       });
     }
 
@@ -693,6 +713,7 @@
         tr.innerHTML = `
           <td>${start + idx + 1}</td>
           <td class="c-item">${d.item}</td>
+          <td class="c-category">${d.category || 'Lainnya'}</td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
           <td class="c-unit">${d.unit || '—'}</td>
           <td class="c-vendor">${d.vendor}</td>
@@ -764,7 +785,7 @@
     }
 
     // Filters events (for…of) - excluding locationSelect since it's handled separately
-    const filterControls = [filterInput, vendorSelect, minPrice, maxPrice];
+    const filterControls = [filterInput, vendorSelect, categorySelect, minPrice, maxPrice];
     for (const el of filterControls) {
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
@@ -775,6 +796,7 @@
       e.preventDefault();
       filterInput.value = ""; 
       vendorSelect.value = ""; 
+      categorySelect.value = "";
       locationSelect.value = "";
       selectedLocationText.textContent = "Semua lokasi";
       minPrice.value = ""; 
