@@ -57,6 +57,10 @@ DASHBOARD_FORM_TEMPLATE = "dashboard/form.html"
 JSON_LD_TYPE_KEY = "@type"
 HTML_PARSER = "html.parser"
 
+# URL name constants
+CURATED_PRICE_LIST_URL = "dashboard:curated_price_list"
+CURATED_PRICE_CREATE_POST_URL = "dashboard:curated_price_create_post"
+
 # Error message constants
 CONTEXT_MANAGER_ERROR = "context manager"
 UNKNOWN_ERROR_MSG = "Unknown error"
@@ -1976,7 +1980,7 @@ def curated_price_create(request):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "New Curated Price", 
         "form": form,
-        "form_action": reverse("dashboard:curated_price_create_post")
+        "form_action": reverse(CURATED_PRICE_CREATE_POST_URL)
     })
 
 
@@ -1987,7 +1991,7 @@ def curated_price_create_post(request):
     if form.is_valid():
         form.save()
         messages.success(request, "Curated price saved")
-        return redirect("dashboard:curated_price_list")
+        return redirect(CURATED_PRICE_LIST_URL)
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
 
 
@@ -2010,7 +2014,7 @@ def curated_price_update_post(request, pk):
     if form.is_valid():
         form.save()
         messages.success(request, "Curated price updated")
-        return redirect("dashboard:curated_price_list")
+        return redirect(CURATED_PRICE_LIST_URL)
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
 
 
@@ -2030,7 +2034,7 @@ def curated_price_delete_post(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
     obj.delete()
     messages.success(request, "Curated price deleted")
-    return redirect("dashboard:curated_price_list")
+    return redirect(CURATED_PRICE_LIST_URL)
 
 
 @require_POST
@@ -2044,5 +2048,5 @@ def curated_price_from_scrape(request):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "Save Price from Scrape", 
         "form": form,
-        "form_action": reverse("dashboard:curated_price_create_post")
+        "form_action": reverse(CURATED_PRICE_CREATE_POST_URL)
     })

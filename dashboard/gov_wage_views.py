@@ -14,6 +14,14 @@ from api.government_wage.simple_cache import get_cache, make_cache_key
 
 logger = logging.getLogger(__name__)
 
+# Constants
+DEFAULT_REGION = 'Kab. Cilacap'
+DEFAULT_PROVINCE = 'Jawa Tengah'
+HTML_PARSER = 'html.parser'
+DEFAULT_TOTAL_ITEMS = 387
+CACHE_TIMEOUT_SHORT = 900  # 15 minutes
+CACHE_TIMEOUT_LONG = 1800  # 30 minutes
+
 
 @require_GET
 def gov_wage_page(request):
@@ -22,9 +30,9 @@ def gov_wage_page(request):
     """
     context = {
         'page_title': 'HSPK Upah Pemerintah',
-        'default_region': 'Kab. Cilacap',
+        'default_region': DEFAULT_REGION,
         'available_regions': [
-            {'value': 'Kab. Cilacap', 'name': 'Kabupaten Cilacap'},
+            {'value': DEFAULT_REGION, 'name': 'Kabupaten Cilacap'},
             {'value': 'Kab. Banyumas', 'name': 'Kabupaten Banyumas'},
             {'value': 'Kab. Purbalingga', 'name': 'Kabupaten Purbalingga'},
             {'value': 'Kab. Banjarnegara', 'name': 'Kabupaten Banjarnegara'},
@@ -48,7 +56,7 @@ def gov_wage_page(request):
 def get_wage_data(request):
     try:
         # Get query parameters
-        region = request.GET.get('region', 'Kab. Cilacap')
+        region = request.GET.get('region', DEFAULT_REGION)
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 10))
         
@@ -238,7 +246,7 @@ def scrape_government_page(region, page, per_page):
         ]
         
         # Cache ALL data for 30 minutes (longer cache since it's expensive to scrape)
-        cache.set(all_data_key, all_wage_data, 1800)
+        cache.set(all_data_key, all_wage_data, CACHE_TIMEOUT_LONG)
         
         # Return the requested page slice
         start_idx = (page - 1) * per_page
@@ -261,7 +269,7 @@ def scrape_all_government_pages(region):
     try:
         logger.info(f"STANDALONE SCRAPER: Starting full scrape for region: {region}")
         
-        # Import what we need directly
+        # Check if required packages are available
         try:
             import requests
             from bs4 import BeautifulSoup
@@ -271,116 +279,147 @@ def scrape_all_government_pages(region):
             logger.info("FALLING BACK TO MOCK DATA")
             return generate_mock_hspk_data(region)
         
-        # Government website URL
+        # Initialize scraping session
+        session = initialize_scraping_session()
+        
+        # Get initial page and form data
         base_url = "https://maspetruk.dpubinmarcipka.jatengprov.go.id/harga_satuan/hspk"
-        
-        all_items = []
-        session = requests.Session()
-        
-        # Add headers to look like a real browser
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        }
-        session.headers.update(headers)
-        
-        # Step 1: Get the initial page
-        logger.info(f"Fetching initial page for {region}")
         response = session.get(base_url, timeout=30)
         response.raise_for_status()
         
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Submit form for specific region
+        form_data = prepare_region_form_data(response.content, region)
+        if form_data:
+            response = session.post(base_url, data=form_data, timeout=30)
+            response.raise_for_status()
         
-        # Step 2: Look for region dropdown and get the form data
-        region_select = soup.find('select', {'id': 'kabupaten'}) or soup.find('select', attrs={'name': lambda x: x and 'region' in x.lower()})
+        # Scrape all pages
+        all_items = scrape_pages_iteratively(session, base_url, response, form_data, region)
         
-        if region_select:
-            # Find the option for our region
-            region_option = None
-            for option in region_select.find_all('option'):
-                if region.lower() in option.get_text().lower():
-                    region_option = option
-                    break
-            
-            if region_option:
-                region_value = region_option.get('value')
-                logger.info(f"Found region option with value: {region_value}")
-                
-                # Step 3: Submit form to get data for specific region
-                form_data = {
-                    'kabupaten': region_value,
-                }
-                
-                # Look for any hidden form fields
-                for hidden_input in soup.find_all('input', {'type': 'hidden'}):
-                    name = hidden_input.get('name')
-                    value = hidden_input.get('value', '')
-                    if name:
-                        form_data[name] = value
-                
-                # Submit the form
-                response = session.post(base_url, data=form_data, timeout=30)
-                response.raise_for_status()
-        
-        # Step 4: Parse all pages
-        page_num = 1
-        max_pages = 50  # Safety limit
-        
-        while page_num <= max_pages:
-            try:
-                logger.info(f"Scraping page {page_num}")
-                
-                if page_num == 1:
-                    # Use the response we already have
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                else:
-                    # Get subsequent pages
-                    page_url = f"{base_url}?page={page_num}"
-                    if 'kabupaten' in form_data:
-                        page_url += f"&kabupaten={form_data['kabupaten']}"
-                    
-                    response = session.get(page_url, timeout=30)
-                    response.raise_for_status()
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                
-                # Parse the table data
-                page_items = parse_hspk_table(soup, region)
-                
-                if not page_items:
-                    logger.info(f"No items found on page {page_num}, stopping")
-                    break
-                
-                all_items.extend(page_items)
-                logger.info(f"Scraped page {page_num}: {len(page_items)} items (total: {len(all_items)})")
-                
-                # Check if there's a next page
-                next_page = soup.find('a', {'aria-label': 'Next'}) or soup.find('a', text=re.compile(r'Next|Selanjutnya'))
-                if not next_page or 'disabled' in next_page.get('class', []):
-                    logger.info(f"No more pages after page {page_num}")
-                    break
-                
-                page_num += 1
-                
-            except Exception as e:
-                logger.error(f"Error scraping page {page_num}: {str(e)}")
-                break
-        
-        logger.info(f"STANDALONE SCRAPER: Completed! Total items: {len(all_items)}")
-        if len(all_items) == 0:
+        if not all_items:
             logger.warning("STANDALONE SCRAPER: No items scraped, falling back to mock data")
             return generate_mock_hspk_data(region)
+            
+        logger.info(f"STANDALONE SCRAPER: Completed! Total items: {len(all_items)}")
         return all_items
         
     except Exception as e:
         logger.error(f"STANDALONE SCRAPER ERROR: {str(e)}", exc_info=True)
-        
-        # Fallback to mock data so you can at least test the frontend
         logger.info("STANDALONE SCRAPER: Exception occurred, generating mock data for testing...")
         return generate_mock_hspk_data(region)
+
+
+def initialize_scraping_session():
+    """Initialize requests session with proper headers"""
+    import requests
+    
+    session = requests.Session()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    }
+    session.headers.update(headers)
+    return session
+
+
+def prepare_region_form_data(html_content, region):
+    """Extract and prepare form data for region selection"""
+    from bs4 import BeautifulSoup
+    
+    soup = BeautifulSoup(html_content, HTML_PARSER)
+    region_select = soup.find('select', {'id': 'kabupaten'}) or soup.find('select', attrs={'name': lambda x: x and 'region' in x.lower()})
+    
+    if not region_select:
+        return None
+    
+    # Find the option for our region
+    region_option = find_region_option(region_select, region)
+    if not region_option:
+        return None
+    
+    region_value = region_option.get('value')
+    logger.info(f"Found region option with value: {region_value}")
+    
+    # Build form data
+    form_data = {'kabupaten': region_value}
+    
+    # Add hidden form fields
+    for hidden_input in soup.find_all('input', {'type': 'hidden'}):
+        name = hidden_input.get('name')
+        value = hidden_input.get('value', '')
+        if name:
+            form_data[name] = value
+    
+    return form_data
+
+
+def find_region_option(region_select, region):
+    """Find the option element for the specified region"""
+    for option in region_select.find_all('option'):
+        if region.lower() in option.get_text().lower():
+            return option
+    return None
+
+
+def scrape_pages_iteratively(session, base_url, initial_response, form_data, region):
+    """Scrape all pages iteratively"""
+    from bs4 import BeautifulSoup
+    
+    all_items = []
+    page_num = 1
+    max_pages = 50  # Safety limit
+    response = initial_response
+    
+    while page_num <= max_pages:
+        try:
+            logger.info(f"Scraping page {page_num}")
+            
+            if page_num > 1:
+                # Get subsequent pages
+                page_url = build_page_url(base_url, page_num, form_data)
+                response = session.get(page_url, timeout=30)
+                response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, HTML_PARSER)
+            page_items = parse_hspk_table(soup, region)
+            
+            if not page_items:
+                logger.info(f"No items found on page {page_num}, stopping")
+                break
+            
+            all_items.extend(page_items)
+            logger.info(f"Scraped page {page_num}: {len(page_items)} items (total: {len(all_items)})")
+            
+            # Check if there's a next page
+            if not has_next_page(soup):
+                logger.info(f"No more pages after page {page_num}")
+                break
+            
+            page_num += 1
+            
+        except Exception as e:
+            logger.error(f"Error scraping page {page_num}: {str(e)}")
+            break
+    
+    return all_items
+
+
+def build_page_url(base_url, page_num, form_data):
+    """Build URL for specific page number"""
+    page_url = f"{base_url}?page={page_num}"
+    if form_data and 'kabupaten' in form_data:
+        page_url += f"&kabupaten={form_data['kabupaten']}"
+    return page_url
+
+
+def has_next_page(soup):
+    """Check if there's a next page link"""
+    next_page = soup.find('a', {'aria-label': 'Next'}) or soup.find('a', text=re.compile(r'Next|Selanjutnya'))
+    return next_page and 'disabled' not in next_page.get('class', [])
 
 
 def parse_hspk_table(soup, region):
@@ -454,8 +493,8 @@ def extract_price_from_text(price_text):
         numbers = re.findall(r'\d+', price_text.replace('.', '').replace(',', ''))
         if numbers:
             return int(''.join(numbers))
-    except:
-        pass
+    except (ValueError, AttributeError, TypeError) as e:
+        logger.warning(f"Error extracting price from text '{price_text}': {str(e)}")
     return 0
 
 
@@ -548,7 +587,7 @@ def get_page_data_filtered(request, region, search_query, category, price_range,
             ]
             
             # Cache for 15 minutes
-            cache.set(cache_key, wage_data, 900)
+            cache.set(cache_key, wage_data, CACHE_TIMEOUT_SHORT)
         else:
             wage_data = cached_data
             # Add category if not present (for backward compatibility)
@@ -583,7 +622,7 @@ def get_page_data_filtered(request, region, search_query, category, price_range,
                 'category': category,
                 'price_range': price_range,
             },
-            'cached': True if cached_data else False
+            'cached': bool(cached_data)
         }
         
         return JsonResponse(response_data)
@@ -602,10 +641,10 @@ def get_pagination_info(request):
     Get pagination information (total items) for a region
     """
     try:
-        region = request.GET.get('region', 'Kab. Cilacap')
+        region = request.GET.get('region', DEFAULT_REGION)
         
         # Simple: always return 387 items, 39 pages (387/10 rounded up)
-        total_items = 387
+        total_items = DEFAULT_TOTAL_ITEMS
         total_pages = 39  # (387 + 10 - 1) // 10
         
         return JsonResponse({
@@ -631,16 +670,16 @@ def get_available_regions(request):
     try:
         # This could be expanded to fetch from the scraper or database
         regions = [
-            {'value': 'Kab. Cilacap', 'name': 'Kabupaten Cilacap', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Banyumas', 'name': 'Kabupaten Banyumas', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Purbalingga', 'name': 'Kabupaten Purbalingga', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Banjarnegara', 'name': 'Kabupaten Banjarnegara', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Kebumen', 'name': 'Kabupaten Kebumen', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Purworejo', 'name': 'Kabupaten Purworejo', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Wonosobo', 'name': 'Kabupaten Wonosobo', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Magelang', 'name': 'Kabupaten Magelang', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Boyolali', 'name': 'Kabupaten Boyolali', 'province': 'Jawa Tengah'},
-            {'value': 'Kab. Klaten', 'name': 'Kabupaten Klaten', 'province': 'Jawa Tengah'},
+            {'value': DEFAULT_REGION, 'name': 'Kabupaten Cilacap', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Banyumas', 'name': 'Kabupaten Banyumas', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Purbalingga', 'name': 'Kabupaten Purbalingga', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Banjarnegara', 'name': 'Kabupaten Banjarnegara', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Kebumen', 'name': 'Kabupaten Kebumen', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Purworejo', 'name': 'Kabupaten Purworejo', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Wonosobo', 'name': 'Kabupaten Wonosobo', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Magelang', 'name': 'Kabupaten Magelang', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Boyolali', 'name': 'Kabupaten Boyolali', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Klaten', 'name': 'Kabupaten Klaten', 'province': DEFAULT_PROVINCE},
         ]
         
         return JsonResponse({
@@ -665,7 +704,7 @@ def search_work_code(request):
     try:
         data = json.loads(request.body)
         work_code = data.get('work_code', '').strip()
-        region = data.get('region', 'Kab. Cilacap')
+        region = data.get('region', DEFAULT_REGION)
         
         if not work_code:
             return JsonResponse({
@@ -751,46 +790,67 @@ def apply_filters(data, search_query, category, price_range):
     
     # Apply search filter
     if search_query:
-        search_lower = search_query.lower()
-        filtered_data = [
-            item for item in filtered_data
-            if (search_lower in item.get('work_description', '').lower() or
-                search_lower in item.get('work_code', '').lower())
-        ]
+        filtered_data = apply_search_filter(filtered_data, search_query)
     
     # Apply category filter
     if category:
-        filtered_data = [
-            item for item in filtered_data
-            if item.get('category', '') == category
-        ]
+        filtered_data = apply_category_filter(filtered_data, category)
     
     # Apply price range filter
     if price_range:
-        try:
-            if price_range == '0-500000':
-                min_price, max_price = 0, 500000
-            elif price_range == '500000-1000000':
-                min_price, max_price = 500000, 1000000
-            elif price_range == '1000000-2000000':
-                min_price, max_price = 1000000, 2000000
-            elif price_range == '2000000-':
-                min_price, max_price = 2000000, float('inf')
-            else:
-                # Custom range format: "min-max"
-                parts = price_range.split('-')
-                min_price = int(parts[0]) if parts[0] else 0
-                max_price = int(parts[1]) if len(parts) > 1 and parts[1] else float('inf')
-            
-            filtered_data = [
-                item for item in filtered_data
-                if min_price <= item.get('unit_price_idr', 0) <= max_price
-            ]
-        except (ValueError, IndexError):
-            # Invalid price range format, ignore filter
-            pass
+        filtered_data = apply_price_range_filter(filtered_data, price_range)
     
     return filtered_data
+
+
+def apply_search_filter(data, search_query):
+    """Apply search query filter to data"""
+    search_lower = search_query.lower()
+    return [
+        item for item in data
+        if (search_lower in item.get('work_description', '').lower() or
+            search_lower in item.get('work_code', '').lower())
+    ]
+
+
+def apply_category_filter(data, category):
+    """Apply category filter to data"""
+    return [
+        item for item in data
+        if item.get('category', '') == category
+    ]
+
+
+def apply_price_range_filter(data, price_range):
+    """Apply price range filter to data"""
+    try:
+        min_price, max_price = parse_price_range(price_range)
+        return [
+            item for item in data
+            if min_price <= item.get('unit_price_idr', 0) <= max_price
+        ]
+    except (ValueError, IndexError):
+        # Invalid price range format, return data unfiltered
+        logger.warning(f"Invalid price range format: {price_range}")
+        return data
+
+
+def parse_price_range(price_range):
+    """Parse price range string into min and max values"""
+    if price_range == '0-500000':
+        return 0, 500000
+    elif price_range == '500000-1000000':
+        return 500000, 1000000
+    elif price_range == '1000000-2000000':
+        return 1000000, 2000000
+    elif price_range == '2000000-':
+        return 2000000, float('inf')
+    else:
+        # Custom range format: "min-max"
+        parts = price_range.split('-')
+        min_price = int(parts[0]) if parts[0] else 0
+        max_price = int(parts[1]) if len(parts) > 1 and parts[1] else float('inf')
+        return min_price, max_price
 
 
 def apply_sorting(data, sort_by, sort_order):
