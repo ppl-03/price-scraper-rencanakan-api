@@ -34,6 +34,9 @@ from api.tokopedia.scraper import TOKOPEDIA_LOCATION_IDS
 from api.tokopedia.location_scraper import TokopediaLocationScraper
 from api.tokopedia.unit_parser import TokopediaUnitParser
 
+# Import categorization service
+from db_pricing.categorization import ProductCategorizer
+
 # Playwright fallback (optional at runtime)
 HAS_PLAYWRIGHT = False
 try:
@@ -320,6 +323,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
         cards = soup.select("div.product-card") or \
                 soup.select("div.product-card__item, div.card-product, div.catalog-item, div.product")
 
+        categorizer = ProductCategorizer()
         out = []
         for card in cards:
             name = _extract_juragan_product_name(card)
@@ -335,8 +339,11 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             # Extract unit and location for Juragan Material
             unit = _extract_juragan_product_unit(href) if href else ""
             location = _extract_juragan_product_location(href) if href else ""
+            
+            # Categorize the product
+            category = categorizer.categorize(name)
 
-            out.append({"item": name, "value": price, "unit": unit, "location": location, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
+            out.append({"item": name, "value": price, "unit": unit, "location": location, "source": JURAGAN_MATERIAL_SOURCE, "url": href, "category": category or "Lainnya"})
 
         return out, url, len(html)
     except Exception:
@@ -453,6 +460,7 @@ def _depo_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
                 soup.select("li.product-item") or \
                 soup.select("div.product-item")
 
+        categorizer = ProductCategorizer()
         out = []
         for card in cards:
             name = _extract_depo_product_name(card)
@@ -471,8 +479,11 @@ def _depo_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             # If no unit found from name, try extracting from detail page
             if not unit and href:
                 unit = _extract_depo_product_unit(href)
+            
+            # Categorize the product
+            category = categorizer.categorize(name)
 
-            out.append({"item": name, "value": price, "unit": unit, "source": DEPO_BANGUNAN_SOURCE, "url": href})
+            out.append({"item": name, "value": price, "unit": unit, "source": DEPO_BANGUNAN_SOURCE, "url": href, "category": category or "Lainnya"})
 
         return out, url, len(html)
     except Exception:
@@ -658,6 +669,7 @@ def _parse_jsonld_products(data: dict | list, emit_func):
 def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
     """Parse Mitra10 JSON-LD structured data."""
     out = []
+    categorizer = ProductCategorizer()
 
     def _emit(name: str | None, price_val: int, href: str | None):
         if not name or price_val <= 0:
@@ -675,7 +687,10 @@ def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
         if not unit and full_url:
             unit = _extract_mitra10_product_unit(full_url)
         
-        out.append({"item": _clean_text(name), "value": price_val, "unit": unit, "source": MITRA10_SOURCE, "url": full_url})
+        # Categorize the product
+        category = categorizer.categorize(name)
+        
+        out.append({"item": _clean_text(name), "value": price_val, "unit": unit, "source": MITRA10_SOURCE, "url": full_url, "category": category or "Lainnya"})
 
     jsonld_scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
     for script in jsonld_scripts:
@@ -1314,6 +1329,7 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
             soup.select('div.css-bk6tzz') or \
             soup.select('div[data-unify="Card"]')
 
+    categorizer = ProductCategorizer()
     out = []
     for card in cards:
         name = _extract_tokopedia_product_name(card)
@@ -1325,6 +1341,9 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
             continue
 
         href = _extract_tokopedia_product_link(card)
+        
+        # Categorize the product
+        category = categorizer.categorize(name)
 
         # Extract location from product card
         location = _extract_tokopedia_product_location(card)
@@ -1342,7 +1361,8 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
             "unit": unit,
             "location": location,
             "source": TOKOPEDIA_SOURCE, 
-            "url": href
+            "url": href,
+            "category": category or "Lainnya"
         })
 
     return out
@@ -1352,17 +1372,23 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
 def _handle_successful_scrape(request, res, label: str, url: str, html_len: int) -> list[dict]:
     """Handle successful scrape results."""
     rows = []
+    categorizer = ProductCategorizer()
+    
     for p in res.products:
         # Include unit and location when available
         unit = getattr(p, "unit", None)
         location = getattr(p, "location", None)
+        
+        # Categorize the product
+        category = categorizer.categorize(p.name)
 
         product_data = {
             "item": p.name,
             "value": p.price,
             "unit": unit,
             "source": label,
-            "url": getattr(p, "url", "")
+            "url": getattr(p, "url", ""),
+            "category": category or "Lainnya"
         }
 
         # Add location if available
