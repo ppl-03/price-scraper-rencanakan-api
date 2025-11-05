@@ -39,10 +39,10 @@ class Mitra10DatabaseService:
     def _insert_product(self, cursor, item, now):
         cursor.execute(
             """
-            INSERT INTO mitra10_products (name, price, url, unit, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO mitra10_products (name, price, url, unit, category, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (item["name"], item["price"], item["url"], item["unit"], now, now),
+            (item["name"], item["price"], item["url"], item["unit"], item.get("category"), now, now),
         )
         return 1
 
@@ -55,10 +55,10 @@ class Mitra10DatabaseService:
             cursor.execute(
                 """
                 UPDATE mitra10_products
-                SET price = %s, updated_at = %s
+                SET price = %s, category = %s, updated_at = %s
                 WHERE id = %s
                 """,
-                (new_price, now, existing_id),
+                (new_price, item.get("category"), now, existing_id),
             )
             return 1
         return 0

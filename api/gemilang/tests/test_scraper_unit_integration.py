@@ -135,8 +135,9 @@ class TestGemilangScraperUnitIntegration(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(len(result.products), 2)
         
+        # Products without unit specification default to "PCS"
         for product in result.products:
-            self.assertIn(product.unit, [None, "SET"])
+            self.assertIn(product.unit, ["PCS", "SET"])
     
     def test_full_url_generation(self):
         mock_html = """
