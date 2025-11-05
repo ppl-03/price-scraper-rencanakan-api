@@ -2,19 +2,6 @@ from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProdu
 from db_pricing.categorization import ProductCategorizer
 
 
-# Available product categories for grouping/filtering
-AVAILABLE_CATEGORIES = [
-    "Material Sanitair",
-    "Peralatan Kerja",
-    "Alat Berat",
-    "Baja dan Besi Tulangan",
-    "Material Interior",
-    "Material Listrik",
-    "Material Pipa Air",
-    "Tanah, Pasir, Batu, dan Semen",
-]
-
-
 class AutoCategorizationService:
     
     MODEL_MAP = {

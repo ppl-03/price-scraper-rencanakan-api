@@ -105,13 +105,13 @@ def test_auto_categorization_service():
             GemilangProduct.objects.create(
                 name="Test Besi Beton 12mm",
                 price=100000,
-                url="http://test.com/test1",
+                url="https://test.com/test1",
                 unit="batang"
             ),
             GemilangProduct.objects.create(
                 name="Test Semen",
                 price=65000,
-                url="http://test.com/test2",
+                url="https://test.com/test2",
                 unit="sak"
             ),
         ]
