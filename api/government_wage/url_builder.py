@@ -11,5 +11,5 @@ class GovernmentWageUrlBuilder(BaseUrlBuilder):
         url = f"{self.base_url}{self.search_path}"
         return url  
 
-    def build_region_url(self, region: str = "Kab. Cilacap") -> str:
+    def build_region_url(self) -> str:
         return self.build_search_url()

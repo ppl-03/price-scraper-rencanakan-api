@@ -7,6 +7,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Error message constants
+INTERNAL_SERVER_ERROR_MSG = 'Internal server error occurred'
+
 
 def _create_error_response(message, status=400):
     """Helper function to create error responses"""
@@ -76,7 +79,7 @@ def scrape_region_data(request):
         
     except Exception as e:
         logger.error(f"Unexpected error in Government Wage API (region scraping): {str(e)}", exc_info=True)
-        return _create_error_response('Internal server error occurred', 500)
+        return _create_error_response(INTERNAL_SERVER_ERROR_MSG, 500)
 
 
 @require_http_methods(["GET"])
@@ -145,7 +148,7 @@ def search_by_work_code(request):
         
     except Exception as e:
         logger.error(f"Unexpected error in Government Wage API (work code search): {str(e)}", exc_info=True)
-        return _create_error_response('Internal server error occurred', 500)
+        return _create_error_response(INTERNAL_SERVER_ERROR_MSG, 500)
 
 
 @require_http_methods(["GET"])
@@ -166,7 +169,7 @@ def get_available_regions(request):
         
     except Exception as e:
         logger.error(f"Unexpected error in Government Wage API (get regions): {str(e)}", exc_info=True)
-        return _create_error_response('Internal server error occurred', 500)
+        return _create_error_response(INTERNAL_SERVER_ERROR_MSG, 500)
 
 
 @require_http_methods(["GET"])
@@ -228,4 +231,4 @@ def scrape_all_regions(request):
         
     except Exception as e:
         logger.error(f"Unexpected error in Government Wage API (scrape all regions): {str(e)}", exc_info=True)
-        return _create_error_response('Internal server error occurred', 500)
+        return _create_error_response(INTERNAL_SERVER_ERROR_MSG, 500)

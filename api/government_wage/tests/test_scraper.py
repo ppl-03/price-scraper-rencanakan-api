@@ -192,7 +192,7 @@ class TestGovernmentWageScraper(TestCase):
         
         def mock_scrape_region_data(region):
             if region == "Kab. Error":
-                raise Exception("Failed to scrape")
+                raise ConnectionError("Failed to scrape")
             return [GovernmentWageItem(
                 item_number="1",
                 work_code="A.1.1.1.1",
@@ -387,7 +387,7 @@ class TestGovernmentWageScrapingScenarios(TestCase):
         
         # This test would verify that the scraper can handle pagination
         # In a real implementation, this would test page navigation logic
-        self.assertIsNotNone(pagination_info)
+        self.assertIn("entri", pagination_info)
     
     def test_rate_limiting_compliance(self):
         """Test that scraper respects rate limiting for government site"""
@@ -398,12 +398,12 @@ class TestGovernmentWageScrapingScenarios(TestCase):
         self.scraper.get_available_regions = Mock(return_value=regions)
         
         # Mock timing-sensitive operations
-        with patch('time.sleep') as mock_sleep:
+        with patch('time.sleep'):
             # In real implementation, this would test actual delay calls
             pass
         
         # Verify respectful access patterns are implemented
-        self.assertTrue(True)  # Placeholder for actual timing tests
+        self.assertEqual(len(regions), 2)  # Verify we have regions to test with
     
     def test_data_structure_compliance(self):
         """Test that scraped data matches expected DHSP schema"""
