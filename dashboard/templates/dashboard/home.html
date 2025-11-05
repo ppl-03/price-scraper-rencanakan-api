@@ -231,7 +231,7 @@
         
         <!-- Row 2: Grouping (Category) and Location -->
         <div class="row g-3 mb-3">
-          <div class="col-md-4">
+          <div class="col-md-6">
             <label for="categorySelect" class="form-label small text-muted">Pengelompokan</label>
             <select id="categorySelect" class="form-select">
               <option value="">Semua kategori</option>
@@ -240,7 +240,7 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-8">
+          <div class="col-md-6">
             <label for="locationSelect" class="form-label small text-muted">Lokasi</label>
             <div class="dropdown">
               <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="locationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -255,11 +255,11 @@
             <!-- Hidden input to store the actual selected value -->
             <input type="hidden" id="locationSelect" value="">
           </div>
-          <div class="col-md-4">
+          <div class="col-md-6">
             <label for="minPrice" class="form-label small text-muted">Harga Minimum</label>
             <input id="minPrice" type="number" class="form-control" placeholder="0">
           </div>
-          <div class="col-md-4">
+          <div class="col-md-6">
             <label for="maxPrice" class="form-label small text-muted">Harga Maksimum</label>
             <input id="maxPrice" type="number" class="form-control" placeholder="Tidak ada batas">
           </div>
