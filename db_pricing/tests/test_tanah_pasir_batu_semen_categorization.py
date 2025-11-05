@@ -35,10 +35,14 @@ class TanahPasirBatuSemenCategorizationTest(TestCase):
         self.assertEqual(self.categorizer.categorize("Tanah Merah Subur"), "Tanah, Pasir, Batu, dan Semen")
 
     def test_non_tanah_pasir_batu_semen(self):
-        self.assertIsNone(self.categorizer.categorize("Cat Tembok Interior"))
+        # "Cat Tembok Interior" should match Interior category, not Tanah/Pasir
+        result = self.categorizer.categorize("Cat Tembok Interior")
+        self.assertNotEqual(result, "Tanah, Pasir, Batu, dan Semen")
 
     def test_avoid_false_positive(self):
-        self.assertIsNone(self.categorizer.categorize("Keramik Batu Alam"))
+        # "Keramik Batu Alam" should match Interior (keramik), not Tanah/Pasir (batu)
+        result = self.categorizer.categorize("Keramik Batu Alam")
+        self.assertNotEqual(result, "Tanah, Pasir, Batu, dan Semen")
 
     def test_bulk_positive_cases(self):
         positives = [
@@ -83,7 +87,7 @@ class TanahPasirBatuSemenCategorizationTest(TestCase):
         ]
         for name in negatives:
             with self.subTest(name=name):
-                self.assertIsNone(self.categorizer.categorize(name))
+                self.assertNotEqual(self.categorizer.categorize(name),"Tanah, Pasir, Batu, dan Semen")
 
 
 class TanahPasirBatuSemenAutoCategorizationIntegrationTest(TestCase):
@@ -102,7 +106,8 @@ class TanahPasirBatuSemenAutoCategorizationIntegrationTest(TestCase):
 
         self.assertEqual(results[0], "Tanah, Pasir, Batu, dan Semen")
         self.assertEqual(results[1], "Tanah, Pasir, Batu, dan Semen")
-        self.assertIsNone(results[2])
+        # "Cat Kayu Jati" is a paint product, should match Interior
+        self.assertEqual(results[2], "Material Interior")
         self.assertEqual(results[3], "Tanah, Pasir, Batu, dan Semen")
 
     def test_categorize_all_subcategories(self):
@@ -128,7 +133,9 @@ class TanahPasirBatuSemenAutoCategorizationIntegrationTest(TestCase):
 
         self.assertEqual(len(results), 5)
         self.assertEqual(results[0], "Tanah, Pasir, Batu, dan Semen")
-        self.assertIsNone(results[1])
+        # "Cat Tembok" is interior paint, should match Interior
+        self.assertEqual(results[1], "Material Interior")
         self.assertEqual(results[2], "Tanah, Pasir, Batu, dan Semen")
         self.assertEqual(results[3], "Tanah, Pasir, Batu, dan Semen")
-        self.assertIsNone(results[4])
+        # "Keramik" is ceramic tiles, should match Interior
+        self.assertEqual(results[4], "Material Interior")
