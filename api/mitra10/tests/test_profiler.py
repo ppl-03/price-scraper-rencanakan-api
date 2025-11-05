@@ -342,25 +342,35 @@ class TestProfilerEdgeCases(TestCase):
     
     def test_profile_complete_scraper_success(self):
         """Test profile_complete_scraper with successful scraping (covers lines 257-268)"""
+        from types import SimpleNamespace
         with patch('api.mitra10.utils.mitra10_profiler.ENV', {'PROFILING_ITERATIONS_SCRAPER': '1'}):
             # Create mock products with name and price attributes to trigger lines 257-268
             mock_products = [
-                type('Product', (), {
-                    'name': 'Test Product With A Very Long Name That Needs Truncation',
-                    'price': 150000,
-                    'url': 'https://test.com/product'
-                })(),
-                type('Product', (), {
-                    'name': 'Another Product',
-                    'price': 75000,
-                    'url': 'https://test.com/product2'
-                })()
+                SimpleNamespace(
+                    name='Test Product With A Very Long Name That Needs Truncation',
+                    price=150000,
+                    url='https://test.com/product'
+                ),
+                SimpleNamespace(
+                    name='Another Product',
+                    price=75000,
+                    url='https://test.com/product2'
+                )
             ]
-            
-            with patch.object(self.profiler.real_scraper.http_client, 'get', return_value='<html>Mock HTML Content</html>'):
-                with patch.object(self.profiler.real_scraper.html_parser, 'parse_products', return_value=mock_products):
-                    result = self.profiler.profile_complete_scraper()
-            
+
+            # Build a mock scraper returned by factory called inside profiler module
+            mock_scraper = SimpleNamespace(
+                url_builder=SimpleNamespace(build_search_url=lambda keyword, *_: 'https://test.com/search'),
+                http_client=SimpleNamespace(get=lambda url: '<html>Mock HTML Content</html>'),
+                html_parser=SimpleNamespace(
+                    parse_products=lambda html: mock_products,
+                    price_cleaner=SimpleNamespace(clean_price=lambda s: 123456)
+                )
+            )
+
+            with patch('api.mitra10.utils.mitra10_profiler.create_mitra10_scraper', return_value=mock_scraper):
+                result = self.profiler.profile_complete_scraper()
+
             self.assertIsInstance(result, dict)
             self.assertEqual(result['component'], 'complete_scraper')
             self.assertIn('total_time', result)
@@ -619,7 +629,8 @@ class TestProfilerEdgeCases(TestCase):
             mock_scraper.html_parser.parse_products.return_value = [mock_product, mock_product]
             mock_scraper.html_parser.price_cleaner.clean_price.return_value = 150000
             
-            with patch('api.mitra10.factory.create_mitra10_scraper', return_value=mock_scraper):
+            # Patch the symbol used in profiler module
+            with patch('api.mitra10.utils.mitra10_profiler.create_mitra10_scraper', return_value=mock_scraper):
                 result = profiler.profile_complete_scraper()
             
             # Should execute lines 257-268 (sample product display)

@@ -161,6 +161,16 @@ class TestMitra10UnitExtractor(unittest.TestCase):
         # Should still work despite truncation warning - unit is found because it's at the end
         self.assertEqual(unit, UNIT_KG)  # Unit found despite truncation
 
+    def test_whitespace_only_input(self):
+        # Cover validate_and_clean_text branch where stripped text becomes empty (~180)
+        unit = self.extractor.extract_unit("   \t \n  ")
+        self.assertIsNone(unit)
+
+    def test_adjacent_branch_via_extractor(self):
+        # Force adjacent-pattern path by using a unit ('sak') not present in standard patterns (~345)
+        text = "Semen kualitas tinggi 50 sak"
+        self.assertEqual(self.extractor.extract_unit(text), 'SAK')
+
 
 class TestMitra10SpecificationFinder(unittest.TestCase):
     
@@ -295,20 +305,23 @@ class TestMitra10UnitParser(unittest.TestCase):
         </div>
         """
         unit = self.parser.parse_unit(html)
-        self.assertIsNone(unit)
+        # Should default to 'PCS' when no unit is found
+        self.assertEqual(unit, 'PCS')
     
     def test_empty_html(self):
         unit = self.parser.parse_unit("")
-        self.assertIsNone(unit)
+        # Should default to 'PCS' for empty HTML
+        self.assertEqual(unit, 'PCS')
     
     def test_none_input(self):
         unit = self.parser.parse_unit(None)
-        self.assertIsNone(unit)
+        # Should default to 'PCS' for None input
+        self.assertEqual(unit, 'PCS')
     
     def test_invalid_html(self):
         unit = self.parser.parse_unit("Not valid HTML content")
-        # Should still try to extract from text
-        self.assertIsNone(unit)
+        # Should default to 'PCS' when no unit can be extracted
+        self.assertEqual(unit, 'PCS')
 
 
 class TestErrorHandlingMixin(unittest.TestCase):
@@ -365,16 +378,170 @@ class TestMitra10UnitParserEdgeCases(unittest.TestCase):
         # Mock BeautifulSoup to raise exception
         with unittest.mock.patch('api.mitra10.unit_parser.BeautifulSoup', side_effect=Exception("Parser error")):
             unit = self.parser.parse_unit("<div>test</div>")
-            self.assertIsNone(unit)
+            # Should default to 'PCS' when exception occurs
+            self.assertEqual(unit, 'PCS')
     
     def test_extract_specifications_safely_with_empty_result(self):
         html = "<div>No specifications</div>"
         
         # This should handle cases where no specifications are found
-        result = self.parser._parse_unit_from_html(html)
-        # Result depends on implementation, just verify it doesn't crash
-        self.assertTrue(result is None or isinstance(result, str))
+        result = self.parser.parse_unit(html)
+        # Should default to 'PCS' when no specifications found
+        self.assertEqual(result, 'PCS')
 
+
+class TestHelperAndStrategyCoverage(unittest.TestCase):
+    """Additional coverage for helpers and strategy internals"""
+
+    def test_safe_regex_search_and_finditer_error(self):
+        from api.mitra10.unit_parser import TextProcessingHelper
+        # Invalid regex should be handled gracefully
+        self.assertIsNone(TextProcessingHelper.safe_regex_search('(', 'text'))
+        self.assertEqual(list(TextProcessingHelper.safe_regex_finditer('(', 'text')), [])
+
+    def test_context_checker_exception(self):
+        from api.mitra10.unit_parser import ContextChecker
+        # Pass None keywords to trigger exception path in checker
+        self.assertFalse(ContextChecker.check_keywords_in_text('some text', None, 'ctx'))
+
+    def test_adjacent_process_match_group_error(self):
+        from api.mitra10.unit_parser import Mitra10AdjacentPatternStrategy
+        strat = Mitra10AdjacentPatternStrategy()
+        # Object without .group attr triggers AttributeError branch in _process_match_group
+        self.assertIsNone(strat._process_match_group(object(), 1))
+
+
+class TestSpecificationFinderCoverage(unittest.TestCase):
+    def setUp(self):
+        from api.mitra10.unit_parser import Mitra10SpecificationFinder
+        self.finder = Mitra10SpecificationFinder()
+
+    def test_find_description_areas_exception(self):
+        class Dummy:
+            def find_all(self, *args, **kwargs):
+                raise Exception('boom')
+        self.assertEqual(self.finder._find_description_areas(Dummy()), [])
+
+    def test_extract_text_safely_exception(self):
+        # object() has no get_text, should return None
+        self.assertIsNone(self.finder._extract_text_safely(object()))
+
+    def test_find_elements_safely_exception(self):
+        class Dummy:
+            def find_all(self, *args, **kwargs):
+                raise Exception('err')
+        self.assertEqual(self.finder._find_elements_safely(Dummy(), 'table'), [])
+
+    def test_extract_spec_from_row_exception(self):
+        class Row:
+            def find_all(self, *args, **kwargs):
+                raise AttributeError('nope')
+        self.assertIsNone(self.finder._extract_spec_from_row(Row()))
+
+    def test_find_spec_divs_exception(self):
+        class Dummy:
+            def find_all(self, *args, **kwargs):
+                raise Exception('err')
+        self.assertEqual(self.finder._find_spec_divs(Dummy()), [])
+
+    def test_is_valid_spec_text_else_branch(self):
+        # Unknown element_type path should return False
+        self.assertFalse(self.finder._is_valid_spec_text('anything', 'p'))
+
+
+class TestParserPriorityAndContext(unittest.TestCase):
+    def setUp(self):
+        from api.mitra10.unit_parser import Mitra10UnitParser
+        self.parser = Mitra10UnitParser()
+
+    def test_apply_priority_rules_empty(self):
+        # No units found returns None
+        self.assertIsNone(self.parser._apply_mitra10_priority_rules([], 'no ctx'))
+
+    def test_general_priority_fallback_first_element(self):
+        # If none of the units are in the priority list, return first element
+        self.assertEqual(self.parser._get_general_priority_unit(['CUSTOM1', 'CUSTOM2']), 'CUSTOM1')
+
+    def test_fallback_extract_from_full_text(self):
+        # Ensure fallback path extracts from full text when specs are absent
+        html = '<div>Produk umum tanpa spesifikasi. Isi 2 pcs.</div>'
+        self.assertEqual(self.parser.parse_unit(html), 'PCS')
+
+
+class TestAdditionalCoverageTargets(unittest.TestCase):
+    """Extra tests to cover specific uncovered branches/lines."""
+
+    def test_text_processing_helper_truncation(self):
+        # Force truncation path in validate_and_clean_text (line ~180)
+        from api.mitra10.unit_parser import TextProcessingHelper
+        long_text = ("abc " * 200) + "tail-unit"
+        result = TextProcessingHelper.validate_and_clean_text(long_text, max_length=100)
+        # Expect smart truncation indicator and tail preserved
+        self.assertIn(" ... ", result)
+        self.assertTrue(result.endswith("tail-unit"))
+
+    def test_extractor_standard_pattern_branch(self):
+        # Ensure the standard pattern branch (not area/adjacent) is used (~345)
+        from api.mitra10.unit_parser import Mitra10UnitExtractor, UNIT_KG
+        extractor = Mitra10UnitExtractor()
+        # No number before unit to avoid adjacent-pattern path; should hit standard pattern
+        text = "berat dalam kg untuk pengujian"
+        self.assertEqual(extractor.extract_unit(text), UNIT_KG)
+
+    def test_extractor_no_match_returns_none(self):
+        # Ensure the final return None paths (~355) are executed when no patterns match
+        from api.mitra10.unit_parser import Mitra10UnitExtractor
+        extractor = Mitra10UnitExtractor()
+        self.assertIsNone(extractor.extract_unit("teks tanpa satuan apapun"))
+
+    def test_is_valid_spec_text_no_text_branch(self):
+        # Cover the `if not text: return False` branch (~498)
+        from api.mitra10.unit_parser import Mitra10SpecificationFinder
+        finder = Mitra10SpecificationFinder()
+        self.assertFalse(finder._is_valid_spec_text("", "span"))
+        self.assertFalse(finder._is_valid_spec_text(None, "div"))
+
+    def test_context_specific_unit_return_none(self):
+        # Trigger the context-specific function to return None (~620-624)
+        from api.mitra10.unit_parser import Mitra10UnitParser
+        parser = Mitra10UnitParser()
+        # Provide some found units but a context string with no keywords
+        found_units = ["PCS", "SET"]
+        self.assertIsNone(parser._get_context_specific_unit(found_units, "produk umum tanpa konteks"))
+
+    def test_priority_pattern_search_direct_match(self):
+        # Directly call the priority search to cover internal line where priority_order is retrieved (~345)
+        from api.mitra10.unit_parser import Mitra10UnitExtractor, UNIT_KG
+        extractor = Mitra10UnitExtractor()
+        self.assertEqual(extractor._priority_pattern_search("berat dalam kg untuk pengujian"), UNIT_KG)
+
+    def test_priority_pattern_search_direct_no_match(self):
+        # Directly call the priority search to hit the terminal return None (~355)
+        from api.mitra10.unit_parser import Mitra10UnitExtractor
+        extractor = Mitra10UnitExtractor()
+        self.assertIsNone(extractor._priority_pattern_search("teks tanpa satuan apapun"))
+
+    def test_priority_pattern_search_whitespace(self):
+        # Ensure the not-processed branch triggers when input cleans to empty (~355)
+        from api.mitra10.unit_parser import Mitra10UnitExtractor
+        extractor = Mitra10UnitExtractor()
+        self.assertIsNone(extractor._priority_pattern_search("   \t \n  "))
+
+    def test_plumbing_context_length_preference(self):
+        # Cover plumbing context branch to prefer length units (~621-622)
+        from api.mitra10.unit_parser import Mitra10UnitParser
+        
+        class StubConfig:
+            def is_construction_context(self, _):
+                return False
+            def is_electrical_context(self, _):
+                return False
+            def is_plumbing_context(self, _):
+                return True
+
+        parser = Mitra10UnitParser(config=StubConfig())
+        found_units = ["PCS", "CM", "M"]
+        self.assertIn(parser._get_context_specific_unit(found_units, "any html"), ["CM", "M"])
 
 if __name__ == '__main__':
     unittest.main()
