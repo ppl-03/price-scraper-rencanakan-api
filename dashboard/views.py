@@ -1935,7 +1935,7 @@ def trigger_scrape(request):
             gemilang=counts["gemilang"], depo=counts["depo"], juragan=counts["juragan"], mitra=counts["mitra10"], tokopedia=counts["tokopedia"]
         )
     )
-    return redirect("home")
+    return redirect("dashboard:dashboard_home")
 
 
 @require_GET
@@ -1950,7 +1950,7 @@ def curated_price_create(request):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "New Curated Price", 
         "form": form,
-        "form_action": reverse("curated_price_create_post")
+        "form_action": reverse("dashboard:curated_price_create_post")
     })
 
 
@@ -1961,7 +1961,7 @@ def curated_price_create_post(request):
     if form.is_valid():
         form.save()
         messages.success(request, "Curated price saved")
-        return redirect("curated_price_list")
+        return redirect("dashboard:curated_price_list")
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
 
 
@@ -1972,7 +1972,7 @@ def curated_price_update(request, pk):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "Edit Curated Price", 
         "form": form,
-        "form_action": reverse("curated_price_update_post", args=[pk])
+        "form_action": reverse("dashboard:curated_price_update_post", args=[pk])
     })
 
 
@@ -1984,7 +1984,7 @@ def curated_price_update_post(request, pk):
     if form.is_valid():
         form.save()
         messages.success(request, "Curated price updated")
-        return redirect("curated_price_list")
+        return redirect("dashboard:curated_price_list")
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
 
 
@@ -1994,7 +1994,7 @@ def curated_price_delete(request, pk):
     return render(request, "dashboard/confirm_delete.html", {
         "title": "Delete Curated Price", 
         "obj": obj,
-        "form_action": reverse("curated_price_delete_post", args=[pk])
+        "form_action": reverse("dashboard:curated_price_delete_post", args=[pk])
     })
 
 
@@ -2004,7 +2004,7 @@ def curated_price_delete_post(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
     obj.delete()
     messages.success(request, "Curated price deleted")
-    return redirect("curated_price_list")
+    return redirect("dashboard:curated_price_list")
 
 
 @require_POST
@@ -2018,5 +2018,5 @@ def curated_price_from_scrape(request):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "Save Price from Scrape", 
         "form": form,
-        "form_action": reverse("curated_price_create_post")
+        "form_action": reverse("dashboard:curated_price_create_post")
     })
