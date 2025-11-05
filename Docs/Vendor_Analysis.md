@@ -231,6 +231,93 @@ The price element that displays the formatted price string, such as Rp55.670. Th
 #### Complete Price Path:
 a[data-testid="lnkProductContainer"] → div[data-testid="divProductWrapper"] → span.css-20kt3o → div → span.css-o5uqv
 
+#### **Location Path - Multi-Strategy Extraction**
+
+The Tokopedia location scraper uses a three-tier fallback strategy to extract merchant/seller location with maximum reliability:
+
+**Priority 1 - Primary Selector (Most Reliable):**
+- Selector: `span.css-ywdpwd` inside `div.css-vbihp9`
+- Returns the inner text exactly as found on the page
+- Example: `<span class="css-ywdpwd">Kab. Tangerang</span>` → `"Kab. Tangerang"`
+
+**Priority 2 - Span Element Scan (Secondary Fallback):**
+- When `css-ywdpwd` is not found, scan all span elements in document order
+- Filter criteria:
+  - Skip UI text (buttons like "Beli", "Tambah ke Wishlist", etc.)
+  - Skip very short (< 3 chars) or very long (> 80 chars) text
+  - Prioritize spans containing location keywords: `jakarta`, `bandung`, `surabaya`, `medan`, `semarang`, `yogyakarta`, `kab`, `kota`, `utara`, `selatan`, `timur`, `barat`, `pusat`, etc.
+- Returns first valid location match in document order
+
+**Priority 3 - Text Node Traversal (Final Fallback):**
+- Last resort: extract location from raw text nodes
+- Splits text by delimiters: `\n`, `\r`, `•`, `|`, `,`
+- Two-pass approach:
+  - First pass: look for segments containing known location keywords
+  - Second pass: if no known location found, return first valid text segment
+- Filters out obvious non-locations (product names, prices, etc.)
+
+**Behavior & Notes:**
+
+- Text is returned **exactly as found** on the page (preserves `Kab.`, `Kota.`, spacing, etc.)
+- No aggressive normalization or database lookup is performed
+- Invalid locations are rejected based on length constraints (2-100 chars) and content validation
+- Optional field: returns `None` if no location can be extracted
+
+**Example HTML Snippets:**
+
+Primary method (preferred):
+```html
+<div class="css-vbihp9">
+  <span class="css-ywdpwd">Jakarta Utara</span>
+</div>
+```
+Expected output: `"location": "Jakarta Utara"`
+
+Secondary method fallback (no css-ywdpwd class):
+```html
+<div class="product-item">
+  <span>Product Name</span>
+  <span>Jakarta Timur</span>
+</div>
+```
+Expected output: `"location": "Jakarta Timur"`
+
+Tertiary method fallback (text nodes):
+```html
+<div class="product-item">
+  Product • Bandung | Shop
+</div>
+```
+Expected output: `"location": "Bandung"`
+
+**Rationale:**
+
+- The multi-tier approach maximizes location extraction coverage while maintaining accuracy
+- Prioritizing known location keywords in fallback methods reduces false-positives from UI elements
+- Preserving original text format allows downstream systems to apply their own normalization if needed
+
+**Recommendation:**
+
+- For normalized or canonical location names (analytics, grouping, geo-lookup), implement a separate normalization pass that maps extracted strings to canonical names
+- Do not modify the scraper's core extraction behavior to avoid losing site-provided context
+
+#### Extracted Location Data:
+
+The location field in the Product object contains:
+- **Data Type**: String or None
+- **Content**: Merchant/Seller Location (where the seller is based)
+- **Format**: Returned as found on page (e.g., "Jakarta Utara", "Kab. Bandung", "Kota Surabaya")
+- **Extraction Method**: Multi-strategy approach (css-ywdpwd selector → span scan → text node traversal)
+- **Availability**: Optional field (None if extraction unsuccessful across all strategies)
+- **Use Case**: Understanding product availability, estimating shipping times, and filtering by seller location
+
+#### Common Locations Found:
+- "Jakarta Utara", "Jakarta Selatan", "Jakarta Timur", "Jakarta Barat", "Jakarta Pusat"
+- "Bandung", "Surabaya", "Medan", "Semarang", "Yogyakarta"
+- "Makassar", "Tangerang", "Depok", "Bekasi", "Bogor"
+- "Kab. Tangerang", "Kab. Bandung", "Kota Bandung"
+- And 100+ other major Indonesian cities and regencies
+
 ---
 
 #### URL Breakdown

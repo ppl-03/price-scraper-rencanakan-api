@@ -170,4 +170,53 @@ class TestScrapeAndSaveEndpoint(TestCase):
     def test_scrape_and_save_get_method_not_allowed(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
+    
+    def test_scrape_and_save_read_only_token_denied(self):
+        data = {'keyword': 'test'}
+        response = self._post_with_token(data, token='read-only-token')
+        self.assertEqual(response.status_code, 403)
+        response_data = json.loads(response.content)
+        self.assertIn('Insufficient permissions', response_data['error'])
+    
+    def test_scrape_and_save_invalid_keyword_sql_injection(self):
+        data = {'keyword': "'; DROP TABLE users; --"}
+        response = self._post_with_token(data)
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+    
+    def test_scrape_and_save_invalid_keyword_xss(self):
+        data = {'keyword': "<script>alert('XSS')</script>"}
+        response = self._post_with_token(data)
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+    
+    def test_scrape_and_save_keyword_too_long(self):
+        data = {'keyword': 'a' * 101}
+        response = self._post_with_token(data)
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+    
+    def test_scrape_and_save_empty_keyword(self):
+        data = {'keyword': ''}
+        response = self._post_with_token(data)
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+    
+    def test_scrape_and_save_invalid_page_negative(self):
+        data = {'keyword': 'test', 'page': -1}
+        response = self._post_with_token(data)
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+    
+    def test_scrape_and_save_invalid_page_exceeds_max(self):
+        data = {'keyword': 'test', 'page': 101}
+        response = self._post_with_token(data)
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
 

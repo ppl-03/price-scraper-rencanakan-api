@@ -57,7 +57,6 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'api.middleware.DisableCSRFForAPIMiddleware',  # Disable CSRF for /api/* endpoints
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -191,3 +190,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
 AUTH_USER_MODEL = 'auth.User'
+
+# Test Configuration
+# Test IP addresses from .env (RFC 1918 private addresses for testing only)
+TEST_IP_ALLOWED = env.str('TEST_IP_ALLOWED')
+TEST_IP_DENIED = env.str('TEST_IP_DENIED')
+TEST_IP_ATTACKER = env.str('TEST_IP_ATTACKER')
