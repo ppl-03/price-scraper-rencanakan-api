@@ -28,7 +28,7 @@ class TestGovernmentWageUrlBuilder(unittest.TestCase):
         self.assertEqual(url_2, expected)
 
     def test_build_region_url_delegates_to_search_url(self):
-        out1 = self.builder.build_region_url("Kab. Cilacap")
+        out1 = self.builder.build_region_url()
         out2 = self.builder.build_search_url()
         self.assertEqual(out1, out2)
 
@@ -39,13 +39,13 @@ class TestGovernmentWageUrlBuilder(unittest.TestCase):
         )
         self.assertEqual(builder.build_search_url(), "https://example.com/custom/path")
 
-    def test_build_region_url_with_different_region_still_returns_same_url(self):
-        for region in ["Kab. Pekalongan", "Kota Semarang", "Kab. Wonosobo"]:
-            result = self.builder.build_region_url(region)
-            self.assertEqual(
-                result,
-                "https://maspetruk.dpubinmarcipka.jatengprov.go.id/harga_satuan/hspk",
-            )
+    def test_build_region_url_returns_consistent_url(self):
+        # Since build_region_url no longer takes parameters, test it returns consistent URL
+        result1 = self.builder.build_region_url()
+        result2 = self.builder.build_region_url()
+        expected = "https://maspetruk.dpubinmarcipka.jatengprov.go.id/harga_satuan/hspk"
+        self.assertEqual(result1, expected)
+        self.assertEqual(result2, expected)
 
 
 if __name__ == "__main__":

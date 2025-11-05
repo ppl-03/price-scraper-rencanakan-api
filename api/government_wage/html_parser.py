@@ -185,7 +185,8 @@ class GovernmentWageHtmlParser(IHtmlParser):
             "uraian pekerjaan (hspk)": self.COL_URAIAN_PEKERJAAN,
             "harga satuan (rp)": self.COL_HARGA_SATUAN,
         }
-        for k, v in mapping.items():
+        # Create a copy to avoid "dictionary changed size during iteration"
+        for k, v in list(mapping.items()):
             if k in aliases:
                 mapping[aliases[k]] = v
 
