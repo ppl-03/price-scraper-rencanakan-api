@@ -79,5 +79,5 @@ def get_cache() -> SimpleCache:
 
 def make_cache_key(prefix: str, data: str) -> str:
     """Create a cache key"""
-    hash_value = hashlib.md5(data.encode()).hexdigest()
+    hash_value = hashlib.sha256(data.encode()).hexdigest()
     return f"gov_wage_{prefix}_{hash_value}"
