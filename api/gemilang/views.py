@@ -5,6 +5,7 @@ import logging
 
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
+from db_pricing.auto_categorization_service import AutoCategorizationService
 from .security import (
     require_api_token,
     validate_input,
