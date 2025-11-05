@@ -8,6 +8,9 @@ logger = logging.getLogger(__name__)
 
 # this playwright client is only for MasPetruk (HSPK) pages
 class GovernmentWagePlaywrightClient(IHttpClient):
+    # CSS selectors
+    REGION_SELECT_SELECTOR = "select.form-control"
+    
     def __init__(
         self,
         headless: bool = True,
@@ -80,13 +83,13 @@ class GovernmentWagePlaywrightClient(IHttpClient):
             # 2) Ensure region (dropdown exists on this page)
             if self.auto_select_region and self.region_label:
                 try:
-                    await self.page.wait_for_selector("select.form-control", timeout=5000)
+                    await self.page.wait_for_selector(self.REGION_SELECT_SELECTOR, timeout=5000)
                     try:
-                        await self.page.select_option("select.form-control", label=self.region_label)
+                        await self.page.select_option(self.REGION_SELECT_SELECTOR, label=self.region_label)
                     except Exception:
                         # fallback click if select_option fails
-                        await self.page.click("select.form-control")
-                        await self.page.locator("select.form-control option", has_text=self.region_label).click()
+                        await self.page.click(self.REGION_SELECT_SELECTOR)
+                        await self.page.locator(f"{self.REGION_SELECT_SELECTOR} option", has_text=self.region_label).click()
                 except Exception:
                     pass
 
