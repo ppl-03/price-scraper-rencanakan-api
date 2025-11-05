@@ -28,6 +28,9 @@ class GovernmentWageItem:
 
 
 class GovernmentWageScraper:
+    # Default region constant
+    DEFAULT_REGION = "Kab. Cilacap"
+    
     def __init__(
         self,
         http_client: Optional[IHttpClient] = None,
@@ -40,7 +43,7 @@ class GovernmentWageScraper:
 
         # Central Java regions from DHSP Analysis
         self.available_regions = [
-            "Kab. Cilacap", "Kab. Banyumas", "Kab. Purbalingga", "Kab. Banjarnegara",
+            self.DEFAULT_REGION, "Kab. Banyumas", "Kab. Purbalingga", "Kab. Banjarnegara",
             "Kab. Kebumen", "Kab. Purworejo", "Kab. Wonosobo", "Kab. Magelang",
             "Kab. Boyolali", "Kab. Klaten", "Kab. Sukoharjo", "Kab. Wonogiri",
             "Kab. Karanganyar", "Kab. Sragen", "Kab. Grobogan", "Kab. Blora",
@@ -51,7 +54,9 @@ class GovernmentWageScraper:
             "Kota Semarang", "Kota Pekalongan", "Kota Tegal"
         ]
 
-    def scrape_region_data(self, region: str = "Kab. Cilacap") -> List[GovernmentWageItem]:
+    def scrape_region_data(self, region: str = None) -> List[GovernmentWageItem]:
+        if region is None:
+            region = self.DEFAULT_REGION
         try:
             logger.info(f"Scraping government wage data for region: {region}")
 
@@ -107,7 +112,7 @@ class GovernmentWageScraper:
             if region:
                 return self._search_in_region(work_code, region)
 
-            items = self._search_in_region(work_code, "Kab. Cilacap")
+            items = self._search_in_region(work_code, self.DEFAULT_REGION)
             filtered_items = [item for item in items if work_code.lower() in item.work_code.lower()]
             logger.info(f"Found {len(filtered_items)} items matching work code {work_code}")
             return filtered_items
