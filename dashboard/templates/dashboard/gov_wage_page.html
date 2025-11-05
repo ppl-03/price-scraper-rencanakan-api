@@ -1,0 +1,727 @@
+{% extends 'dashboard/base_with_sidebar.html' %}
+
+{% block title %}HSPK Upah Pemerintah – Rencanakan{% endblock %}
+
+{% block extra_css %}
+  <style>
+    /* Clean white design */
+    body { 
+      background: #fff; 
+      color: #333; 
+    }
+
+    /* Content wrapper */
+    .content-wrapper { 
+      padding: 2rem;
+    }
+
+    .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+
+    /* Search and filter controls */
+    .search-section {
+      background: white;
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    }
+
+    /* Table styling */
+    .table-container {
+      background: white;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    }
+    
+    .table thead{ background:#f8f9fa; border-bottom:2px solid #e9ecef; }
+    .table th{ 
+      border:none; 
+      color:#495057; 
+      font-weight:600; 
+      user-select:none; 
+      cursor:pointer; 
+      padding: 1rem 0.75rem;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .table td{ 
+      vertical-align: middle; 
+      border-color:#f1f3f5; 
+      padding: 0.875rem 0.75rem;
+    }
+
+    /* Sort indicators */
+    .th-sort { position:relative; padding-right:24px; }
+    .th-sort::after {
+      content:"↕"; 
+      position:absolute; 
+      right:8px; 
+      top:50%; 
+      transform:translateY(-50%); 
+      font-size:0.875rem; 
+      opacity:.4;
+      transition: opacity 0.2s;
+    }
+    .th-sort:hover::after { opacity: 0.8; }
+    .th-sort.asc::after { content:"↑"; opacity:.9; color: #0056b3; }
+    .th-sort.desc::after { content:"↓"; opacity:.9; color: #0056b3; }
+
+    /* Primary button styling */
+    .btn-brand { background:#00365a; border-color:#00365a; color:#fff; }
+    .btn-brand:hover, .btn-brand:focus { background:#022b47; border-color:#022b47; color:#fff; }
+    .btn-pill{ border-radius:999px; padding:10px 20px; font-weight:600; }
+
+    /* Price alignment */
+    .price-align-right { text-align: right !important; }
+
+    /* Row hover effect */
+    .table-hover tbody tr:hover {
+      background-color: #f8f9fc;
+      transform: scale(1.001);
+      transition: all 0.2s ease;
+    }
+
+    /* Pagination styling */
+    .pagination { 
+      justify-content:center; 
+      margin-top:1.5rem; 
+      gap:8px; 
+    }
+    .page-link {
+      border-radius:50%!important; 
+      width:40px; 
+      height:40px;
+      display:flex; 
+      align-items:center; 
+      justify-content:center;
+      color:#00365a; 
+      border:2px solid #e9ecef; 
+      background:#fff;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .page-item.active .page-link { 
+      background:#00365a; 
+      color:#fff; 
+      border-color: #00365a;
+      transform: scale(1.1);
+    }
+    .page-item .page-link:hover { 
+      background:#f8f9fc; 
+      color:#00365a; 
+      border-color: #00365a;
+      transform: translateY(-2px);
+    }
+
+    /* Status indicators */
+    .status-badge {
+      padding: 0.375rem 0.75rem;
+      border-radius: 50px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-active { background: #d4edda; color: #155724; }
+    .status-updated { background: #d1ecf1; color: #0c5460; }
+
+    /* Loading states */
+    .loading-spinner {
+      display: none;
+      text-align: center;
+      padding: 3rem;
+    }
+    .spinner-border-custom {
+      width: 3rem;
+      height: 3rem;
+      border-width: 0.3em;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #6c757d;
+    }
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    /* Results info */
+    .results-info {
+      color: #6c757d;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+      .table-responsive {
+        border-radius: 14px;
+      }
+    }
+
+    /* Region selector */
+    .region-selector {
+      background: #e3f2fd;
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      border-left: 4px solid #2196f3;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="content-wrapper">
+    <!-- Region Selection -->
+    <div class="region-selector">
+      <div class="row align-items-center">
+        <div class="col-md-8">
+          <h6 class="mb-2"><i class="fas fa-map-marker-alt me-2"></i>Wilayah Terpilih</h6>
+          <p class="mb-0">Data HSPK untuk <strong>Kabupaten Cilacap</strong> - Provinsi Jawa Tengah</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+          <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#regionModal">
+            <i class="fas fa-edit me-1"></i> Ganti Wilayah
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search and Filter Section -->
+    <div class="search-section">
+      <h6 class="mb-3"><i class="fas fa-search me-2"></i>Pencarian & Filter</h6>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="searchInput" class="form-label">Cari Uraian Pekerjaan</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="text" id="searchInput" class="form-control" 
+                   placeholder="Masukkan kata kunci (misal: pondasi, batu, mortar...)">
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label for="categoryFilter" class="form-label">Kategori</label>
+          <select id="categoryFilter" class="form-select">
+            <option value="">Semua Kategori</option>
+            <option value="pondasi">Pondasi</option>
+            <option value="bekisting">Bekisting</option>
+            <option value="batu">Batu & Mortar</option>
+            <option value="plat">Plat & Lantai</option>
+            <option value="dinding">Dinding</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="priceRange" class="form-label">Range Harga</label>
+          <select id="priceRange" class="form-select">
+            <option value="">Semua Harga</option>
+            <option value="0-500000">< Rp 500.000</option>
+            <option value="500000-1000000">Rp 500.000 - 1 Juta</option>
+            <option value="1000000-2000000">Rp 1 Juta - 2 Juta</option>
+            <option value="2000000-">> Rp 2 Juta</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <!-- Results Info -->
+    <div class="mb-3">
+      <div class="results-info">
+        <span id="resultsCount">Menampilkan 1 sampai 10 dari 387 entri</span>
+      </div>
+    </div>
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner">
+      <div class="spinner-border spinner-border-custom text-primary">
+        <output class="visually-hidden">Loading...</output>
+      </div>
+      <p class="mt-3">Memuat data HSPK...</p>
+    </div>
+    <!-- Data Table -->
+    <div id="dataTable" class="table-container">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th scope="col" class="th-sort" data-sort="no">No.</th>
+              <th scope="col" class="th-sort" data-sort="kode">Kode</th>
+              <th scope="col" class="th-sort" data-sort="uraian">Uraian Pekerjaan</th>
+              <th scope="col" class="th-sort text-center" data-sort="satuan">Satuan</th>
+              <th scope="col" class="th-sort price-align-right" data-sort="harga">Harga Satuan (Rp)</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- Data will be loaded dynamically via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+      <!-- Pagination -->
+      <div class="p-3">
+        <nav aria-label="Page navigation">
+          <ul class="pagination" id="pagination">
+            <li class="page-item">
+              <a class="page-link" href="#" aria-label="Previous">
+                <i class="fas fa-chevron-left"></i>
+              </a>
+            </li>
+            <li class="page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="page-item"><a class="page-link" href="#">2</a></li>
+            <li class="page-item"><a class="page-link" href="#">3</a></li>
+            <li class="page-item"><a class="page-link" href="#">4</a></li>
+            <li class="page-item"><a class="page-link" href="#">5</a></li>
+            <li class="page-item disabled"><a class="page-link" href="#">...</a></li>
+            <li class="page-item"><a class="page-link" href="#">39</a></li>
+            <li class="page-item">
+              <a class="page-link" href="#" aria-label="Next">
+                <i class="fas fa-chevron-right"></i>
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+    <!-- Empty State (hidden by default) -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <div class="empty-state-icon">
+        <i class="fas fa-search"></i>
+      </div>
+      <h5>Tidak ada data ditemukan</h5>
+      <p>Coba ubah filter pencarian atau kata kunci yang digunakan</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-5 pt-4 border-top text-center text-muted">
+      <p>&copy; 2025 Rencanakan. Data HSPK berdasarkan sumber resmi pemerintah.</p>
+    </div>
+  </div>
+  <!-- Region Selection Modal -->
+  <div class="modal fade" id="regionModal" tabindex="-1" aria-labelledby="regionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="regionModalLabel">
+            <i class="fas fa-map-marker-alt me-2"></i>Pilih Wilayah
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="provinceSelect" class="form-label">Provinsi</label>
+              <select id="provinceSelect" class="form-select">
+                <option value="">Pilih Provinsi</option>
+                <option value="jawa-tengah" selected>Jawa Tengah</option>
+                <option value="jawa-barat">Jawa Barat</option>
+                <option value="jawa-timur">Jawa Timur</option>
+                <!-- Add more provinces -->
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="regencySelect" class="form-label">Kabupaten/Kota</label>
+              <select id="regencySelect" class="form-select">
+                <option value="">Pilih Kabupaten/Kota</option>
+                <option value="cilacap" selected>Kabupaten Cilacap</option>
+                <option value="banyumas">Kabupaten Banyumas</option>
+                <option value="purbalingga">Kabupaten Purbalingga</option>
+                <!-- Add more regencies -->
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-brand" onclick="changeRegion()">Terapkan Perubahan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    // Global variables
+    let currentData = [];
+    let allData = [];
+    let currentSort = { field: '', direction: '' };
+    let currentFilters = {
+      region: 'Kab. Cilacap',
+      search: '',
+      category: '',
+      price_range: ''
+    };
+    let currentPage = 1;
+    let totalPages = 1;
+    let isLoading = false;
+
+    // API Functions
+    async function fetchWageData() {
+      if (isLoading) return;
+      
+      isLoading = true;
+      showLoading(true);
+      
+      try {
+        const hasFilters = currentFilters.search || currentFilters.category || currentFilters.price_range || 
+                          currentSort.field !== 'item_number' || currentSort.direction !== 'asc';
+        
+        const params = new URLSearchParams({
+          region: currentFilters.region,
+          search: currentFilters.search,
+          category: currentFilters.category,
+          price_range: currentFilters.price_range,
+          page: currentPage,
+          per_page: 10,
+          sort_by: currentSort.field || 'item_number',
+          sort_order: currentSort.direction || 'asc'
+        });
+        
+        const response = await fetch(`/api/gov-wage/data/?${params}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          currentData = data.data;
+          updatePagination(data.pagination);
+          renderTable();
+          updateResultsCount(data.pagination);
+          
+          // Show scraping method in console for debugging
+          if (data.scraping_method) {
+            console.log(`Data loaded using: ${data.scraping_method}`);
+          }
+          
+          // Show cache status
+          if (data.cached) {
+            console.log('Data loaded from cache');
+          } else {
+            console.log(`Fresh data scraped (${hasFilters ? 'with filters' : 'smart pagination'})`);
+          }
+        } else {
+          showError(data.error || 'Gagal mengambil data HSPK');
+        }
+      } catch (error) {
+        console.error('Error fetching wage data:', error);
+        showError('Terjadi kesalahan saat mengambil data');
+      } finally {
+        isLoading = false;
+        showLoading(false);
+      }
+    }
+
+    async function fetchAvailableRegions() {
+      try {
+        const response = await fetch('/api/gov-wage/regions/');
+        const data = await response.json();
+        
+        if (data.success) {
+          updateRegionSelect(data.regions);
+        }
+      } catch (error) {
+        console.error('Error fetching regions:', error);
+      }
+    }
+
+    async function fetchPaginationInfo(region) {
+      try {
+        const response = await fetch(`/api/gov-wage/pagination/?region=${encodeURIComponent(region)}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          // Update global pagination info
+          totalPages = data.total_pages;
+          console.log(`Pagination info for ${region}: ${data.total_items} items, ${data.total_pages} pages`);
+        }
+      } catch (error) {
+        console.error('Error fetching pagination info:', error);
+      }
+    }
+
+    // Format currency
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(amount).replace('IDR', 'Rp') + ',-';
+    }
+
+    // Event Listeners
+    document.getElementById('searchInput').addEventListener('input', debounce(function() {
+      currentFilters.search = this.value;
+      currentPage = 1;
+      fetchWageData();
+    }, 500));
+
+    document.getElementById('categoryFilter').addEventListener('change', function() {
+      currentFilters.category = this.value;
+      currentPage = 1;
+      fetchWageData();
+    });
+
+    document.getElementById('priceRange').addEventListener('change', function() {
+      currentFilters.price_range = this.value;
+      currentPage = 1;
+      fetchWageData();
+    });
+
+    // Debounce function for search
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // UI Functions
+    function renderTable() {
+      const tableBody = document.getElementById('tableBody');
+      const dataTable = document.getElementById('dataTable');
+      const emptyState = document.getElementById('emptyState');
+
+      if (currentData.length === 0) {
+        dataTable.style.display = 'none';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      dataTable.style.display = 'block';
+      emptyState.style.display = 'none';
+
+      tableBody.innerHTML = currentData.map((item, index) => `
+        <tr>
+          <td>${item.item_number || index + 1}</td>
+          <td>${item.work_code || '-'}</td>
+          <td>${item.work_description || '-'}</td>
+          <td class="text-center">${item.unit || '-'}</td>
+          <td class="price-align-right">${formatCurrency(item.unit_price_idr || 0)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function updateResultsCount(pagination) {
+      const resultsCount = document.getElementById('resultsCount');
+      if (pagination) {
+        const start = ((pagination.current_page - 1) * pagination.per_page) + 1;
+        const end = Math.min(start + pagination.per_page - 1, pagination.total_items);
+        resultsCount.textContent = `Menampilkan ${start} sampai ${end} dari ${pagination.total_items} entri`;
+      } else {
+        resultsCount.textContent = 'Memuat data...';
+      }
+    }
+
+    function updatePagination(pagination) {
+      currentPage = pagination.current_page;
+      totalPages = pagination.total_pages;
+      
+      const paginationEl = document.getElementById('pagination');
+      let paginationHTML = '';
+      
+      // Previous button
+      if (pagination.has_previous) {
+        paginationHTML += `
+          <li class="page-item">
+            <a class="page-link" href="#" onclick="changePage(${currentPage - 1})" aria-label="Previous">
+              <i class="fas fa-chevron-left"></i>
+            </a>
+          </li>
+        `;
+      }
+      
+      // Page numbers
+      const startPage = Math.max(1, currentPage - 2);
+      const endPage = Math.min(totalPages, currentPage + 2);
+      
+      for (let i = startPage; i <= endPage; i++) {
+        paginationHTML += `
+          <li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+          </li>
+        `;
+      }
+      
+      // Show dots and last page if needed
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          paginationHTML += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+        }
+        paginationHTML += `
+          <li class="page-item">
+            <a class="page-link" href="#" onclick="changePage(${totalPages})">${totalPages}</a>
+          </li>
+        `;
+      }
+      
+      // Next button
+      if (pagination.has_next) {
+        paginationHTML += `
+          <li class="page-item">
+            <a class="page-link" href="#" onclick="changePage(${currentPage + 1})" aria-label="Next">
+              <i class="fas fa-chevron-right"></i>
+            </a>
+          </li>
+        `;
+      }
+      
+      paginationEl.innerHTML = paginationHTML;
+    }
+
+    function changePage(page) {
+      if (page !== currentPage && page >= 1 && page <= totalPages) {
+        currentPage = page;
+        fetchWageData();
+      }
+    }
+
+    function showLoading(show) {
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      const dataTable = document.getElementById('dataTable');
+      
+      if (show) {
+        loadingSpinner.style.display = 'block';
+        dataTable.style.display = 'none';
+      } else {
+        loadingSpinner.style.display = 'none';
+        dataTable.style.display = 'block';
+      }
+    }
+
+    function showError(message) {
+      alert(message); // You can replace this with a better error display
+    }
+
+    function updateRegionSelect(regions) {
+      const provinceSelect = document.getElementById('provinceSelect');
+      
+      // Group regions by province
+      const provinceGroups = {};
+      for (const region of regions) {
+        if (!provinceGroups[region.province]) {
+          provinceGroups[region.province] = [];
+        }
+        provinceGroups[region.province].push(region);
+      }
+      
+      // Update province select
+      provinceSelect.innerHTML = '<option value="">Pilih Provinsi</option>';
+      for (const province of Object.keys(provinceGroups)) {
+        const option = document.createElement('option');
+        option.value = province;
+        option.textContent = province;
+        if (province === 'Jawa Tengah') option.selected = true;
+        provinceSelect.appendChild(option);
+      }
+      
+      // Update regency select for Jawa Tengah (default)
+      if (provinceGroups['Jawa Tengah']) {
+        updateRegencySelect(provinceGroups['Jawa Tengah']);
+      }
+    }
+
+    function updateRegencySelect(regencies) {
+      const regencySelectEl = document.getElementById('regencySelect');
+      regencySelectEl.innerHTML = '<option value="">Pilih Kabupaten/Kota</option>';
+      
+      for (const regency of regencies) {
+        const option = document.createElement('option');
+        option.value = regency.value;
+        option.textContent = regency.name;
+        if (regency.value === 'Kab. Cilacap') option.selected = true;
+        regencySelectEl.appendChild(option);
+      }
+    }
+
+    // Sort functionality
+    for (const header of document.querySelectorAll('.th-sort')) {
+      header.addEventListener('click', function() {
+        const field = this.dataset.sort;
+        
+        // Map frontend field names to API field names
+        const fieldMap = {
+          'no': 'item_number',
+          'kode': 'work_code',
+          'uraian': 'work_description',
+          'satuan': 'unit',
+          'harga': 'unit_price_idr'
+        };
+        
+        const apiField = fieldMap[field] || field;
+        
+        // Remove sort classes from all headers
+        for (const h of document.querySelectorAll('.th-sort')) {
+          h.classList.remove('asc', 'desc');
+        }
+
+        // Determine sort direction
+        if (currentSort.field === apiField && currentSort.direction === 'asc') {
+          currentSort.direction = 'desc';
+          this.classList.add('desc');
+        } else {
+          currentSort.direction = 'asc';
+          this.classList.add('asc');
+        }
+        currentSort.field = apiField;
+        
+        // Refresh data with new sorting
+        currentPage = 1;
+        fetchWageData();
+      });
+    }
+
+    // Change region
+    function changeRegion() {
+      const regency = document.getElementById('regencySelect').value;
+      
+      if (!regency) {
+        alert('Silakan pilih kabupaten/kota terlebih dahulu');
+        return;
+      }
+      
+      // Update current region filter
+      currentFilters.region = regency;
+      currentPage = 1;
+      
+      // Update display
+      document.querySelector('.region-selector strong').textContent = 
+        document.querySelector(`#regencySelect option[value="${regency}"]`).textContent;
+      
+      // Close modal
+      const modal = bootstrap.Modal.getInstance(document.getElementById('regionModal'));
+      modal.hide();
+      
+      // Fetch pagination info for new region, then data
+      fetchPaginationInfo(regency).then(() => {
+        fetchWageData();
+      });
+    }
+
+    // Province change handler
+    document.getElementById('provinceSelect').addEventListener('change', function() {
+      const province = this.value;
+      // In a real implementation, you would fetch regencies for the selected province
+      // For now, we only support Central Java
+      if (province === 'Jawa Tengah') {
+        fetchAvailableRegions();
+      }
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      // Load initial data and pagination info
+      fetchPaginationInfo(currentFilters.region);
+      fetchWageData();
+      fetchAvailableRegions();
+
+      // Set up initial display
+      updateResultsCount();
+    });
+  </script>
+{% endblock %}
