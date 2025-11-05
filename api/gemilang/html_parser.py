@@ -60,6 +60,8 @@ class GemilangHtmlParser(IHtmlParser):
         
         item_html = str(item)
         unit = self.unit_parser.parse_unit(item_html)
+        if not unit:
+            unit = "PCS"
         
         return Product(name=name, price=price, url=url, unit=unit)
     

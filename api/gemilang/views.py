@@ -1,5 +1,10 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
+from django.middleware.csrf import get_token
+from .factory import create_gemilang_scraper, create_gemilang_location_scraper
+from .database_service import GemilangDatabaseService
+from db_pricing.auto_categorization_service import AutoCategorizationService
 import json
 import logging
 
@@ -228,6 +233,7 @@ def _handle_regular_save(db_service, products_data):
         }, status=500)
 
 
+@csrf_exempt
 @require_http_methods(["POST"])
 @require_api_token(required_permission='write')
 @enforce_resource_limits
@@ -283,14 +289,57 @@ def scrape_and_save(request):
             return error_response
         
         db_service = GemilangDatabaseService()
+        auto_categorization = AutoCategorizationService()
         
-        if params['use_price_update']:
-            return _handle_price_update_save(db_service, products_data)
+        if use_price_update:
+            save_result = db_service.save_with_price_update(products_data)
+            
+            if save_result['success'] and save_result['product_ids']:
+                cat_result = auto_categorization.categorize_products('gemilang', save_result['product_ids'])
+            else:
+                cat_result = {'categorized': 0}
+            
+            return JsonResponse({
+                'success': save_result['success'],
+                'message': f"Updated {save_result['updated']} products, inserted {save_result['inserted']} new products. Categorized {cat_result['categorized']} products.",
+                'saved': save_result['updated'] + save_result['inserted'],
+                'updated': save_result['updated'],
+                'inserted': save_result['inserted'],
+                'categorized': cat_result['categorized'],
+                'anomalies': save_result['anomalies'],
+                'anomaly_count': len(save_result['anomalies'])
+            })
         else:
-            return _handle_regular_save(db_service, products_data)
+            save_result = db_service.save(products_data)
+            if save_result['success']:
+                cat_result = auto_categorization.categorize_products('gemilang', save_result['product_ids'])
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f"Successfully saved {len(products_data)} products. Categorized {cat_result['categorized']} products.",
+                    'saved': len(products_data),
+                    'updated': 0,
+                    'inserted': len(products_data),
+                    'categorized': cat_result['categorized'],
+                    'anomalies': []
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to save products to database',
+                    'saved': 0,
+                    'updated': 0,
+                    'inserted': 0,
+                    'categorized': 0,
+                    'anomalies': []
+                }, status=500)
         
     except Exception as e:
-        logger.error(f"Unexpected error in scrape_and_save: {type(e).__name__}")
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Unexpected error in scrape_and_save: {str(e)}\n{error_details}")
+        print(f"ERROR in scrape_and_save: {str(e)}")
+        print(error_details)
         return JsonResponse({
-            'error': 'Internal server error occurred'
+            'error': f'Internal server error: {str(e)}'
         }, status=500)
