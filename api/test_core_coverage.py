@@ -2,6 +2,8 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 from api.interfaces import HttpClientError, UrlBuilderError, HtmlParserError
 from api.core import BaseHttpClient, BaseUrlBuilder, BasePriceScraper, clean_price_digits
+
+
 class TestCoreModuleCoverage(TestCase):
     def test_clean_price_digits_none_input(self):
         with self.assertRaises(TypeError) as context:
@@ -16,12 +18,31 @@ class TestCoreModuleCoverage(TestCase):
     def test_clean_price_digits_empty_string(self):
         result = clean_price_digits("")
         self.assertEqual(result, 0)
+    
     def test_clean_price_digits_no_digits(self):
         result = clean_price_digits("No digits here!")
         self.assertEqual(result, 0)
+    
     def test_clean_price_digits_with_digits(self):
         result = clean_price_digits("Rp 55.000")
         self.assertEqual(result, 55000)
+    
+    def test_http_client_enhanced_headers(self):
+        """Test that BaseHttpClient sets User-Agent header"""
+        from api.config import config
+        
+        client = BaseHttpClient()
+        
+        # Verify headers are set in the session
+        headers = client.session.headers
+        
+        # Check for User-Agent header - using config.user_agent as source of truth
+        self.assertIn('User-Agent', headers)
+        self.assertIn('Chrome/', headers['User-Agent'], 
+                     f"Expected Chrome version in User-Agent, got: {headers['User-Agent']}")
+        self.assertEqual(headers['User-Agent'], config.user_agent,
+                        f"User-Agent mismatch. Expected: {config.user_agent}, Got: {headers['User-Agent']}")
+    
     @patch('api.core.requests.Session')
     def test_http_client_request_retry_mechanism(self, mock_session_class):
         mock_session = Mock()

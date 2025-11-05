@@ -16,13 +16,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     default-libmysqlclient-dev \
     && pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y --auto-remove build-essential gcc \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers and dependencies
+RUN playwright install && playwright install-deps
+
+# Clean up to reduce image size
+RUN apt-get purge -y --auto-remove build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /app/
 
 EXPOSE 8000
 
-# Koyeb provides $PORT. Collect static files at startup, then run Gunicorn
-CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:${PORT:-8000} price_scraper_rencanakan_api.wsgi:application"]
+# Collect static files at startup, then run Gunicorn
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn price_scraper_rencanakan_api.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers=4 --threads=2 --worker-class=sync --timeout=120"]

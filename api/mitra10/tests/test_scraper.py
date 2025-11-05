@@ -52,7 +52,7 @@ class TestMitra10PriceScraper(TestCase):
         self.assertEqual(result[0].url, "https://test.com/product1")
         
         self.mock_url_builder.build_search_url.assert_called_once_with(test_keyword)
-        mock_batch_client.get.assert_called_once_with(test_url)
+        mock_batch_client.get.assert_called_once_with(test_url, timeout=60)
         self.mock_html_parser.parse_products.assert_called_once_with(test_html)
         
         mock_batch_client_class.assert_called_once()
@@ -196,7 +196,7 @@ class TestMitra10PriceScraper(TestCase):
             elif keyword == "another_success":
                 return test_urls[2]
         
-        def mock_get_html(url):
+        def mock_get_html(url, **kwargs):
             if url == test_urls[1]:  
                 raise ConnectionError("Network error")
             return test_html
@@ -243,7 +243,7 @@ class TestMitra10PriceScraper(TestCase):
         self.assertEqual(result, [])
 
         self.mock_url_builder.build_search_url.assert_called_once_with("no_results_keyword")
-        mock_batch_client.get.assert_called_once_with(test_url)
+        mock_batch_client.get.assert_called_once_with(test_url, timeout=60)
         self.mock_html_parser.parse_products.assert_called_once_with(test_html)
     
     @patch('api.mitra10.scraper.BatchPlaywrightClient')
@@ -279,3 +279,75 @@ class TestMitra10PriceScraper(TestCase):
         self.assertEqual(result[2].name, "Product 2A")
         self.assertEqual(result[3].name, "Product 2B")
         self.assertEqual(result[4].name, "Product 2C")
+
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    @patch('builtins.print')
+    def test_scrape_batch_with_error_handling_comprehensive(self, mock_print, mock_batch_client_class):
+        """Test comprehensive error handling in scrape_batch"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_keywords = ["keyword1", "keyword2", "keyword3"]
+        
+        # Mock url_builder to fail on second keyword
+        self.mock_url_builder.build_search_url.side_effect = [
+            "https://test.com/search?q=keyword1",
+            Exception("URL builder error"),
+            "https://test.com/search?q=keyword3"
+        ]
+        
+        # Mock successful response for keywords that don't error
+        mock_batch_client.get.return_value = "<html>test</html>"
+        self.mock_html_parser.parse_products.return_value = [
+            Product(name="Test Product", price=10000, url="https://test.com/product")
+        ]
+        
+        result = self.scraper.scrape_batch(test_keywords)
+        
+        # Should get products from keyword1 and keyword3, skip keyword2 due to error
+        self.assertEqual(len(result), 2)
+        
+        # Verify error was printed
+        mock_print.assert_called_once()
+        call_args = mock_print.call_args[0][0]
+        self.assertIn("Error scraping keyword2", call_args)
+        self.assertIn("URL builder error", call_args)
+
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    @patch('builtins.print')
+    def test_scrape_batch_http_client_error(self, mock_print, mock_batch_client_class):
+        """Test error handling when HTTP client fails"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_keyword = "test_keyword"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com/search"
+        mock_batch_client.get.side_effect = Exception("Network error")
+        
+        result = self.scraper.scrape_batch([test_keyword])
+        
+        self.assertEqual(len(result), 0)
+        mock_print.assert_called_once()
+        call_args = mock_print.call_args[0][0]
+        self.assertIn("Error scraping test_keyword", call_args)
+        self.assertIn("Network error", call_args)
+
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    @patch('builtins.print')
+    def test_scrape_batch_html_parser_error(self, mock_print, mock_batch_client_class):
+        """Test error handling when HTML parser fails"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_keyword = "test_keyword"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com/search"
+        mock_batch_client.get.return_value = "<html>test</html>"
+        self.mock_html_parser.parse_products.side_effect = Exception("Parser error")
+        
+        result = self.scraper.scrape_batch([test_keyword])
+        
+        self.assertEqual(len(result), 0)
+        mock_print.assert_called_once()
+        call_args = mock_print.call_args[0][0]
+        self.assertIn("Error scraping test_keyword", call_args)
+        self.assertIn("Parser error", call_args)
