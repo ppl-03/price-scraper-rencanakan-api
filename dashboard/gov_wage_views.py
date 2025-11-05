@@ -150,7 +150,7 @@ def get_wage_data(request):
         }, status=500)
 
 
-def get_page_data_smart(request, region, page, per_page):
+def get_page_data_smart(region, page, per_page):
     try:
         # Check cache for this specific page
         cache = get_cache()

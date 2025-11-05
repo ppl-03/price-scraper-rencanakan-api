@@ -600,26 +600,25 @@
 
     function updateRegionSelect(regions) {
       const provinceSelect = document.getElementById('provinceSelect');
-      const regencySelect = document.getElementById('regencySelect');
       
       // Group regions by province
       const provinceGroups = {};
-      regions.forEach(region => {
+      for (const region of regions) {
         if (!provinceGroups[region.province]) {
           provinceGroups[region.province] = [];
         }
         provinceGroups[region.province].push(region);
-      });
+      }
       
       // Update province select
       provinceSelect.innerHTML = '<option value="">Pilih Provinsi</option>';
-      Object.keys(provinceGroups).forEach(province => {
+      for (const province of Object.keys(provinceGroups)) {
         const option = document.createElement('option');
         option.value = province;
         option.textContent = province;
         if (province === 'Jawa Tengah') option.selected = true;
         provinceSelect.appendChild(option);
-      });
+      }
       
       // Update regency select for Jawa Tengah (default)
       if (provinceGroups['Jawa Tengah']) {
@@ -631,17 +630,17 @@
       const regencySelectEl = document.getElementById('regencySelect');
       regencySelectEl.innerHTML = '<option value="">Pilih Kabupaten/Kota</option>';
       
-      regencies.forEach(regency => {
+      for (const regency of regencies) {
         const option = document.createElement('option');
         option.value = regency.value;
         option.textContent = regency.name;
         if (regency.value === 'Kab. Cilacap') option.selected = true;
         regencySelectEl.appendChild(option);
-      });
+      }
     }
 
     // Sort functionality
-    document.querySelectorAll('.th-sort').forEach(header => {
+    for (const header of document.querySelectorAll('.th-sort')) {
       header.addEventListener('click', function() {
         const field = this.dataset.sort;
         
@@ -657,9 +656,9 @@
         const apiField = fieldMap[field] || field;
         
         // Remove sort classes from all headers
-        document.querySelectorAll('.th-sort').forEach(h => {
+        for (const h of document.querySelectorAll('.th-sort')) {
           h.classList.remove('asc', 'desc');
-        });
+        }
 
         // Determine sort direction
         if (currentSort.field === apiField && currentSort.direction === 'asc') {
@@ -675,7 +674,7 @@
         currentPage = 1;
         fetchWageData();
       });
-    });
+    }
 
     // Change region
     function changeRegion() {
