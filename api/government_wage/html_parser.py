@@ -185,10 +185,14 @@ class GovernmentWageHtmlParser(IHtmlParser):
             "uraian pekerjaan (hspk)": self.COL_URAIAN_PEKERJAAN,
             "harga satuan (rp)": self.COL_HARGA_SATUAN,
         }
-        # Create a copy to avoid "dictionary changed size during iteration"
-        for k, v in list(mapping.items()):
+        # Build alias mappings separately to avoid modifying dict during iteration
+        alias_mappings = {}
+        for k, v in mapping.items():
             if k in aliases:
-                mapping[aliases[k]] = v
+                alias_mappings[aliases[k]] = v
+        
+        # Update mapping after iteration
+        mapping.update(alias_mappings)
 
         canonical: Dict[str, int] = {}
         for key in ("no", "kode", self.COL_URAIAN_PEKERJAAN, "satuan", self.COL_HARGA_SATUAN):
