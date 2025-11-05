@@ -4,9 +4,11 @@ from dashboard.views import home
 from . import views
 from . import gov_wage_views
 
+app_name = 'dashboard'
+
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", home, name="home"),
+    path("", home, name="dashboard_home"),
     path("scrape/gemilang/", views.trigger_scrape, name="trigger_scrape"),
 
     # Curated prices (ItemPriceProvince)

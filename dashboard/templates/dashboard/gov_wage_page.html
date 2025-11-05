@@ -1,23 +1,20 @@
-<!doctype html>
-<html lang="id">
-<head>
-  <meta charset="utf-8">
-  <title>HSPK Upah Pemerintah – Rencanakan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  {% load static %}
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+{% extends 'dashboard/base_with_sidebar.html' %}
+
+{% block title %}HSPK Upah Pemerintah – Rencanakan{% endblock %}
+
+{% block extra_css %}
   <style>
-    /* Base styling consistent with home page */
-    body { background:#f7f9fb; font-family: Arial, sans-serif; color:#333; }
+    /* Clean white design */
+    body { 
+      background: #fff; 
+      color: #333; 
+    }
 
-    /* Top bar with only the logo + avatar */
-    .topbar { background:#fff; box-shadow: 0 2px 4px rgba(0,0,0,.05); }
-    .brand-wrap { display:flex; align-items:center; gap:12px; }
-    .brand-logo { height:36px; width:auto; }
-    .avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; }
+    /* Content wrapper */
+    .content-wrapper { 
+      padding: 2rem;
+    }
 
-    .content-wrapper{ margin-top:24px; }
     .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
 
     /* Search and filter controls */
@@ -177,24 +174,10 @@
       border-left: 4px solid #2196f3;
     }
   </style>
-</head>
-<body>
-  <!-- Top bar with logo only -->
-  <header class="topbar py-3">
-    <div class="container d-flex align-items-center justify-content-between">
-      <div class="brand-wrap">
-        <img class="brand-logo" src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan logo">
-      </div>
-      <div class="d-flex align-items-center gap-3">
-        <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
-          <i class="fas fa-arrow-left me-1"></i> Kembali ke Beranda
-        </a>
-        <img class="avatar" src="https://i.imgur.com/7k12rjS.png" alt="profile">
-      </div>
-    </div>
-  </header>
+{% endblock %}
 
-  <div class="container content-wrapper">
+{% block content %}
+  <div class="content-wrapper">
     <!-- Region Selection -->
     <div class="region-selector">
       <div class="row align-items-center">
@@ -245,14 +228,12 @@
         </div>
       </div>
     </div>
-
     <!-- Results Info -->
     <div class="mb-3">
       <div class="results-info">
         <span id="resultsCount">Menampilkan 1 sampai 10 dari 387 entri</span>
       </div>
     </div>
-
     <!-- Loading Spinner -->
     <div id="loadingSpinner" class="loading-spinner">
       <div class="spinner-border spinner-border-custom text-primary" role="status">
@@ -260,7 +241,6 @@
       </div>
       <p class="mt-3">Memuat data HSPK...</p>
     </div>
-
     <!-- Data Table -->
     <div id="dataTable" class="table-container">
       <div class="table-responsive">
@@ -275,81 +255,10 @@
             </tr>
           </thead>
           <tbody id="tableBody">
-            <!-- Sample data matching the screenshot -->
-            <tr>
-              <td>1</td>
-              <td>2.2.2.1.4</td>
-              <td>Pemasangan 1 m3 Pondasi Batu Belah Mortar Tipe S (12,5 MPa) cara manual (HSPK Bidang Sumber Daya Air A.1.02.1b.1)</td>
-              <td class="text-center">m3</td>
-              <td class="price-align-right">Rp 1.053.797,-</td>
-            </tr>
-            <tr>
-              <td>2</td>
-              <td>2.2.2.1.6</td>
-              <td>Pemasangan 1 m3 Pondasi Batu Belah Mortar Tipe N (5,2MPa) cara manual (HSPK Bidang Sumber Daya Air A.1.02.1c.1)</td>
-              <td class="text-center">m3</td>
-              <td class="price-align-right">Rp 1.189.492,-</td>
-            </tr>
-            <tr>
-              <td>3</td>
-              <td>2.2.2.1.8</td>
-              <td>Pemasangan 1 m3 Pondasi Batu Belah Mortar Tipe O (2,4 MPa) cara manual (HSPK Bidang Sumber Daya Air A.1.02.1d.1)</td>
-              <td class="text-center">m3</td>
-              <td class="price-align-right">Rp 965.963,-</td>
-            </tr>
-            <tr>
-              <td>4</td>
-              <td>2.2.2.1.1</td>
-              <td>Pemasangan 1 m3 Batu Kosong (Aanstamping) untuk Pondasi Gedung</td>
-              <td class="text-center">m3</td>
-              <td class="price-align-right">Rp 595.345,-</td>
-            </tr>
-            <tr>
-              <td>5</td>
-              <td>2.2.2.2.6</td>
-              <td>Pemasangan 1 m3 Pondasi Sumuran, Diameter 100 cm Masif</td>
-              <td class="text-center">m3</td>
-              <td class="price-align-right">Rp 1.095.779,-</td>
-            </tr>
-            <tr>
-              <td>6</td>
-              <td>2.2.1.3.1</td>
-              <td>Pemasangan 1 m2 Bekisting untuk Pondasi Telapak (3 kali pakai)</td>
-              <td class="text-center">m2</td>
-              <td class="price-align-right">Rp 232.373,-</td>
-            </tr>
-            <tr>
-              <td>7</td>
-              <td>2.2.1.3.4</td>
-              <td>Pemasangan 1 m2 Bekisting untuk Kolom (3 kali pakai)</td>
-              <td class="text-center">m2</td>
-              <td class="price-align-right">Rp 179.154,-</td>
-            </tr>
-            <tr>
-              <td>8</td>
-              <td>2.2.1.3.5</td>
-              <td>Pemasangan 1 m2 Bekisting untuk Balok (3 kali pakai)</td>
-              <td class="text-center">m2</td>
-              <td class="price-align-right">Rp 180.410,-</td>
-            </tr>
-            <tr>
-              <td>9</td>
-              <td>2.2.1.3.6</td>
-              <td>Pemasangan 1 m2 Bekisting untuk Plat lantai Beton Bangunan Gedung</td>
-              <td class="text-center">m2</td>
-              <td class="price-align-right">Rp 202.022,-</td>
-            </tr>
-            <tr>
-              <td>10</td>
-              <td>2.2.1.3.7</td>
-              <td>Pemasangan 1 m2 Bekisting untuk Dinding Sheerwall (3 kali pakai)</td>
-              <td class="text-center">m2</td>
-              <td class="price-align-right">Rp 186.685,-</td>
-            </tr>
+            <!-- Data will be loaded dynamically via JavaScript -->
           </tbody>
         </table>
       </div>
-
       <!-- Pagination -->
       <div class="p-3">
         <nav aria-label="Page navigation">
@@ -375,7 +284,6 @@
         </nav>
       </div>
     </div>
-
     <!-- Empty State (hidden by default) -->
     <div id="emptyState" class="empty-state" style="display: none;">
       <div class="empty-state-icon">
@@ -384,8 +292,12 @@
       <h5>Tidak ada data ditemukan</h5>
       <p>Coba ubah filter pencarian atau kata kunci yang digunakan</p>
     </div>
-  </div>
 
+    <!-- Footer -->
+    <div class="mt-5 pt-4 border-top text-center text-muted">
+      <p>&copy; 2025 Rencanakan. Data HSPK berdasarkan sumber resmi pemerintah.</p>
+    </div>
+  </div>
   <!-- Region Selection Modal -->
   <div class="modal fade" id="regionModal" tabindex="-1" aria-labelledby="regionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -427,15 +339,9 @@
       </div>
     </div>
   </div>
+{% endblock %}
 
-  <!-- Footer -->
-  <div class="footer mt-5 pb-4">
-    <div class="container">
-      <p>&copy; 2024 Rencanakan. Data HSPK berdasarkan sumber resmi pemerintah.</p>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}
   <script>
     // Global variables
     let currentData = [];
@@ -814,10 +720,9 @@
       fetchPaginationInfo(currentFilters.region);
       fetchWageData();
       fetchAvailableRegions();
-      
+
       // Set up initial display
       updateResultsCount();
     });
   </script>
-</body>
-</html>
+{% endblock %}

@@ -1902,7 +1902,7 @@ def _clean_and_dedupe_prices(prices: list[dict]) -> list[dict]:
 # ---------------- views ----------------
 @require_GET
 def home(request):
-    keyword = request.GET.get("q", "semen")
+    keyword = request.GET.get("q", "pasir")
 
     # Scrape prices from all vendors
     prices = _scrape_all_vendors(request, keyword)
@@ -1921,7 +1921,7 @@ def home(request):
 
 @require_POST
 def trigger_scrape(request):
-    keyword = request.POST.get("q", "semen")
+    keyword = request.POST.get("q", "pasir")
     counts = {
         "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE),
         "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback),
