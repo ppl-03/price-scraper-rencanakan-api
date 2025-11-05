@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 from django.test import TestCase
+from unittest.mock import MagicMock
 import unittest.mock
 from api.mitra10.html_parser import Mitra10HtmlParser
 
@@ -214,6 +215,112 @@ class TestMitra10HTMLParser(TestCase):
         self.assertEqual(products_dict[0]['name'], 'Nested Product Title')
         self.assertEqual(products_dict[0]['price'], 30000)
         self.assertEqual(products_dict[0]['url'], '/nested-product')
+
+    def test_price_extraction_regex_rupiah(self):
+        """Cover regex-based price extraction when no Rp/IDR is present to hit _extract_from_regex_patterns return."""
+        html = '<div><span>harga sekitar 12.345 rupiah</span></div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        price = self.parser.price_helper.extract_price_from_element(soup)
+        self.assertEqual(price, 12345)
+
+    def test_unit_fallback_from_name_when_item_html_has_no_unit(self):
+        """Force first unit parse to None and second (name-only) to 'PCS' to cover name-fallback path."""
+        mock_unit_parser = MagicMock()
+        mock_unit_parser.parse_unit.side_effect = [None, 'PCS']
+        parser = Mitra10HtmlParser(unit_parser=mock_unit_parser)
+
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/p1">
+                    <p>Produk Sample 10 PCS</p>
+                </a>
+                <span class="price__final">IDR 10,000</span>
+            </div>
+        </div>
+        '''
+        products = parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].unit, 'PCS')
+
+    def test_extract_sold_count_regular_number(self):
+        """Cover normalization of sold count for standard integer text."""
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/sold-regular"><p>Produk A</p></a>
+                <span class="price__final">IDR 20,000</span>
+                <div>38 Terjual</div>
+            </div>
+        </div>
+        '''
+        products = self.parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].sold_count, 38)
+
+    def test_extract_sold_count_thousands_rb(self):
+        """Cover normalization of sold count for 'rb' thousands notation."""
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/sold-rb"><p>Produk B</p></a>
+                <span class="price__final">IDR 30,000</span>
+                <div>1 rb+ terjual</div>
+            </div>
+        </div>
+        '''
+        products = self.parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].sold_count, 1000)
+
+    def test_extract_sold_count_no_digits_returns_none(self):
+        """Cover branch where sold_text exists but contains no digits, triggering final return None (~294-297)."""
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/sold-nodigits"><p>Produk C</p></a>
+                <span class="price__final">IDR 10,000</span>
+                <div>terjual</div>
+            </div>
+        </div>
+        '''
+        products = self.parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        self.assertIsNone(products[0].sold_count)
+
+    def test_normalize_sold_count_value_error_branch(self):
+        """Force ValueError in int(number_str) by patching re.sub to return non-numeric, covering except path (~294-295)."""
+        from unittest.mock import patch
+        import api.mitra10.html_parser as hp
+
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/sold-patch"><p>Produk D</p></a>
+                <span class="price__final">IDR 40,000</span>
+                <div>123 terjual</div>
+            </div>
+        </div>
+        '''
+        with patch.object(hp.re, 'sub', return_value='notanumber'):
+            products = self.parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        self.assertIsNone(products[0].sold_count)
+
+    def test_normalize_sold_count_rb_value_error_branch(self):
+        """Trigger ValueError in rb/ribu branch by using a malformed number like '1,,2 rb', covering lines ~285-286."""
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/sold-rb-malformed"><p>Produk E</p></a>
+                <span class="price__final">IDR 50,000</span>
+                <div>1,,2 rb terjual</div>
+            </div>
+        </div>
+        '''
+        products = self.parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        self.assertIsNone(products[0].sold_count)
 
     def test_html_parser_text_content_normalization(self):
         """Test HTML parser's text content normalization and whitespace handling"""
