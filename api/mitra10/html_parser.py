@@ -241,7 +241,60 @@ class Mitra10HtmlParser(IHtmlParser, SafeExtractionMixin):
         if not unit and name:
             unit = self.unit_parser.parse_unit(f"<div><h2>{name}</h2></div>")
         
-        return Product(name=name, price=price, url=url, unit=unit)
+        # Extract sold count
+        sold_count = self._extract_sold_count(item)
+        
+        return Product(name=name, price=price, url=url, unit=unit, sold_count=sold_count)
+    
+    def _extract_sold_count(self, item) -> Optional[int]:
+        """Extract and normalize sold count from product item"""
+        # Look for text containing "terjual" (sold in Indonesian)
+        sold_text = None
+        
+        # Search for text with "terjual" in the item
+        for text_element in item.find_all(text=True):
+            text = text_element.strip().lower()
+            if 'terjual' in text:
+                sold_text = text
+                break
+        
+        if not sold_text:
+            return None
+        
+        # Normalize sold count
+        return self._normalize_sold_count(sold_text)
+    
+    def _normalize_sold_count(self, sold_text: str) -> Optional[int]:
+        """
+        Normalize sold count text to integer
+        Examples:
+        - "38 Terjual" -> 38
+        - "1 rb+ terjual" -> 1000
+        """
+        sold_text = sold_text.lower().replace('terjual', '').strip()
+        
+        # Handle "rb+" or "ribu+" format (thousands)
+        if 'rb' in sold_text or 'ribu' in sold_text:
+            # Extract number before rb/ribu
+            match = re.search(r'([\d.,]+)\s*(?:rb|ribu)', sold_text)
+            if match:
+                number_str = match.group(1).replace('.', '').replace(',', '.')
+                try:
+                    number = float(number_str)
+                    return int(number * 1000)
+                except ValueError:
+                    return None
+        
+        # Handle regular numbers (may have spaces between digits)
+        # Remove all non-digit characters except decimal point
+        number_str = re.sub(r'[^\d]', '', sold_text)
+        if number_str:
+            try:
+                return int(number_str)
+            except ValueError:
+                return None
+        
+        return None
     
     def _extract_product_name(self, item) -> Optional[str]:
         # Try primary selectors
