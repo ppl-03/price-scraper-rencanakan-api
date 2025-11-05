@@ -284,7 +284,6 @@ def scrape_and_save(request):
             return error_response
         
         db_service = GemilangDatabaseService()
-        auto_categorization = AutoCategorizationService()
         
         if params['use_price_update']:
             return _handle_price_update_save(db_service, products_data)
