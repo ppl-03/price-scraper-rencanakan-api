@@ -12,6 +12,9 @@ from bs4 import BeautifulSoup
 import re, json, os, time
 import secrets
 
+# Import available categories
+from db_pricing.auto_categorization_service import AVAILABLE_CATEGORIES
+
 # For diagnostics + plain HTML fetch
 from api.core import BaseHttpClient
 
@@ -1916,7 +1919,10 @@ def home(request):
     # Clean and deduplicate prices
     prices = _clean_and_dedupe_prices(prices)
 
-    return render(request, "dashboard/home.html", {"prices": prices})
+    return render(request, "dashboard/home.html", {
+        "prices": prices,
+        "available_categories": AVAILABLE_CATEGORIES
+    })
 
 
 @require_POST
