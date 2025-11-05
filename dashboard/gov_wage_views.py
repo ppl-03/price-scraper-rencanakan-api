@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods, require_GET
+from django.views.decorators.csrf import csrf_protect
 from django.core.paginator import Paginator
 from django.db.models import Q
 import json
@@ -15,6 +15,7 @@ from api.government_wage.simple_cache import get_cache, make_cache_key
 logger = logging.getLogger(__name__)
 
 
+@require_GET
 def gov_wage_page(request):
     """
     Render the government wage page with initial context
@@ -656,7 +657,7 @@ def get_available_regions(request):
 
 
 @require_http_methods(["POST"])
-@csrf_exempt
+@csrf_protect
 def search_work_code(request):
     """
     API endpoint to search by specific work code
