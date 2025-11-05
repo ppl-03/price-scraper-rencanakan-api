@@ -229,9 +229,18 @@
           </div>
         </div>
         
-        <!-- Row 2: Location and Price range -->
+        <!-- Row 2: Grouping (Category) and Location -->
         <div class="row g-3 mb-3">
           <div class="col-md-4">
+            <label for="categorySelect" class="form-label small text-muted">Pengelompokan</label>
+            <select id="categorySelect" class="form-select">
+              <option value="">Semua kategori</option>
+              {% for cat in available_categories %}
+                <option value="{{ cat }}">{{ cat }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-8">
             <label for="locationSelect" class="form-label small text-muted">Lokasi</label>
             <div class="dropdown">
               <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="locationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -293,6 +302,7 @@
           </thead>
           <tbody id="tableBody">
             {% for r in prices %}
+              <tr data-category="{{ r.category|default:'' }}">
               <tr>
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
@@ -459,6 +469,7 @@
       const data = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
+      const category = tr.dataset.category?.trim() || "";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
         const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
       const priceNum = toNumber(priceText);
@@ -481,11 +492,12 @@
       // Normalize empty unit to dash
       const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
       
-      return { item, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
+      return { item, vendor, category, price: priceNum, unit: normalizedUnit, location, allLocations };
     });
 
     // Populate vendor dropdown (for…of)
     const vendorSelect = document.getElementById("vendorSelect");
+    const categorySelect = document.getElementById("categorySelect");
     const uniqueVendors = [...new Set(data.map(d => d.vendor).filter(Boolean))].sort();
     for (const v of uniqueVendors) {
       const opt = document.createElement("option");
@@ -626,12 +638,13 @@
     function applyFilters() {
       const q = (filterInput.value || "").toLowerCase();
       const v = vendorSelect.value || "";
-      const l = locationSelect.value || "";
+      const c = categorySelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
       return data.filter(d => {
         const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
+        const cm = !c || d.category === c;
         
         // Enhanced location matching: check both primary location and all locations
         let lm = !l || d.location === l;
@@ -641,7 +654,7 @@
         
         const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
                    (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
-        return qmatch && vm && lm && pm;
+        return qmatch && vm && cm && lm && pm;
       });
     }
 
@@ -671,6 +684,7 @@
       let idx = 0;
       for (const d of slice) {
         const tr = document.createElement("tr");
+        tr.dataset.category = d.category || "";
         
         // Build location cell content with improved design
         let locationHtml = `<div class="d-flex align-items-center">
@@ -764,7 +778,7 @@
     }
 
     // Filters events (for…of) - excluding locationSelect since it's handled separately
-    const filterControls = [filterInput, vendorSelect, minPrice, maxPrice];
+    const filterControls = [filterInput, vendorSelect, categorySelect, minPrice, maxPrice];
     for (const el of filterControls) {
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
@@ -775,6 +789,7 @@
       e.preventDefault();
       filterInput.value = ""; 
       vendorSelect.value = ""; 
+      categorySelect.value = "";
       locationSelect.value = "";
       selectedLocationText.textContent = "Semua lokasi";
       minPrice.value = ""; 
