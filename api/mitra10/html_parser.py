@@ -9,6 +9,9 @@ from .unit_parser import Mitra10UnitParser
 
 logger = logging.getLogger(__name__)
 
+MAX_SOLD_TEXT_LEN = 64
+RB_RIBU_PATTERN = re.compile(r"\b(\d{1,4}(?:[.,]\d{1,3})?)\s*(?:rb|ribu)\b", re.IGNORECASE)
+
 
 class HtmlElementExtractor:
     """Helper class for extracting data from HTML elements using selectors"""
@@ -272,11 +275,12 @@ class Mitra10HtmlParser(IHtmlParser, SafeExtractionMixin):
         - "1 rb+ terjual" -> 1000
         """
         sold_text = sold_text.lower().replace('terjual', '').strip()
-        
-        # Handle "rb+" or "ribu+" format (thousands)
-        if 'rb' in sold_text or 'ribu' in sold_text:
-            # Extract number before rb/ribu
-            match = re.search(r'([\d.,]+)\s*(?:rb|ribu)', sold_text)
+        # Truncate to a reasonable length to avoid regex backtracking on pathological input
+        limited = sold_text[:MAX_SOLD_TEXT_LEN]
+
+        # Handle "rb" or "ribu" format (thousands) using a bounded regex
+        if 'rb' in limited or 'ribu' in limited:
+            match = RB_RIBU_PATTERN.search(limited)
             if match:
                 number_str = match.group(1).replace('.', '').replace(',', '.')
                 try:
@@ -284,10 +288,9 @@ class Mitra10HtmlParser(IHtmlParser, SafeExtractionMixin):
                     return int(number * 1000)
                 except ValueError:
                     return None
-        
-        # Handle regular numbers (may have spaces between digits)
-        # Remove all non-digit characters except decimal point
-        number_str = re.sub(r'[^\d]', '', sold_text)
+
+        # Handle regular numbers: extract consecutive digits only (no regex for safety)
+        number_str = ''.join(ch for ch in limited if ch.isdigit())
         if number_str:
             try:
                 return int(number_str)

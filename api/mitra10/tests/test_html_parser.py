@@ -1,8 +1,12 @@
 from bs4 import BeautifulSoup
+import builtins
 from django.test import TestCase
 from unittest.mock import MagicMock
 import unittest.mock
 from api.mitra10.html_parser import Mitra10HtmlParser
+from unittest.mock import patch
+import api.mitra10.html_parser as hp
+from api.mitra10.html_parser import HtmlParserError
 
 
 class TestMitra10HTMLParser(TestCase):
@@ -289,10 +293,6 @@ class TestMitra10HTMLParser(TestCase):
         self.assertIsNone(products[0].sold_count)
 
     def test_normalize_sold_count_value_error_branch(self):
-        """Force ValueError in int(number_str) by patching re.sub to return non-numeric, covering except path (~294-295)."""
-        from unittest.mock import patch
-        import api.mitra10.html_parser as hp
-
         html = '''
         <div class="MuiGrid-root MuiGrid-item">
             <div class="jss273 grid-item">
@@ -302,13 +302,14 @@ class TestMitra10HTMLParser(TestCase):
             </div>
         </div>
         '''
+        # re.sub is no longer used in implementation; parsing should still succeed
         with patch.object(hp.re, 'sub', return_value='notanumber'):
             products = self.parser.parse_products(html)
         self.assertEqual(len(products), 1)
-        self.assertIsNone(products[0].sold_count)
+        # Expect robust digit-only parsing to return 123
+        self.assertEqual(products[0].sold_count, 123)
 
     def test_normalize_sold_count_rb_value_error_branch(self):
-        """Trigger ValueError in rb/ribu branch by using a malformed number like '1,,2 rb', covering lines ~285-286."""
         html = '''
         <div class="MuiGrid-root MuiGrid-item">
             <div class="jss273 grid-item">
@@ -320,10 +321,29 @@ class TestMitra10HTMLParser(TestCase):
         '''
         products = self.parser.parse_products(html)
         self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].sold_count, 2000)
+
+    def test_normalize_sold_count_rb_value_error_branch_forced(self):
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/sold-rb-bad"><p>Produk F</p></a>
+                <span class="price__final">IDR 10,000</span>
+                <div>xx rb terjual</div>
+            </div>
+        </div>
+        '''
+        class DummyMatch:
+            def group(self, idx):
+                return "not-a-float"
+        with patch.object(hp, 'RB_RIBU_PATTERN', autospec=True) as mock_pattern:
+            mock_pattern.search.return_value = DummyMatch()
+            products = self.parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        # Expect None due to forced ValueError in float(number_str)
         self.assertIsNone(products[0].sold_count)
 
     def test_html_parser_text_content_normalization(self):
-        """Test HTML parser's text content normalization and whitespace handling"""
         html = '''
         <div class="MuiGrid-root MuiGrid-item">
             <div class="jss273 grid-item">
@@ -350,6 +370,21 @@ class TestMitra10HTMLParser(TestCase):
         self.assertEqual(products_dict[0]['name'], 'Product With\n                        Multiple     Spaces')
         self.assertEqual(products_dict[0]['price'], 25000)
         self.assertEqual(products_dict[0]['url'], '/normalized-product')
+
+    def test_normalize_sold_count_value_error_branch_forced(self):
+        html = '''
+        <div class="MuiGrid-root MuiGrid-item">
+            <div class="jss273 grid-item">
+                <a class="gtm_mitra10_cta_product" href="/sold-int-bad"><p>Produk G</p></a>
+                <span class="price__final">IDR 40,000</span>
+                <div>123 terjual</div>
+            </div>
+        </div>
+        '''
+        with patch.object(builtins, 'int', side_effect=ValueError("boom")):
+            products = self.parser.parse_products(html)
+        self.assertEqual(len(products), 1)
+        self.assertIsNone(products[0].sold_count)
 
     def test_html_parser_malformed_structure_resilience(self):
         malformed_htmls = [
@@ -537,8 +572,6 @@ class TestMitra10HTMLParser(TestCase):
         self.assertEqual(len(products), 1)
 
     def test_parse_with_fallback_failure(self):
-        """Test _parse_with_fallback raises HtmlParserError on failure"""
-        from api.mitra10.html_parser import HtmlParserError
         with unittest.mock.patch('api.mitra10.html_parser.BeautifulSoup', side_effect=Exception("Parser error")):
             with self.assertRaises(HtmlParserError):
                 self.parser._parse_with_fallback("<html></html>", Exception("Original"))

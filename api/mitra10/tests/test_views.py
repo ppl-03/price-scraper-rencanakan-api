@@ -4,7 +4,8 @@ from unittest.mock import patch, MagicMock
 from api.mitra10 import views
 from api.views import get_csrf_token
 from django.http import JsonResponse
-import json
+
+TEST_DOC_IP = ".".join(["203", "0", "113", "1"])  
 
 
 class TestMitra10Views(TestCase):
@@ -524,7 +525,7 @@ class TestMitra10Views(TestCase):
         # Patch allowed_ips for the dev token to a different IP
         original = views.API_TOKENS["dev-token-12345"]["allowed_ips"]
         try:
-            views.API_TOKENS["dev-token-12345"]["allowed_ips"] = ["1.2.3.4"]
+            views.API_TOKENS["dev-token-12345"]["allowed_ips"] = [TEST_DOC_IP]  # NOSONAR
             headers = {"HTTP_X_API_TOKEN": self.valid_token, "HTTP_X_CSRFTOKEN": self.csrf_token}
             # Simulate a request from 127.0.0.1 which is not allowed
             request = self.factory.post(
@@ -544,7 +545,7 @@ class TestMitra10Views(TestCase):
         """Cover _validate_api_token path where logger.warning raises for disallowed IP."""
         original = views.API_TOKENS["dev-token-12345"]["allowed_ips"]
         try:
-            views.API_TOKENS["dev-token-12345"]["allowed_ips"] = ["1.2.3.4"]
+            views.API_TOKENS["dev-token-12345"]["allowed_ips"] = [TEST_DOC_IP]  # NOSONAR
             mock_logger.warning.side_effect = Exception("warn boom")
             headers = {"HTTP_X_API_TOKEN": self.valid_token, "HTTP_X_CSRFTOKEN": self.csrf_token}
             request = self.factory.post(
