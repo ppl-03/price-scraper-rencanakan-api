@@ -1,5 +1,8 @@
 import unittest
 from bs4 import BeautifulSoup
+from api.mitra10.unit_parser import ErrorHandlingMixin
+from api.mitra10.unit_parser import ContextChecker
+from api.mitra10.unit_parser import TextProcessingHelper
 from api.mitra10.unit_parser import (
     Mitra10UnitParser, Mitra10UnitExtractor, Mitra10UnitPatternRepository,
     Mitra10AreaPatternStrategy, Mitra10AdjacentPatternStrategy,
@@ -328,7 +331,6 @@ class TestErrorHandlingMixin(unittest.TestCase):
     """Test ErrorHandlingMixin methods"""
     
     def test_safe_execute_success(self):
-        from api.mitra10.unit_parser import ErrorHandlingMixin
         mixin = ErrorHandlingMixin()
         
         def success_operation():
@@ -338,7 +340,6 @@ class TestErrorHandlingMixin(unittest.TestCase):
         self.assertEqual(result, "success")
     
     def test_safe_execute_with_exception(self):
-        from api.mitra10.unit_parser import ErrorHandlingMixin
         mixin = ErrorHandlingMixin()
         
         def failing_operation():
@@ -348,7 +349,6 @@ class TestErrorHandlingMixin(unittest.TestCase):
         self.assertIsNone(result)
     
     def test_safe_execute_with_default_success(self):
-        from api.mitra10.unit_parser import ErrorHandlingMixin
         mixin = ErrorHandlingMixin()
         
         def success_operation():
@@ -358,7 +358,6 @@ class TestErrorHandlingMixin(unittest.TestCase):
         self.assertEqual(result, "success")
     
     def test_safe_execute_with_default_exception(self):
-        from api.mitra10.unit_parser import ErrorHandlingMixin
         mixin = ErrorHandlingMixin()
         
         def failing_operation():
@@ -394,18 +393,13 @@ class TestHelperAndStrategyCoverage(unittest.TestCase):
     """Additional coverage for helpers and strategy internals"""
 
     def test_safe_regex_search_and_finditer_error(self):
-        from api.mitra10.unit_parser import TextProcessingHelper
-        # Invalid regex should be handled gracefully
         self.assertIsNone(TextProcessingHelper.safe_regex_search('(', 'text'))
         self.assertEqual(list(TextProcessingHelper.safe_regex_finditer('(', 'text')), [])
 
     def test_context_checker_exception(self):
-        from api.mitra10.unit_parser import ContextChecker
-        # Pass None keywords to trigger exception path in checker
         self.assertFalse(ContextChecker.check_keywords_in_text('some text', None, 'ctx'))
 
     def test_adjacent_process_match_group_error(self):
-        from api.mitra10.unit_parser import Mitra10AdjacentPatternStrategy
         strat = Mitra10AdjacentPatternStrategy()
         # Object without .group attr triggers AttributeError branch in _process_match_group
         self.assertIsNone(strat._process_match_group(object(), 1))
@@ -417,9 +411,10 @@ class TestSpecificationFinderCoverage(unittest.TestCase):
         self.finder = Mitra10SpecificationFinder()
 
     def test_find_description_areas_exception(self):
+        """Cover _find_description_areas exception branch: returns [] when soup.find_all raises."""
         class Dummy:
             def find_all(self, *args, **kwargs):
-                raise Exception('boom')
+                raise RuntimeError()
         self.assertEqual(self.finder._find_description_areas(Dummy()), [])
 
     def test_extract_text_safely_exception(self):
@@ -427,21 +422,44 @@ class TestSpecificationFinderCoverage(unittest.TestCase):
         self.assertIsNone(self.finder._extract_text_safely(object()))
 
     def test_find_elements_safely_exception(self):
+        """Cover _find_elements_safely exception branch: returns [] when find_all raises."""
         class Dummy:
             def find_all(self, *args, **kwargs):
-                raise Exception('err')
+                raise RuntimeError()
         self.assertEqual(self.finder._find_elements_safely(Dummy(), 'table'), [])
 
     def test_extract_spec_from_row_exception(self):
+        """Cover _extract_spec_from_row except path when row.find_all raises."""
+        class Row:
+            def find_all(self, *args, **kwargs):
+                raise AttributeError()
+        self.assertIsNone(self.finder._extract_spec_from_row(Row()))
+
+    def test_find_spec_divs_exception(self):
+        """Cover _find_spec_divs exception branch: returns [] when soup.find_all raises."""
+        class Dummy:
+            def find_all(self, *args, **kwargs):
+                raise RuntimeError()
+        self.assertEqual(self.finder._find_spec_divs(Dummy()), [])
+    def test_find_elements_safely_exception(self):
+        """Cover _find_elements_safely exception branch (unit_parser: lines 437-439)."""
+        class Dummy:
+            def find_all(self, *args, **kwargs):
+                raise RuntimeError('err')
+        self.assertEqual(self.finder._find_elements_safely(Dummy(), 'table'), [])
+
+    def test_extract_spec_from_row_exception(self):
+        """Cover _extract_spec_from_row except path (unit_parser: lines 459-461)."""
         class Row:
             def find_all(self, *args, **kwargs):
                 raise AttributeError('nope')
         self.assertIsNone(self.finder._extract_spec_from_row(Row()))
 
     def test_find_spec_divs_exception(self):
+        """Cover _find_spec_divs exception branch (unit_parser: lines 482-484)."""
         class Dummy:
             def find_all(self, *args, **kwargs):
-                raise Exception('err')
+                raise RuntimeError('err')
         self.assertEqual(self.finder._find_spec_divs(Dummy()), [])
 
     def test_is_valid_spec_text_else_branch(self):
@@ -473,7 +491,6 @@ class TestAdditionalCoverageTargets(unittest.TestCase):
 
     def test_text_processing_helper_truncation(self):
         # Force truncation path in validate_and_clean_text (line ~180)
-        from api.mitra10.unit_parser import TextProcessingHelper
         long_text = ("abc " * 200) + "tail-unit"
         result = TextProcessingHelper.validate_and_clean_text(long_text, max_length=100)
         # Expect smart truncation indicator and tail preserved
@@ -482,55 +499,40 @@ class TestAdditionalCoverageTargets(unittest.TestCase):
 
     def test_extractor_standard_pattern_branch(self):
         # Ensure the standard pattern branch (not area/adjacent) is used (~345)
-        from api.mitra10.unit_parser import Mitra10UnitExtractor, UNIT_KG
         extractor = Mitra10UnitExtractor()
         # No number before unit to avoid adjacent-pattern path; should hit standard pattern
         text = "berat dalam kg untuk pengujian"
         self.assertEqual(extractor.extract_unit(text), UNIT_KG)
 
     def test_extractor_no_match_returns_none(self):
-        # Ensure the final return None paths (~355) are executed when no patterns match
-        from api.mitra10.unit_parser import Mitra10UnitExtractor
         extractor = Mitra10UnitExtractor()
         self.assertIsNone(extractor.extract_unit("teks tanpa satuan apapun"))
 
     def test_is_valid_spec_text_no_text_branch(self):
-        # Cover the `if not text: return False` branch (~498)
-        from api.mitra10.unit_parser import Mitra10SpecificationFinder
         finder = Mitra10SpecificationFinder()
         self.assertFalse(finder._is_valid_spec_text("", "span"))
-        self.assertFalse(finder._is_valid_spec_text(None, "div"))
+        # Pass empty string instead of None to match expected argument type (str)
+        self.assertFalse(finder._is_valid_spec_text("", "div"))
 
     def test_context_specific_unit_return_none(self):
-        # Trigger the context-specific function to return None (~620-624)
-        from api.mitra10.unit_parser import Mitra10UnitParser
         parser = Mitra10UnitParser()
         # Provide some found units but a context string with no keywords
         found_units = ["PCS", "SET"]
         self.assertIsNone(parser._get_context_specific_unit(found_units, "produk umum tanpa konteks"))
 
     def test_priority_pattern_search_direct_match(self):
-        # Directly call the priority search to cover internal line where priority_order is retrieved (~345)
-        from api.mitra10.unit_parser import Mitra10UnitExtractor, UNIT_KG
         extractor = Mitra10UnitExtractor()
         self.assertEqual(extractor._priority_pattern_search("berat dalam kg untuk pengujian"), UNIT_KG)
 
     def test_priority_pattern_search_direct_no_match(self):
-        # Directly call the priority search to hit the terminal return None (~355)
-        from api.mitra10.unit_parser import Mitra10UnitExtractor
         extractor = Mitra10UnitExtractor()
         self.assertIsNone(extractor._priority_pattern_search("teks tanpa satuan apapun"))
 
     def test_priority_pattern_search_whitespace(self):
-        # Ensure the not-processed branch triggers when input cleans to empty (~355)
-        from api.mitra10.unit_parser import Mitra10UnitExtractor
         extractor = Mitra10UnitExtractor()
         self.assertIsNone(extractor._priority_pattern_search("   \t \n  "))
 
-    def test_plumbing_context_length_preference(self):
-        # Cover plumbing context branch to prefer length units (~621-622)
-        from api.mitra10.unit_parser import Mitra10UnitParser
-        
+    def test_plumbing_context_length_preference(self):        
         class StubConfig:
             def is_construction_context(self, _):
                 return False

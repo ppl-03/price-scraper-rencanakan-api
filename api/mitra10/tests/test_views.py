@@ -3,7 +3,8 @@ from django.test import TestCase, RequestFactory
 from unittest.mock import patch, MagicMock
 from api.mitra10 import views
 from api.views import get_csrf_token
-from django.http import JsonResponse
+from api.interfaces import Product, ScrapingResult
+
 
 TEST_DOC_IP = ".".join(["203", "0", "113", "1"])  
 
@@ -47,7 +48,6 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_products_success(self, mock_factory):
-        from api.interfaces import Product, ScrapingResult
         
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
@@ -224,9 +224,7 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_and_save_successful(self, mock_scraper_factory, mock_db_service):
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_and_save_successful(self, mock_scraper_factory, mock_db_service):       
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -276,9 +274,7 @@ class TestMitra10Views(TestCase):
         self.assertIn("Scraping failed", data["error_message"])
 
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_and_save_scraper_returns_failure(self, mock_scraper_factory):
-        from api.interfaces import ScrapingResult
-        
+    def test_scrape_and_save_scraper_returns_failure(self, mock_scraper_factory):        
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=False,
@@ -301,9 +297,7 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_and_save_database_failure(self, mock_scraper_factory, mock_db_service):
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_and_save_database_failure(self, mock_scraper_factory, mock_db_service):        
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -329,9 +323,6 @@ class TestMitra10Views(TestCase):
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_and_save_unexpected_exception_after_db(self, mock_scraper_factory, mock_db_service):
-        """Trigger an unexpected error after DB save to cover outer except (lines 301-303)."""
-        from api.interfaces import Product, ScrapingResult
-
         # Scraper returns a successful result with one product
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
@@ -364,9 +355,6 @@ class TestMitra10Views(TestCase):
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_and_save_logger_info_raises_outer_except(self, mock_scraper_factory, mock_db_service, mock_logger):
-        """Force logger.info to raise to cover outer exception handler after successful save."""
-        from api.interfaces import Product, ScrapingResult
-
         # Prepare scraper result
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
@@ -401,9 +389,7 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_and_save_with_anomalies(self, mock_scraper_factory, mock_db_service):
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_and_save_with_anomalies(self, mock_scraper_factory, mock_db_service):        
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -449,9 +435,7 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_and_save_response_format(self, mock_scraper_factory, mock_db_service):
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_and_save_response_format(self, mock_scraper_factory, mock_db_service):        
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -562,9 +546,6 @@ class TestMitra10Views(TestCase):
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_and_save_with_sort_type_cheapest(self, mock_scraper_factory, mock_db_service):
-        """Test scrape_and_save with sort_type=cheapest (default behavior)"""
-        from api.interfaces import Product, ScrapingResult
-        
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -597,10 +578,7 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_and_save_with_sort_type_popularity(self, mock_scraper_factory, mock_db_service):
-        """Test scrape_and_save with sort_type=popularity"""
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_and_save_with_sort_type_popularity(self, mock_scraper_factory, mock_db_service):        
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -637,10 +615,7 @@ class TestMitra10Views(TestCase):
 
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_and_save_default_sort_type(self, mock_scraper_factory, mock_db_service):
-        """Test scrape_and_save defaults to cheapest when sort_type is not specified"""
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_and_save_default_sort_type(self, mock_scraper_factory, mock_db_service):        
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -673,8 +648,6 @@ class TestMitra10Views(TestCase):
     @patch("api.mitra10.views.Mitra10DatabaseService")
     @patch("api.mitra10.views.create_mitra10_scraper")
     def test_scrape_and_save_with_bearer_token_header(self, mock_scraper_factory, mock_db_service):
-        """Support Authorization: Bearer <token> header path in _validate_api_token."""
-        from api.interfaces import Product, ScrapingResult
         mock_scraper = MagicMock()
         mock_result = ScrapingResult(
             success=True,
@@ -732,10 +705,7 @@ class TestMitra10Views(TestCase):
         self.assertIn("Page parameter must be a valid integer", data['error_message'])
 
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_popularity_success(self, mock_factory):
-        """Test successful scrape_popularity request"""
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_popularity_success(self, mock_factory):        
         # Mock scraper
         mock_scraper = MagicMock()
         mock_factory.return_value = mock_scraper
@@ -768,10 +738,7 @@ class TestMitra10Views(TestCase):
         mock_scraper.scrape_by_popularity.assert_called_once_with(keyword='semen', top_n=5, page=0)
 
     @patch("api.mitra10.views.create_mitra10_scraper")
-    def test_scrape_popularity_with_page_parameter(self, mock_factory):
-        """Test scrape_popularity with page parameter"""
-        from api.interfaces import Product, ScrapingResult
-        
+    def test_scrape_popularity_with_page_parameter(self, mock_factory):        
         mock_scraper = MagicMock()
         mock_factory.return_value = mock_scraper
         
