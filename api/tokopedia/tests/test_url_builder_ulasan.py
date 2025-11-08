@@ -149,6 +149,110 @@ class TestTokopediaUrlBuilderUlasan(unittest.TestCase):
         )
 
         self.assertEqual(basic_url, advanced_url)
+    def test_initialization_with_custom_values(self):
+        custom_base = "https://custom.tokopedia.com"
+        custom_path = "/custom/path"
+        builder = TokopediaUrlBuilderUlasan(base_url=custom_base, search_path=custom_path)
+        self.assertEqual(builder.base_url, custom_base)
+        self.assertEqual(builder.search_path, custom_path)
+
+    def test_initialization_with_none_values(self):
+        builder = TokopediaUrlBuilderUlasan(base_url=None, search_path=None)
+        self.assertEqual(builder.base_url, "https://www.tokopedia.com")
+        self.assertEqual(builder.search_path, "/p/pertukangan/material-bangunan")
+
+    def test_build_params_with_special_characters(self):
+        params = self.url_builder._build_params("semen & bata", True, 0)
+        expected = {'q': 'semen & bata', 'ob': '5'}
+        self.assertEqual(params, expected)
+
+    def test_build_params_with_unicode(self):
+        params = self.url_builder._build_params("semen 40kg", True, 0)
+        expected = {'q': 'semen 40kg', 'ob': '5'}
+        self.assertEqual(params, expected)
+
+    def test_advanced_url_with_minimum_price_only(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="bata merah",
+            min_price=25000
+        )
+
+        self.assertIn('q=bata+merah', url)
+        self.assertIn('pmin=25000', url)
+        self.assertNotIn('pmax=', url)
+
+    def test_advanced_url_with_maximum_price_only(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="genteng",
+            max_price=75000
+        )
+
+        self.assertIn('q=genteng', url)
+        self.assertIn('pmax=75000', url)
+        self.assertNotIn('pmin=', url)
+
+    def test_advanced_url_with_empty_location_list(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="semen",
+            location_ids=[]
+        )
+
+        self.assertIn('q=semen', url)
+        self.assertNotIn('fcity=', url)
+
+    def test_build_search_url_with_filters_zero_min_price(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="semen",
+            min_price=0
+        )
+
+        self.assertIn('q=semen', url)
+        self.assertNotIn('pmin=', url)
+
+    def test_build_search_url_with_filters_negative_min_price(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="semen",
+            min_price=-1000
+        )
+
+        self.assertIn('q=semen', url)
+        self.assertNotIn('pmin=', url)
+
+    def test_build_search_url_with_filters_zero_max_price(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="semen",
+            max_price=0
+        )
+
+        self.assertIn('q=semen', url)
+        self.assertNotIn('pmax=', url)
+
+    def test_build_search_url_with_filters_negative_max_price(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="semen",
+            max_price=-500
+        )
+
+        self.assertIn('q=semen', url)
+        self.assertNotIn('pmax=', url)
+
+    def test_build_search_url_with_filters_zero_location_id(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="semen",
+            location_ids=0
+        )
+
+        self.assertIn('q=semen', url)
+        self.assertNotIn('fcity=', url)
+
+    def test_build_search_url_with_filters_negative_location_id(self):
+        url = self.url_builder.build_search_url_with_filters(
+            keyword="semen",
+            location_ids=-1
+        )
+
+        self.assertIn('q=semen', url)
+        self.assertNotIn('fcity=', url)
 
 
 if __name__ == '__main__':
