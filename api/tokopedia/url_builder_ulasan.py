@@ -21,10 +21,28 @@ class TokopediaUrlBuilderUlasan(TokopediaUrlBuilder):
         # Start from the parent's params (keeps q, page and price-sort ob)
         params = super()._build_params(keyword, sort_by_price, page)
 
-        # For the 'ulasan' builder, when the caller passes sort_by_price=False
-        # we explicitly request ob=5 (popularity/reviews). When sort_by_price is
-        # True we keep the parent's behavior (ob=3).
-        if not sort_by_price:
+        # For the 'ulasan' builder the scraper uses the same boolean flag but
+        # with inverted semantics compared to the price builder: a True value
+        # here signals we want the 'ulasan' (popularity/reviews) ordering.
+        # Therefore set ob=5 when sort_by_price is True.
+        if sort_by_price:
             params["ob"] = "5"
 
         return params
+
+    def build_search_url_with_filters(self, keyword: str, sort_by_ulasan: bool = True,
+                                      page: int = 0, min_price: int = None, max_price: int = None,
+                                      location_ids: Union[int, List[int]] = None) -> str:
+        """Compatibility wrapper: accept `sort_by_ulasan` keyword used by callers
+        of this builder and forward to the parent implementation which expects
+        `sort_by_price` (we map it accordingly).
+        """
+        # Map the ulasan flag into the parent's expected flag name
+        return super().build_search_url_with_filters(
+            keyword=keyword,
+            sort_by_price=sort_by_ulasan,
+            page=page,
+            min_price=min_price,
+            max_price=max_price,
+            location_ids=location_ids,
+        )
