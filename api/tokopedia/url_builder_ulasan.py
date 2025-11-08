@@ -16,12 +16,22 @@ class TokopediaUrlBuilderUlasan(BaseUrlBuilder):
             search_path or "/p/pertukangan/material-bangunan"
         )
 
-    def _build_params(self, keyword: str, sort_by_ulasan: bool, page: int) -> dict:
+    def _build_params(self, keyword: str, sort_by_price: bool, page: int) -> dict:
+        """
+        Build query params. This builder is compatible with the
+        TokopediaPriceScraper which passes the `sort_by_price` keyword.
+
+        When `sort_by_price` is False this builder will set `ob=5` to
+        request sorting by "ulasan" (popularity/reviews).
+        """
         params = {
             'q': keyword
         }
 
-        if sort_by_ulasan:
+        # The default scraper uses a boolean `sort_by_price` flag. For
+        # this ulasan builder, a False value indicates we want the
+        # popularity/reviews ordering (ob=5).
+        if not sort_by_price:
             params['ob'] = '5'  # Sort by "ulasan" / popularity / reviews
 
         # Add page parameter (Tokopedia uses 1-based pagination)
@@ -49,7 +59,7 @@ class TokopediaUrlBuilderUlasan(BaseUrlBuilder):
         elif isinstance(location_ids, int) and location_ids > 0:
             params['fcity'] = location_ids
 
-    def build_search_url_with_filters(self, keyword: str, sort_by_ulasan: bool = True,
+    def build_search_url_with_filters(self, keyword: str, sort_by_price: bool = True,
                                       page: int = 0, min_price: int = None, max_price: int = None,
                                       location_ids: Union[int, List[int]] = None) -> str:
         """
@@ -70,7 +80,8 @@ class TokopediaUrlBuilderUlasan(BaseUrlBuilder):
             if page < 0:
                 raise ValueError("Page number cannot be negative")
 
-            params = self._build_params(keyword.strip(), sort_by_ulasan, page)
+            # Keep the same keyword name used by the scraper (`sort_by_price`)
+            params = self._build_params(keyword.strip(), sort_by_price, page)
 
             # Add price and location filters using helper methods
             self._add_price_filters(params, min_price, max_price)
