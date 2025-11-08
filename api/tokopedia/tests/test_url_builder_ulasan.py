@@ -59,7 +59,7 @@ class TestTokopediaUrlBuilderUlasan(unittest.TestCase):
         keyword = "semen"
         url = self.url_builder.build_search_url_with_filters(
             keyword=keyword,
-            sort_by_ulasan=True,
+            sort_by_price=True,
             min_price=50000,
             max_price=100000
         )
@@ -90,7 +90,7 @@ class TestTokopediaUrlBuilderUlasan(unittest.TestCase):
     def test_advanced_url_with_all_filters(self):
         url = self.url_builder.build_search_url_with_filters(
             keyword="semen portland",
-            sort_by_ulasan=True,
+            sort_by_price=True,
             page=1,
             min_price=50000,
             max_price=100000,
@@ -144,7 +144,7 @@ class TestTokopediaUrlBuilderUlasan(unittest.TestCase):
         basic_url = self.url_builder.build_search_url(keyword, sort_flag, page)
         advanced_url = self.url_builder.build_search_url_with_filters(
             keyword=keyword,
-            sort_by_ulasan=sort_flag,
+            sort_by_price=sort_flag,
             page=page
         )
 
