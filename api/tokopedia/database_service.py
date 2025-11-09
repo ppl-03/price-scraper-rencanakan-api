@@ -1,5 +1,6 @@
 from django.db import connection, transaction
 from django.utils import timezone
+from db_pricing.anomaly_service import PriceAnomalyService
 
 
 class TokopediaDatabaseService:
@@ -155,6 +156,14 @@ class TokopediaDatabaseService:
                         )
                     else:
                         inserted_count += self._insert_new_product(cursor, item, now)
+
+        # Save anomalies to database for review
+        if anomalies:
+            anomaly_result = PriceAnomalyService.save_anomalies('tokopedia', anomalies)
+            if not anomaly_result['success']:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
 
         return {
             "success": True,

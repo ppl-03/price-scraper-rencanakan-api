@@ -1,5 +1,6 @@
 from django.db import connection, transaction
 from django.utils import timezone
+from db_pricing.anomaly_service import PriceAnomalyService
 
 class JuraganMaterialDatabaseService:
     def _validate_dict_item(self, item):
@@ -158,6 +159,14 @@ class JuraganMaterialDatabaseService:
                     updated, inserted = self._process_single_item(cursor, item, now, anomalies)
                     updated_count += updated
                     inserted_count += inserted
+
+        # Save anomalies to database for review
+        if anomalies:
+            anomaly_result = PriceAnomalyService.save_anomalies('juragan_material', anomalies)
+            if not anomaly_result['success']:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
 
         return {
             "success": True,

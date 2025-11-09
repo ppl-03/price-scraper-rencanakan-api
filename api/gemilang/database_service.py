@@ -2,6 +2,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 from typing import List, Dict, Any, Tuple
 import logging
+from db_pricing.anomaly_service import PriceAnomalyService
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +251,12 @@ class GemilangDatabaseService:
                 f"Save with update completed: {updated_count} updated, "
                 f"{inserted_count} inserted, {len(anomalies)} anomalies"
             )
+            
+            # Save anomalies to database for review
+            if anomalies:
+                anomaly_result = PriceAnomalyService.save_anomalies('gemilang', anomalies)
+                if not anomaly_result['success']:
+                    logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
             
             return {
                 "success": True,

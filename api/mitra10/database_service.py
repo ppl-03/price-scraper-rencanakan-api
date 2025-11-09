@@ -1,5 +1,6 @@
 from django.db import connection, transaction
 from django.utils import timezone
+from db_pricing.anomaly_service import PriceAnomalyService
 
 class Mitra10DatabaseService:
     """Handles Mitra10 product database operations with validation and anomaly tracking."""
@@ -39,10 +40,10 @@ class Mitra10DatabaseService:
     def _insert_product(self, cursor, item, now):
         cursor.execute(
             """
-            INSERT INTO mitra10_products (name, price, url, unit, category, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO mitra10_products (name, price, url, unit, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (item["name"], item["price"], item["url"], item["unit"], item.get("category"), now, now),
+            (item["name"], item["price"], item["url"], item["unit"], now, now),
         )
         return 1
 
@@ -55,10 +56,10 @@ class Mitra10DatabaseService:
             cursor.execute(
                 """
                 UPDATE mitra10_products
-                SET price = %s, category = %s, updated_at = %s
+                SET price = %s, updated_at = %s
                 WHERE id = %s
                 """,
-                (new_price, item.get("category"), now, existing_id),
+                (new_price, now, existing_id),
             )
             return 1
         return 0
@@ -117,5 +118,14 @@ class Mitra10DatabaseService:
                     updated += self._update_product(cursor, item, existing_id, existing_price, now, anomalies)
                 else:
                     inserted += self._insert_product(cursor, item, now)
+
+        # Save anomalies to database for review
+        if anomalies:
+            anomaly_result = PriceAnomalyService.save_anomalies('mitra10', anomalies)
+            if not anomaly_result['success']:
+                # Log error but don't fail the entire operation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
 
         return {"success": True, "updated": updated, "inserted": inserted, "anomalies": anomalies}

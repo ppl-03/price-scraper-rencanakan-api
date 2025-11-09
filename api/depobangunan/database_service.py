@@ -3,6 +3,7 @@ from django.db import transaction, connection
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from db_pricing.models import DepoBangunanProduct
+from db_pricing.anomaly_service import PriceAnomalyService
 from dataclasses import dataclass
 import logging
 
@@ -586,6 +587,12 @@ class DepoBangunanDatabaseService:
                         updated_count += self._update_product_price(cursor, item, existing_id, existing_price, now, anomalies)
                     else:
                         inserted_count += self._insert_product(cursor, item, now)
+
+        # Save anomalies to database for review
+        if anomalies:
+            anomaly_result = PriceAnomalyService.save_anomalies('depobangunan', anomalies)
+            if not anomaly_result['success']:
+                self.logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
 
         return {
             "success": True,
