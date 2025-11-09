@@ -12,6 +12,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Error message constants
+ERROR_INTERNAL_SERVER = 'Internal server error'
+
 
 @require_http_methods(["GET"])
 def check_database_status(request):
@@ -124,7 +127,7 @@ def list_price_anomalies(request):
         logger.error(f"Error listing anomalies: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error'
+            'error': ERROR_INTERNAL_SERVER
         }, status=500)
 
 
@@ -166,7 +169,7 @@ def get_price_anomaly(request, anomaly_id):
         logger.error(f"Error getting anomaly {anomaly_id}: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error'
+            'error': ERROR_INTERNAL_SERVER
         }, status=500)
 
 
@@ -224,7 +227,7 @@ def review_price_anomaly(request, anomaly_id):
         logger.error(f"Error reviewing anomaly {anomaly_id}: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error'
+            'error': ERROR_INTERNAL_SERVER
         }, status=500)
 
 
@@ -266,6 +269,6 @@ def get_anomaly_statistics(request):
         logger.error(f"Error getting anomaly statistics: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': 'Internal server error'
+            'error': ERROR_INTERNAL_SERVER
         }, status=500)
 

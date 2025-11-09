@@ -82,6 +82,17 @@ class Mitra10DatabaseService:
             }
         return None
 
+    def _save_detected_anomalies(self, anomalies):
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('mitra10', anomalies)
+        if not anomaly_result['success']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
     # =========================
     # Public Methods
     # =========================
@@ -120,12 +131,6 @@ class Mitra10DatabaseService:
                     inserted += self._insert_product(cursor, item, now)
 
         # Save anomalies to database for review
-        if anomalies:
-            anomaly_result = PriceAnomalyService.save_anomalies('mitra10', anomalies)
-            if not anomaly_result['success']:
-                # Log error but don't fail the entire operation
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+        self._save_detected_anomalies(anomalies)
 
         return {"success": True, "updated": updated, "inserted": inserted, "anomalies": anomalies}

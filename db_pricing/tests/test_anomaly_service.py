@@ -5,6 +5,7 @@ Tests for the PriceAnomalyService
 
 from django.test import TestCase
 from django.utils import timezone
+from django.db import DatabaseError
 from db_pricing.models import PriceAnomaly
 from db_pricing.anomaly_service import PriceAnomalyService
 
@@ -428,7 +429,7 @@ class TestPriceAnomalyService(TestCase):
         def mock_create(*args, **kwargs):
             create_count[0] += 1
             if create_count[0] == 2:
-                raise Exception("Database error")
+                raise DatabaseError("Database error")
             return original_create(*args, **kwargs)
         
         with patch.object(PriceAnomaly.objects, 'create', side_effect=mock_create):
