@@ -388,3 +388,140 @@ class TestDatabaseStatusView(TestCase):
         self.assertIn('connection', data)
         self.assertIn('gemilang_table', data)
         self.assertIn('overall_status', data)
+
+
+class TestErrorHandling(TestCase):
+    """Test suite for error handling in API endpoints"""
+    
+    def setUp(self):
+        """Set up test client"""
+        self.client = Client()
+    
+    def test_list_anomalies_invalid_page_number(self):
+        """Test handling invalid page number (ValueError)"""
+        response = self.client.get('/api/pricing/anomalies/?page=invalid')
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('Invalid parameter', data['error'])
+    
+    def test_list_anomalies_invalid_page_size(self):
+        """Test handling invalid page_size (ValueError)"""
+        response = self.client.get('/api/pricing/anomalies/?page_size=notanumber')
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('Invalid parameter', data['error'])
+    
+    def test_list_anomalies_database_error(self):
+        """Test handling database error in list endpoint"""
+        from unittest.mock import patch
+        
+        with patch('db_pricing.views.PriceAnomaly.objects.all') as mock_all:
+            mock_all.side_effect = Exception("Database connection error")
+            response = self.client.get('/api/pricing/anomalies/')
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_get_anomaly_not_found(self):
+        """Test getting non-existent anomaly (DoesNotExist)"""
+        response = self.client.get('/api/pricing/anomalies/99999/')
+        self.assertEqual(response.status_code, 404)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Anomaly not found')
+    
+    def test_get_anomaly_database_error(self):
+        """Test handling database error in get endpoint"""
+        from unittest.mock import patch
+        
+        # Create an anomaly first
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        with patch('db_pricing.views.PriceAnomaly.objects.get') as mock_get:
+            mock_get.side_effect = Exception("Database error")
+            response = self.client.get(f'/api/pricing/anomalies/{anomaly.id}/')
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_review_anomaly_invalid_json(self):
+        """Test review endpoint with invalid JSON"""
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        response = self.client.post(
+            f'/api/pricing/anomalies/{anomaly.id}/review/',
+            data='invalid json',
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Invalid JSON')
+    
+    def test_review_anomaly_database_error(self):
+        """Test handling database error in review endpoint"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        payload = {
+            'status': 'approved',
+            'notes': 'Approved'
+        }
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark:
+            mock_mark.side_effect = Exception("Database error")
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/review/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_get_statistics_database_error(self):
+        """Test handling database error in statistics endpoint"""
+        from unittest.mock import patch
+        
+        with patch('db_pricing.views.PriceAnomaly.objects.count') as mock_count:
+            mock_count.side_effect = Exception("Database error")
+            response = self.client.get('/api/pricing/anomalies/statistics/')
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
