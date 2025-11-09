@@ -170,7 +170,7 @@ def get_price_anomaly(request, anomaly_id):
         }, status=500)
 
 
-@csrf_exempt
+
 @require_http_methods(["POST"])
 def review_price_anomaly(request, anomaly_id):
     """
