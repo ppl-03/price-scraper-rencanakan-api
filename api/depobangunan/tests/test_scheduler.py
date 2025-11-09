@@ -30,7 +30,7 @@ class TestDepoBangunanScheduler(unittest.TestCase):
             with patch.object(scheduler, 'create_scraper') as mock_scraper:
                 mock_result = SimpleNamespace(
                     success=True,
-                    products=[SimpleNamespace(name='Product', price='100', url='http://test.com', unit='pcs')]
+                    products=[SimpleNamespace(name='Product', price='100', url='https://test.com', unit='pcs')]
                 )
                 mock_scraper.return_value.scrape_products.return_value = mock_result
                 
@@ -62,7 +62,7 @@ class TestDepoBangunanScheduler(unittest.TestCase):
             with patch.object(scheduler, 'create_scraper') as mock_scraper:
                 mock_result = SimpleNamespace(
                     success=True,
-                    products=[SimpleNamespace(name='P1', price='50', url='http://url', unit='box')]
+                    products=[SimpleNamespace(name='P1', price='50', url='https://url', unit='box')]
                 )
                 mock_scraper.return_value.scrape_products.return_value = mock_result
                 
@@ -93,8 +93,8 @@ class TestDepoBangunanScheduler(unittest.TestCase):
         with patch.object(scheduler, 'get_categories', return_value=['test']):
             with patch.object(scheduler, 'create_scraper') as mock_scraper:
                 products = [
-                    SimpleNamespace(name='P1', price='10', url='http://1', unit='pcs'),
-                    SimpleNamespace(name='P2', price='20', url='http://2', unit='box')
+                    SimpleNamespace(name='P1', price='10', url='https://1', unit='pcs'),
+                    SimpleNamespace(name='P2', price='20', url='https://2', unit='box')
                 ]
                 mock_result = SimpleNamespace(success=True, products=products)
                 mock_scraper.return_value.scrape_products.return_value = mock_result
@@ -146,7 +146,7 @@ class TestDepoBangunanScheduler(unittest.TestCase):
             with patch.object(scheduler, 'create_scraper') as mock_scraper:
                 mock_result = SimpleNamespace(
                     success=True,
-                    products=[SimpleNamespace(name='P', price='1', url='http://u', unit='pc')]
+                    products=[SimpleNamespace(name='P', price='1', url='https://u', unit='pc')]
                 )
                 mock_scraper.return_value.scrape_products.return_value = mock_result
                 
@@ -177,7 +177,7 @@ class TestDepoBangunanScheduler(unittest.TestCase):
             with patch.object(scheduler, 'create_scraper') as mock_scraper:
                 mock_result = SimpleNamespace(
                     success=True,
-                    products=[SimpleNamespace(name='P', price='10', url='http://test', unit='kg')]
+                    products=[SimpleNamespace(name='P', price='10', url='https://test', unit='kg')]
                 )
                 mock_scraper.return_value.scrape_products.return_value = mock_result
                 
