@@ -2127,3 +2127,13 @@ def curated_price_from_scrape(request):
         "form": form,
         "form_action": reverse(CURATED_PRICE_CREATE_POST_URL)
     })
+
+
+# ==================== PRICE ANOMALY VIEWS ====================
+
+@require_GET
+def price_anomalies(request):
+    """
+    Display price anomalies page
+    """
+    return render(request, "dashboard/price_anomalies.html")
