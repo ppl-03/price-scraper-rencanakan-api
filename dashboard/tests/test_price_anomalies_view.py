@@ -67,8 +67,8 @@ class TestDashboardPriceAnomaliesView(TestCase):
         content = response.content.decode('utf-8')
 
         # API endpoints used by the page
-        self.assertIn('/api/db-pricing/anomalies/statistics/', content)
-        self.assertIn('/api/db-pricing/anomalies/', content)
+        self.assertIn('/api/pricing/anomalies/statistics/', content)
+        self.assertIn('/api/pricing/anomalies/', content)
 
         # Review modal and form
         for elem in ('review-modal', 'review-form', 'review-status', 'review-notes'):
