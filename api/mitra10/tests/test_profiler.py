@@ -3,8 +3,11 @@ import json
 import tempfile
 import shutil
 from django.test import TestCase
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from api.mitra10.utils.mitra10_profiler import Mitra10Profiler
+from types import SimpleNamespace
+from api.mitra10.utils.mitra10_profiler import load_env, main
+from pathlib import Path
 
 
 class TestMitra10Profiler(TestCase):
@@ -341,26 +344,34 @@ class TestProfilerEdgeCases(TestCase):
             self.assertEqual(html1, html2)
     
     def test_profile_complete_scraper_success(self):
-        """Test profile_complete_scraper with successful scraping (covers lines 257-268)"""
         with patch('api.mitra10.utils.mitra10_profiler.ENV', {'PROFILING_ITERATIONS_SCRAPER': '1'}):
             # Create mock products with name and price attributes to trigger lines 257-268
             mock_products = [
-                type('Product', (), {
-                    'name': 'Test Product With A Very Long Name That Needs Truncation',
-                    'price': 150000,
-                    'url': 'https://test.com/product'
-                })(),
-                type('Product', (), {
-                    'name': 'Another Product',
-                    'price': 75000,
-                    'url': 'https://test.com/product2'
-                })()
+                SimpleNamespace(
+                    name='Test Product With A Very Long Name That Needs Truncation',
+                    price=150000,
+                    url='https://test.com/product'
+                ),
+                SimpleNamespace(
+                    name='Another Product',
+                    price=75000,
+                    url='https://test.com/product2'
+                )
             ]
-            
-            with patch.object(self.profiler.real_scraper.http_client, 'get', return_value='<html>Mock HTML Content</html>'):
-                with patch.object(self.profiler.real_scraper.html_parser, 'parse_products', return_value=mock_products):
-                    result = self.profiler.profile_complete_scraper()
-            
+
+            # Build a mock scraper returned by factory called inside profiler module
+            mock_scraper = SimpleNamespace(
+                url_builder=SimpleNamespace(build_search_url=lambda keyword, *_: 'https://test.com/search'),
+                http_client=SimpleNamespace(get=lambda url: '<html>Mock HTML Content</html>'),
+                html_parser=SimpleNamespace(
+                    parse_products=lambda html: mock_products,
+                    price_cleaner=SimpleNamespace(clean_price=lambda s: 123456)
+                )
+            )
+
+            with patch('api.mitra10.utils.mitra10_profiler.create_mitra10_scraper', return_value=mock_scraper):
+                result = self.profiler.profile_complete_scraper()
+
             self.assertIsInstance(result, dict)
             self.assertEqual(result['component'], 'complete_scraper')
             self.assertIn('total_time', result)
@@ -482,10 +493,7 @@ class TestProfilerEdgeCases(TestCase):
                 with self.assertRaises(Exception):
                     self.profiler.run_complete_profiling()
     
-    def test_load_env_with_comments_and_empty_lines(self):
-        """Test load_env handles comments and empty lines correctly"""
-        from api.mitra10.utils.mitra10_profiler import load_env
-        
+    def test_load_env_with_comments_and_empty_lines(self):       
         # The load_env function should skip comments and empty lines
         env = load_env()
         self.assertIsInstance(env, dict)
@@ -502,8 +510,6 @@ class TestProfilerEdgeCases(TestCase):
             self.assertEqual(result['component'], 'price_cleaner')
     
     def test_get_fallback_html_with_fixture_file(self):
-        """Test _get_fallback_html when fixture file exists"""
-        from pathlib import Path
         # Create a temporary fixture file
         fixture_dir = Path(self.test_temp_dir)
         os.makedirs(os.path.join(str(fixture_dir), 'api', 'mitra10', 'tests'), exist_ok=True)
@@ -551,10 +557,7 @@ class TestProfilerEdgeCases(TestCase):
                 self.assertIn('<html>', html)
                 self.assertIn('product', html.lower())
 
-    def test_profile_html_parser_with_parse_exception(self):
-        """Test profile_html_parser when parser throws exception (lines 94-95)"""
-        from unittest.mock import MagicMock
-        
+    def test_profile_html_parser_with_parse_exception(self):        
         with patch('api.mitra10.utils.mitra10_profiler.ENV', {
             'PROFILING_ITERATIONS_HTML': '2',
             'PROFILING_ENABLED': 'true'
@@ -573,9 +576,6 @@ class TestProfilerEdgeCases(TestCase):
             self.assertEqual(result['component'], 'html_parser')
 
     def test_profile_url_builder_with_exception(self):
-        """Test profile_url_builder when builder throws exception (lines 177-178)"""
-        from unittest.mock import MagicMock
-        
         with patch('api.mitra10.utils.mitra10_profiler.ENV', {
             'PROFILING_ITERATIONS_URL': '3',
             'PROFILING_ENABLED': 'true'
@@ -593,11 +593,7 @@ class TestProfilerEdgeCases(TestCase):
             self.assertIn('component', result)
             self.assertEqual(result['component'], 'url_builder')
 
-    def test_profile_complete_scraper_with_sample_product_display(self):
-        """Test profile_complete_scraper displaying sample product (lines 257-268)"""
-        from unittest.mock import MagicMock
-        from types import SimpleNamespace
-        
+    def test_profile_complete_scraper_with_sample_product_display(self):       
         with patch('api.mitra10.utils.mitra10_profiler.ENV', {
             'PROFILING_ITERATIONS_COMPLETE': '1',
             'PROFILING_ENABLED': 'true',
@@ -619,17 +615,15 @@ class TestProfilerEdgeCases(TestCase):
             mock_scraper.html_parser.parse_products.return_value = [mock_product, mock_product]
             mock_scraper.html_parser.price_cleaner.clean_price.return_value = 150000
             
-            with patch('api.mitra10.factory.create_mitra10_scraper', return_value=mock_scraper):
+            # Patch the symbol used in profiler module
+            with patch('api.mitra10.utils.mitra10_profiler.create_mitra10_scraper', return_value=mock_scraper):
                 result = profiler.profile_complete_scraper()
             
             # Should execute lines 257-268 (sample product display)
             self.assertIn('component', result)
             self.assertEqual(result['component'], 'complete_scraper')
 
-    def test_main_function_execution(self):
-        """Test main() function (lines 423-424)"""
-        from api.mitra10.utils.mitra10_profiler import main
-        
+    def test_main_function_execution(self):        
         with patch('api.mitra10.utils.mitra10_profiler.ENV', {
             'PROFILING_ENABLED': 'false'
         }):
