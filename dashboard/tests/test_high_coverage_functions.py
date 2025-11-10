@@ -12,7 +12,7 @@ class VendorScrapingExecutionTests(TestCase):
         self.client = Client()
 
     @patch('dashboard.views._safe_scrape_products')
-    @patch('db_pricing.categorization.AutoCategorizer.categorize')
+    @patch('db_pricing.categorization.ProductCategorizer.categorize')
     def test_execute_vendor_scraping_success(self, mock_categorize, mock_safe_scrape):
         """Test successful vendor scraping execution"""
         from django.test import RequestFactory
