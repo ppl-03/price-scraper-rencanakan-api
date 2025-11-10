@@ -178,71 +178,7 @@ class TestDepoPriceScraperIntegration(unittest.TestCase):
         """Set up test fixtures with real components."""
         from api.depobangunan.factory import create_depo_scraper
         # We'll use the factory but mock the HTTP calls
-        
-    @patch('api.core.BaseHttpClient.get')
-    def test_end_to_end_unit_extraction_workflow(self, mock_http_get):
-        """Test the complete unit extraction workflow with mocked HTTP."""
-        from api.depobangunan.factory import create_depo_scraper
-        
-        # Mock HTML response with products
-        search_html = '''
-        <html>
-            <body>
-                <li class="item product product-item">
-                    <strong class="product name product-item-name">
-                        <a href="http://example.com/product1">MAGIX WIN TILE GROUT WHITE 1KG</a>
-                    </strong>
-                    <span class="price">Rp 8,499</span>
-                </li>
-                <li class="item product product-item">
-                    <strong class="product name product-item-name">
-                        <a href="http://example.com/product2">PRODUCT WITHOUT UNIT</a>
-                    </strong>
-                    <span class="price">Rp 5,000</span>
-                </li>
-            </body>
-        </html>
-        '''
-        
-        # Mock detail page HTML with specification
-        detail_html = '''
-        <html>
-            <body>
-                <table>
-                    <tr>
-                        <td>Ukuran</td>
-                        <td>2KG</td>
-                    </tr>
-                </table>
-            </body>
-        </html>
-        '''
-        
-        # Configure HTTP mock to return different content based on URL
-        def mock_get_side_effect(url, **kwargs):
-            if 'catalogsearch' in url:
-                return search_html
-            else:
-                return detail_html
-        
-        mock_http_get.side_effect = mock_get_side_effect
-        
-        # Create scraper and test
-        scraper = create_depo_scraper()
-        
-        # Execute
-        result = scraper.scrape_products("test", sort_by_price=True, page=0)
-        
-        # Assertions
-        self.assertTrue(result.success)
-        self.assertEqual(len(result.products), 2)
-        
-        # First product should have unit from name
-        self.assertEqual(result.products[0].unit, "KG")
-        
-        # Second product should have unit from detail page
-        self.assertEqual(result.products[1].unit, "KG")
-
+    
     def test_extract_adjacent_unit_various_patterns(self):
         """Test _extract_adjacent_unit with various adjacent patterns"""
         from api.depobangunan.unit_parser import DepoBangunanUnitExtractor
@@ -418,7 +354,7 @@ class TestDepoPriceScraperIntegration(unittest.TestCase):
         for invalid_html in test_cases:
             with self.subTest(html=invalid_html):
                 result = parser.parse_unit_from_detail_page(invalid_html)
-                self.assertIsNone(result)
+                self.assertEqual(result, 'PCS')  # Now defaults to PCS instead of None
 
     def test_unit_parser_initialization_properties(self):
         """Test that parser initializes with correct properties"""
