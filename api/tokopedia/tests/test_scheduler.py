@@ -12,13 +12,16 @@ class TestTokopediaScheduler(unittest.TestCase):
         mock_scraper = patch.object(scheduler, 'create_scraper').start()
         mock_result = SimpleNamespace(success=success, products=products)
         mock_scraper.return_value.scrape_products.return_value = mock_result
-        
-        if db_save_result is not None:
-            mock_db = patch.object(scheduler, 'load_db_service').start()
-            mock_db.return_value.save.return_value = db_save_result
+
+        # Always patch load_db_service to avoid touching real DB in tests.
+        mock_db = patch.object(scheduler, 'load_db_service').start()
+        if db_save_result is None:
+            # Simulate absence of a DB service
+            mock_db.return_value = None
         else:
-            patch.object(scheduler, 'load_db_service', return_value=None).start()
-        
+            # Simulate a DB service whose save() returns the given tuple
+            mock_db.return_value.save.return_value = db_save_result
+
         self.addCleanup(patch.stopall)
     
     def test_scheduler_imports_base_scheduler(self):
