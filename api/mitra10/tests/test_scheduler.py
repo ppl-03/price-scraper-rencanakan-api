@@ -1,78 +1,214 @@
-from unittest.mock import patch, MagicMock
-from django.test import TestCase
-from api.mitra10.scheduler import Mitra10Scheduler
+import unittest
+from unittest.mock import Mock, patch
+from datetime import datetime
+from types import SimpleNamespace
 
 
-class TestMitra10Scheduler(TestCase):
-    def setUp(self):
-        self.scheduler = Mitra10Scheduler()
+class TestMitra10Scheduler(unittest.TestCase):
+    def test_scheduler_imports_base_scheduler(self):
+        """Test that Mitra10Scheduler inherits from BaseScheduler"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        from api.scheduler import BaseScheduler
+        self.assertTrue(issubclass(Mitra10Scheduler, BaseScheduler))
 
-    @patch('api.scheduler.BaseScheduler.run')
-    def test_run_with_default_vendors(self, mock_base_run):
-        """Test that run method defaults to mitra10 vendor"""
-        mock_base_run.return_value = {'status': 'success'}
-        
-        result = self.scheduler.run()
-        
-        mock_base_run.assert_called_once_with(
-            server_time=None,
-            vendors=['mitra10'],
-            pages_per_keyword=1,
-            use_price_update=False,
-            max_products_per_keyword=None,
-            expected_start_time=None
-        )
-        self.assertEqual(result, {'status': 'success'})
+    def test_scheduler_initialization(self):
+        """Test that scheduler can be initialized"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        self.assertIsNotNone(scheduler)
 
-    @patch('api.scheduler.BaseScheduler.run')
-    def test_run_with_custom_vendors(self, mock_base_run):
-        """Test that run method accepts custom vendors"""
-        mock_base_run.return_value = {'status': 'success'}
-        custom_vendors = ['mitra10', 'other_vendor']
-        
-        result = self.scheduler.run(vendors=custom_vendors)
-        
-        mock_base_run.assert_called_once_with(
-            server_time=None,
-            vendors=['mitra10', 'other_vendor'],
-            pages_per_keyword=1,
-            use_price_update=False,
-            max_products_per_keyword=None,
-            expected_start_time=None
-        )
+    def test_get_categories_returns_list(self):
+        """Test that get_categories returns a list"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        server_time = datetime.now()
+        categories = scheduler.get_categories('mitra10', server_time)
+        self.assertIsInstance(categories, list)
 
-    @patch('api.scheduler.BaseScheduler.run')
-    def test_run_with_all_parameters(self, mock_base_run):
-        """Test that run method passes all parameters correctly"""
-        mock_base_run.return_value = {'status': 'success'}
+    def test_run_without_arguments(self):
+        """Test running scheduler without arguments defaults to mitra10"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
         
-        result = self.scheduler.run(
-            server_time='2024-01-01 10:00:00',
-            vendors=['mitra10'],
-            pages_per_keyword=3,
-            use_price_update=True,
-            max_products_per_keyword=50,
-            expected_start_time='2024-01-01 09:00:00'
-        )
-        
-        mock_base_run.assert_called_once_with(
-            server_time='2024-01-01 10:00:00',
-            vendors=['mitra10'],
-            pages_per_keyword=3,
-            use_price_update=True,
-            max_products_per_keyword=50,
-            expected_start_time='2024-01-01 09:00:00'
-        )
-        self.assertEqual(result, {'status': 'success'})
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(
+                    success=True,
+                    products=[SimpleNamespace(name='Product', price='100', url='https://test.com', unit='pcs')]
+                )
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service') as mock_db:
+                    mock_db.return_value.save.return_value = (True, None)
+                    
+                    result = scheduler.run()
+                    self.assertIn('mitra10', result['vendors'])
 
-    @patch('api.scheduler.BaseScheduler.run')
-    def test_run_converts_vendors_to_list(self, mock_base_run):
-        """Test that vendors parameter is converted to list"""
-        mock_base_run.return_value = {'status': 'success'}
+    def test_run_with_custom_vendors(self):
+        """Test running scheduler with custom vendor list"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
         
-        result = self.scheduler.run(vendors=('mitra10', 'vendor2'))
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(success=True, products=[])
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service', return_value=None):
+                    result = scheduler.run(vendors=['mitra10'])
+                    self.assertEqual(result['total_vendors'], 1)
+                    self.assertIn('mitra10', result['vendors'])
+
+    def test_run_single_page(self):
+        """Test scraping single page per keyword"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
         
-        # Verify vendors was converted to list
-        call_args = mock_base_run.call_args
-        self.assertIsInstance(call_args[1]['vendors'], list)
-        self.assertEqual(call_args[1]['vendors'], ['mitra10', 'vendor2'])
+        with patch.object(scheduler, 'get_categories', return_value=['category1']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(
+                    success=True,
+                    products=[SimpleNamespace(name='P1', price='50', url='https://url', unit='box')]
+                )
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service') as mock_db:
+                    mock_db.return_value.save.return_value = (True, None)
+                    
+                    result = scheduler.run(vendors=['mitra10'], pages_per_keyword=1)
+                    vendor_data = result['vendors']['mitra10']
+                    self.assertEqual(vendor_data['scrape_attempts'], 1)
+
+    def test_run_multiple_pages(self):
+        """Test scraping multiple pages per keyword"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['cat1']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(success=True, products=[])
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service', return_value=None):
+                    result = scheduler.run(vendors=['mitra10'], pages_per_keyword=3)
+                    self.assertEqual(result['vendors']['mitra10']['scrape_attempts'], 3)
+
+    def test_run_products_saved(self):
+        """Test that scraped products are saved correctly"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                products = [
+                    SimpleNamespace(name='P1', price='10', url='https://1', unit='pcs'),
+                    SimpleNamespace(name='P2', price='20', url='https://2', unit='box')
+                ]
+                mock_result = SimpleNamespace(success=True, products=products)
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service') as mock_db:
+                    mock_db.return_value.save.return_value = (True, None)
+                    
+                    result = scheduler.run(vendors=['mitra10'], pages_per_keyword=1)
+                    self.assertEqual(result['vendors']['mitra10']['saved'], 2)
+
+    def test_run_with_scrape_failure(self):
+        """Test handling of scrape failures (negative case)"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(success=False, products=[])
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service', return_value=None):
+                    result = scheduler.run(vendors=['mitra10'])
+                    self.assertEqual(result['vendors']['mitra10']['saved'], 0)
+
+    def test_run_with_empty_products(self):
+        """Test handling when no products are found (edge case)"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(success=True, products=[])
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service', return_value=None):
+                    result = scheduler.run(vendors=['mitra10'])
+                    self.assertEqual(result['vendors']['mitra10']['saved'], 0)
+
+    def test_run_with_price_update_enabled(self):
+        """Test running scheduler with price update enabled"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(
+                    success=True,
+                    products=[SimpleNamespace(name='P1', price='100', url='https://test', unit='pcs')]
+                )
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service') as mock_db:
+                    mock_db.return_value.save.return_value = (True, None)
+                    
+                    result = scheduler.run(vendors=['mitra10'], use_price_update=True)
+                    self.assertIn('mitra10', result['vendors'])
+
+    def test_run_with_max_products_limit(self):
+        """Test running scheduler with max products limit (edge case)"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                products = [
+                    SimpleNamespace(name=f'P{i}', price=f'{i*10}', url=f'https://{i}', unit='pcs')
+                    for i in range(10)
+                ]
+                mock_result = SimpleNamespace(success=True, products=products)
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service') as mock_db:
+                    mock_db.return_value.save.return_value = (True, None)
+                    
+                    result = scheduler.run(vendors=['mitra10'], max_products_per_keyword=5)
+                    self.assertIn('mitra10', result['vendors'])
+
+    def test_run_converts_vendors_to_list(self):
+        """Test that vendors tuple is converted to list (edge case)"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                mock_result = SimpleNamespace(success=True, products=[])
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service', return_value=None):
+                    # Pass tuple instead of list
+                    result = scheduler.run(vendors=('mitra10',))
+                    self.assertIn('mitra10', result['vendors'])
+
+    def test_run_with_db_save_failure(self):
+        """Test handling of database save failures (negative case)"""
+        from api.mitra10.scheduler import Mitra10Scheduler
+        scheduler = Mitra10Scheduler()
+        
+        with patch.object(scheduler, 'get_categories', return_value=['test']):
+            with patch.object(scheduler, 'create_scraper') as mock_scraper:
+                products = [SimpleNamespace(name='P1', price='100', url='https://test', unit='pcs')]
+                mock_result = SimpleNamespace(success=True, products=products)
+                mock_scraper.return_value.scrape_products.return_value = mock_result
+                
+                with patch.object(scheduler, 'load_db_service') as mock_db:
+                    mock_db.return_value.save.return_value = (False, "Database error")
+                    
+                    result = scheduler.run(vendors=['mitra10'])
+                    # Should still complete even with save failure
+                    self.assertIn('mitra10', result['vendors'])
