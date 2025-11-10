@@ -475,12 +475,14 @@
     }
 
     .btn-reject {
-        background-color: #ff0019;
-        color: white;
+        /* Increased contrast vs white text to meet WCAG AA for normal text */
+        background-color: #c70015; /* accessible: white text contrast ≈ 6.1:1 */
+        color: #ffffff;
     }
 
     .btn-reject:hover {
-        background-color: #c82333;
+        /* Slightly darker on hover for clear affordance */
+        background-color: #a5000f;
     }
 
     .btn-review {
@@ -975,7 +977,7 @@
     });
 
     function loadStatistics() {
-        fetch('/api/db-pricing/anomalies/statistics/')
+        fetch('/api/pricing/anomalies/statistics/')
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.data) {
@@ -996,7 +998,7 @@
         const vendor = document.getElementById('filter-vendor').value;
         const search = document.getElementById('filter-search').value;
         
-        let url = `/api/db-pricing/anomalies/?page=${page}&page_size=${pageSize}`;
+        let url = `/api/pricing/anomalies/?page=${page}&page_size=${pageSize}`;
         if (status) url += `&status=${status}`;
         if (vendor) url += `&vendor=${vendor}`;
         if (search) url += `&search=${search}`;
@@ -1162,7 +1164,7 @@
     }
 
     function viewAnomalyDetail(anomalyId) {
-        fetch(`/api/db-pricing/anomalies/${anomalyId}/`)
+        fetch(`/api/pricing/anomalies/${anomalyId}/`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -1191,7 +1193,7 @@
         const status = document.getElementById('review-status').value;
         const notes = document.getElementById('review-notes').value;
 
-        fetch(`/api/db-pricing/anomalies/${currentAnomalyId}/review/`, {
+        fetch(`/api/pricing/anomalies/${currentAnomalyId}/review/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1223,7 +1225,7 @@
             return;
         }
 
-        fetch(`/api/db-pricing/anomalies/${anomalyId}/review/`, {
+        fetch(`/api/pricing/anomalies/${anomalyId}/review/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
