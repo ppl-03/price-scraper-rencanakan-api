@@ -237,7 +237,7 @@ class TestLocationScraperEdgeCases(TestCase):
         mock_client.get.return_value = None
         
         mock_url_builder = MagicMock()
-        mock_url_builder.build_location_url.return_value = "http://test.com"
+        mock_url_builder.build_location_url.return_value = "https://test.com"
         
         mock_parser = MagicMock()
         
