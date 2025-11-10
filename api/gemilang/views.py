@@ -40,6 +40,15 @@ def scrape_products(request):
         sort_by_price = validated_data.get('sort_by_price', True)
         page = validated_data.get('page', 0)
         
+        location_scraper = create_gemilang_location_scraper()
+        location_result = location_scraper.scrape_locations(timeout=30)
+        
+        store_locations = []
+        if location_result.success and location_result.locations:
+            store_locations = [loc.name for loc in location_result.locations]
+        
+        all_stores_location = ", ".join(store_locations) if store_locations else ""
+        
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
             keyword=keyword,
@@ -47,12 +56,14 @@ def scrape_products(request):
             page=page
         )
         
+        # Return products with ALL store locations in one field
         products_data = [
             {
                 'name': product.name,
                 'price': product.price,
                 'url': product.url,
-                'unit': product.unit
+                'unit': product.unit,
+                'location': all_stores_location
             }
             for product in result.products
         ]
@@ -242,6 +253,18 @@ def scrape_and_save(request):
         if error_response:
             return error_response
         
+        location_scraper = create_gemilang_location_scraper()
+        location_result = location_scraper.scrape_locations(timeout=30)
+        
+        store_locations = []
+        if location_result.success and location_result.locations:
+            store_locations = [loc.name for loc in location_result.locations]
+            logger.info(f"Found {len(store_locations)} Gemilang store locations")
+        else:
+            logger.warning("Could not fetch store locations, will save without locations")
+        
+        all_stores_location = ", ".join(store_locations) if store_locations else ""
+        
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
             keyword=params['keyword'],
@@ -264,10 +287,13 @@ def scrape_and_save(request):
                 'name': product.name,
                 'price': product.price,
                 'url': product.url,
-                'unit': product.unit
+                'unit': product.unit,
+                'location': all_stores_location
             }
             for product in result.products
         ]
+        
+        logger.info(f"Prepared {len(products_data)} products with location: {all_stores_location[:100]}...")
         
         if not products_data:
             return JsonResponse({

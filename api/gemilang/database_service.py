@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class GemilangDatabaseService:
     ALLOWED_TABLES = ['gemilang_products']
     ALLOWED_COLUMNS = {
-        'id', 'name', 'price', 'url', 'unit', 'created_at', 'updated_at'
+        'id', 'name', 'price', 'url', 'unit', 'location', 'created_at', 'updated_at'
     }
     
     def __init__(self):
@@ -125,11 +125,11 @@ class GemilangDatabaseService:
             
             sql = """
                 INSERT INTO gemilang_products
-                    (name, price, url, unit, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (name, price, url, unit, location, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             
-            self._validate_column_names(['name', 'price', 'url', 'unit', 'created_at', 'updated_at'])
+            self._validate_column_names(['name', 'price', 'url', 'unit', 'location', 'created_at', 'updated_at'])
             
             params_list = [
                 (
@@ -137,6 +137,7 @@ class GemilangDatabaseService:
                     int(item["price"]),
                     self._sanitize_string(item["url"]),
                     self._sanitize_string(item["unit"]),
+                    self._sanitize_string(item.get("location", "")),
                     now,
                     now
                 )
@@ -197,7 +198,7 @@ class GemilangDatabaseService:
             inserted_count = 0
             anomalies = []
             
-            self._validate_column_names(['id', 'name', 'price', 'url', 'unit', 'created_at', 'updated_at'])
+            self._validate_column_names(['id', 'name', 'price', 'url', 'unit', 'location', 'created_at', 'updated_at'])
             
             with transaction.atomic():
                 with connection.cursor() as cursor:
@@ -205,6 +206,7 @@ class GemilangDatabaseService:
                         name = self._sanitize_string(item["name"])
                         url = self._sanitize_string(item["url"])
                         unit = self._sanitize_string(item["unit"])
+                        location = self._sanitize_string(item.get("location", ""))
                         price = int(item["price"])
                         
                         select_sql = """
@@ -237,12 +239,12 @@ class GemilangDatabaseService:
                         else:
                             insert_sql = """
                                 INSERT INTO gemilang_products 
-                                (name, price, url, unit, created_at, updated_at) 
-                                VALUES (%s, %s, %s, %s, %s, %s)
+                                (name, price, url, unit, location, created_at, updated_at) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
                             """
                             cursor.execute(
                                 insert_sql,
-                                (name, price, url, unit, now, now)
+                                (name, price, url, unit, location, now, now)
                             )
                             inserted_count += 1
             
