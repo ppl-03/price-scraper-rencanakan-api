@@ -19,7 +19,7 @@ class BaseScraperAPITestCase(TestCase):
     scraper_name = None
     
     @classmethod
-    def __subclasshook__(cls, subclass):
+    def __subclasshook__(cls, candidate):
         return NotImplemented
     
     def setUp(self):
