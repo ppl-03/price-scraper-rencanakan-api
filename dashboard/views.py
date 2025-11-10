@@ -11,9 +11,12 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 import re, json, os, time
 import secrets
+import logging
 
 # For diagnostics + plain HTML fetch
 from api.core import BaseHttpClient
+
+logger = logging.getLogger(__name__)
 
 # Vendors (use each package's own factory + url builder)
 from api.gemilang.factory import create_gemilang_scraper, create_gemilang_location_scraper
@@ -1373,6 +1376,75 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
 
 
 # ---------------- generic runners ----------------
+def _get_database_service(label: str):
+    """Get the appropriate database service for a vendor label."""
+    if label == GEMILANG_SOURCE:
+        from api.gemilang.database_service import GemilangDatabaseService
+        return GemilangDatabaseService()
+    elif label == MITRA10_SOURCE:
+        from api.mitra10.database_service import Mitra10DatabaseService
+        return Mitra10DatabaseService()
+    elif label == JURAGAN_MATERIAL_SOURCE:
+        from api.juragan_material.database_service import JuraganMaterialDatabaseService
+        return JuraganMaterialDatabaseService()
+    return None
+
+
+def _format_product_data(product, label: str, categorizer):
+    """Format a single product for database insertion."""
+    category = categorizer.categorize(product.name) or 'Lainnya'
+    
+    product_dict = {
+        'name': product.name,
+        'price': product.price,
+        'url': getattr(product, 'url', ''),
+        'unit': getattr(product, 'unit', ''),
+    }
+    
+    if label == MITRA10_SOURCE:
+        product_dict['category'] = category
+    
+    if label == JURAGAN_MATERIAL_SOURCE:
+        product_dict['location'] = getattr(product, 'location', 'Unknown')
+    
+    return product_dict
+
+
+def _execute_database_save(db_service, products_data, label: str):
+    """Execute the database save operation."""
+    if hasattr(db_service, 'save_with_price_update'):
+        result = db_service.save_with_price_update(products_data)
+        if result and result.get('success', False):
+            logger.info(f"{label}: Saved {result.get('inserted', 0)} new, updated {result.get('updated', 0)} products")
+            return True
+        logger.error(f"{label}: Database save failed - {result.get('error', 'Unknown error')}")
+        return False
+    
+    result = db_service.save(products_data)
+    if result:
+        logger.info(f"{label}: Saved {len(products_data)} products to database")
+        return True
+    logger.error(f"{label}: Failed to save products to database")
+    return False
+
+
+def _save_products_to_database(products, label: str):
+    """Save scraped products to the database."""
+    try:
+        db_service = _get_database_service(label)
+        if not db_service:
+            return True
+        
+        categorizer = ProductCategorizer()
+        products_data = [_format_product_data(p, label, categorizer) for p in products]
+        
+        return _execute_database_save(db_service, products_data, label)
+                
+    except Exception as db_error:
+        logger.error(f"Failed to save {label} products to database: {str(db_error)}")
+        return False
+
+
 def _handle_successful_scrape(request, res, label: str, url: str, html_len: int) -> list[dict]:
     """Handle successful scrape results."""
     rows = []
@@ -1400,6 +1472,11 @@ def _handle_successful_scrape(request, res, label: str, url: str, html_len: int)
             product_data["location"] = location
 
         rows.append(product_data)
+    
+    # Auto-save products to database after successful scraping
+    if res.products:
+        _save_products_to_database(res.products, label)
+    
     messages.info(request, f"[{label}] URL: {url} | HTML: {html_len} bytes | parsed={len(rows)}")
     return rows
 

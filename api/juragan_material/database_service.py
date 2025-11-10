@@ -120,7 +120,7 @@ class JuraganMaterialDatabaseService:
 
     def _insert_new_product(self, cursor, item, now):
         cursor.execute(
-            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s. %s, %s, %s)",
+            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
             self._create_product_params(item, now)
         )
         return 1
