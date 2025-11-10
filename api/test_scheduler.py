@@ -340,8 +340,8 @@ class TestNormalizeProducts(unittest.TestCase):
     def test_normalize_products_dict_list(self):
         scheduler = BaseScheduler()
         products = [
-            {'name': 'Product A', 'price': 100, 'url': 'http://example.com/a', 'unit': 'pcs'},
-            {'name': 'Product B', 'price': 200, 'url': 'http://example.com/b', 'unit': 'box'}
+            {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': 'pcs'},
+            {'name': 'Product B', 'price': 200, 'url': 'https://example.com/b', 'unit': 'box'}
         ]
         
         result = scheduler.normalize_products(products)
@@ -350,8 +350,8 @@ class TestNormalizeProducts(unittest.TestCase):
     
     def test_normalize_products_object_list(self):
         scheduler = BaseScheduler()
-        product1 = SimpleNamespace(name='Product A', price=100, url='http://example.com/a', unit='pcs')
-        product2 = SimpleNamespace(name='Product B', price=200, url='http://example.com/b', unit='kg')
+        product1 = SimpleNamespace(name='Product A', price=100, url='https://example.com/a', unit='pcs')
+        product2 = SimpleNamespace(name='Product B', price=200, url='https://example.com/b', unit='kg')
         products = [product1, product2]
         
         result = scheduler.normalize_products(products)
@@ -359,14 +359,14 @@ class TestNormalizeProducts(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]['name'], 'Product A')
         self.assertEqual(result[0]['price'], 100)
-        self.assertEqual(result[0]['url'], 'http://example.com/a')
+        self.assertEqual(result[0]['url'], 'https://example.com/a')
         self.assertEqual(result[0]['unit'], 'pcs')
         self.assertEqual(result[1]['name'], 'Product B')
         self.assertEqual(result[1]['price'], 200)
     
     def test_normalize_products_object_without_unit(self):
         scheduler = BaseScheduler()
-        product = SimpleNamespace(name='Product A', price=100, url='http://example.com/a')
+        product = SimpleNamespace(name='Product A', price=100, url='https://example.com/a')
         products = [product]
         
         result = scheduler.normalize_products(products)
@@ -376,8 +376,8 @@ class TestNormalizeProducts(unittest.TestCase):
     
     def test_normalize_products_mixed_list(self):
         scheduler = BaseScheduler()
-        product1 = {'name': 'Product A', 'price': 100, 'url': 'http://example.com/a', 'unit': 'pcs'}
-        product2 = SimpleNamespace(name='Product B', price=200, url='http://example.com/b', unit='kg')
+        product1 = {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': 'pcs'}
+        product2 = SimpleNamespace(name='Product B', price=200, url='https://example.com/b', unit='kg')
         products = [product1, product2]
         
         result = scheduler.normalize_products(products)
@@ -404,12 +404,12 @@ class TestEnrichUnit(unittest.TestCase):
         detail = SimpleNamespace(unit='kg')
         scraper.scrape_product_details = Mock(return_value=detail)
         
-        product = {'name': 'Product A', 'price': 100, 'url': 'http://example.com/a', 'unit': ''}
+        product = {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': ''}
         
         scheduler.enrich_unit(scraper, product)
         
         self.assertEqual(product['unit'], 'kg')
-        scraper.scrape_product_details.assert_called_once_with('http://example.com/a')
+        scraper.scrape_product_details.assert_called_once_with('https://example.com/a')
     
     def test_enrich_unit_object_product_success(self):
         scheduler = BaseScheduler()
@@ -417,7 +417,7 @@ class TestEnrichUnit(unittest.TestCase):
         detail = SimpleNamespace(unit='pcs')
         scraper.scrape_product_details = Mock(return_value=detail)
         
-        product = SimpleNamespace(name='Product A', price=100, url='http://example.com/b', unit='')
+        product = SimpleNamespace(name='Product A', price=100, url='https://example.com/b', unit='')
         
         scheduler.enrich_unit(scraper, product)
         
@@ -426,7 +426,7 @@ class TestEnrichUnit(unittest.TestCase):
     def test_enrich_unit_no_scrape_product_details_method(self):
         scheduler = BaseScheduler()
         scraper = Mock(spec=[])
-        product = {'name': 'Product A', 'price': 100, 'url': 'http://example.com/a', 'unit': ''}
+        product = {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': ''}
         
         scheduler.enrich_unit(scraper, product)
         
@@ -449,7 +449,7 @@ class TestEnrichUnit(unittest.TestCase):
         detail = SimpleNamespace()
         scraper.scrape_product_details = Mock(return_value=detail)
         
-        product = {'name': 'Product A', 'price': 100, 'url': 'http://example.com/a', 'unit': ''}
+        product = {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': ''}
         
         scheduler.enrich_unit(scraper, product)
         
@@ -460,7 +460,7 @@ class TestEnrichUnit(unittest.TestCase):
         scraper = Mock()
         scraper.scrape_product_details = Mock(side_effect=Exception('Network error'))
         
-        product = {'name': 'Product A', 'price': 100, 'url': 'http://example.com/a', 'unit': ''}
+        product = {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': ''}
         
         scheduler.enrich_unit(scraper, product)
         
@@ -473,7 +473,7 @@ class TestEnrichUnit(unittest.TestCase):
         scraper.scrape_product_details = Mock(return_value=detail)
         
         product = Mock()
-        product.url = 'http://example.com/a'
+        product.url = 'https://example.com/a'
         type(product).unit = property(lambda self: '')
         
         scheduler.enrich_unit(scraper, product)
@@ -488,7 +488,7 @@ class TestEnrichUnit(unittest.TestCase):
         
         class ImmutableProduct:
             def __init__(self):
-                self.url = 'http://example.com/a'
+                self.url = 'https://example.com/a'
                 self._unit = ''
             
             @property
@@ -503,14 +503,14 @@ class TestEnrichUnit(unittest.TestCase):
         
         scheduler.enrich_unit(scraper, product)
         
-        scraper.scrape_product_details.assert_called_once_with('http://example.com/a')
+        scraper.scrape_product_details.assert_called_once_with('https://example.com/a')
     
     def test_enrich_unit_outer_exception_coverage(self):
         scheduler = BaseScheduler()
         scraper = Mock()
         scraper.scrape_product_details = Mock(side_effect=RuntimeError('Scraping failed'))
         
-        product = SimpleNamespace(url='http://example.com/a', unit='')
+        product = SimpleNamespace(url='https://example.com/a', unit='')
         
         scheduler.enrich_unit(scraper, product)
         
@@ -537,7 +537,7 @@ class TestEnrichUnit(unittest.TestCase):
         scraper = Mock()
         scraper.scrape_product_details = Mock(side_effect=Exception('Network error'))
         
-        product = {'name': 'Product', 'price': 100, 'url': 'http://example.com', 'unit': ''}
+        product = {'name': 'Product', 'price': 100, 'url': 'https://example.com', 'unit': ''}
         
         scheduler.enrich_unit(scraper, product)
         
