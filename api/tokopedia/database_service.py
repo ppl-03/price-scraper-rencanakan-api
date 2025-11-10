@@ -81,6 +81,17 @@ class TokopediaDatabaseService:
         
         return None
 
+    def _save_detected_anomalies(self, anomalies):
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('tokopedia', anomalies)
+        if not anomaly_result['success']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
         """
         Update existing product with SQL injection protection.
@@ -158,12 +169,7 @@ class TokopediaDatabaseService:
                         inserted_count += self._insert_new_product(cursor, item, now)
 
         # Save anomalies to database for review
-        if anomalies:
-            anomaly_result = PriceAnomalyService.save_anomalies('tokopedia', anomalies)
-            if not anomaly_result['success']:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+        self._save_detected_anomalies(anomalies)
 
         return {
             "success": True,

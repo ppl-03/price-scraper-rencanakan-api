@@ -177,6 +177,15 @@ class GemilangDatabaseService:
             }
         return None
 
+    def _save_detected_anomalies(self, anomalies: List[Dict[str, Any]]) -> None:
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('gemilang', anomalies)
+        if not anomaly_result['success']:
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
     def save_with_price_update(
         self, 
         data: List[Dict[str, Any]]
@@ -253,10 +262,7 @@ class GemilangDatabaseService:
             )
             
             # Save anomalies to database for review
-            if anomalies:
-                anomaly_result = PriceAnomalyService.save_anomalies('gemilang', anomalies)
-                if not anomaly_result['success']:
-                    logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+            self._save_detected_anomalies(anomalies)
             
             return {
                 "success": True,

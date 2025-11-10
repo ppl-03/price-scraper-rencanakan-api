@@ -5,6 +5,7 @@ Tests for the PriceAnomalyService
 
 from django.test import TestCase
 from django.utils import timezone
+from django.db import DatabaseError
 from db_pricing.models import PriceAnomaly
 from db_pricing.anomaly_service import PriceAnomalyService
 
@@ -397,3 +398,96 @@ class TestPriceAnomalyService(TestCase):
         
         expected = "mitra10 - Test Product (20.0% change)"
         self.assertEqual(str(anomaly), expected)
+    
+    def test_save_anomalies_database_error_in_loop(self):
+        """Test handling database error while saving individual anomalies"""
+        from unittest.mock import patch, MagicMock
+        
+        anomalies = [
+            {
+                "name": "Good Product",
+                "url": "https://test.com/1",
+                "unit": "PCS",
+                "old_price": 10000,
+                "new_price": 12000,
+                "change_percent": 20.0
+            },
+            {
+                "name": "Bad Product",
+                "url": "https://test.com/2",
+                "unit": "PCS",
+                "old_price": 10000,
+                "new_price": 12000,
+                "change_percent": 20.0
+            }
+        ]
+        
+        # Mock PriceAnomaly.objects.create to raise exception on second call
+        create_count = [0]
+        original_create = PriceAnomaly.objects.create
+        
+        def mock_create(*args, **kwargs):
+            create_count[0] += 1
+            if create_count[0] == 2:
+                raise DatabaseError("Database error")
+            return original_create(*args, **kwargs)
+        
+        with patch.object(PriceAnomaly.objects, 'create', side_effect=mock_create):
+            result = PriceAnomalyService.save_anomalies('mitra10', anomalies)
+        
+        # Should still succeed but with errors
+        self.assertTrue(result['success'])
+        self.assertEqual(result['saved_count'], 1)  # Only first one saved
+        self.assertEqual(len(result['errors']), 1)  # One error logged
+        self.assertIn("Error saving anomaly Bad Product", result['errors'][0])
+    
+    def test_save_anomalies_transaction_error(self):
+        """Test handling transaction-level error"""
+        from unittest.mock import patch
+        
+        anomalies = [
+            {
+                "name": "Test Product",
+                "url": "https://test.com/1",
+                "unit": "PCS",
+                "old_price": 10000,
+                "new_price": 12000,
+                "change_percent": 20.0
+            }
+        ]
+        
+        # Mock transaction.atomic to raise exception
+        with patch('db_pricing.anomaly_service.transaction.atomic') as mock_atomic:
+            mock_atomic.side_effect = Exception("Transaction error")
+            result = PriceAnomalyService.save_anomalies('mitra10', anomalies)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['saved_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn("Transaction error", result['errors'][0])
+    
+    def test_mark_as_reviewed_not_found(self):
+        """Test marking non-existent anomaly as reviewed"""
+        result = PriceAnomalyService.mark_as_reviewed(99999, 'approved', 'Test notes')
+        self.assertFalse(result)
+    
+    def test_mark_as_reviewed_database_error(self):
+        """Test handling database error when marking as reviewed"""
+        from unittest.mock import patch
+        
+        # Create an anomaly
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='PCS',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        # Mock save to raise exception
+        with patch.object(PriceAnomaly, 'save', side_effect=Exception("Database error")):
+            result = PriceAnomalyService.mark_as_reviewed(anomaly.id, 'approved', 'Test')
+        
+        self.assertFalse(result)
