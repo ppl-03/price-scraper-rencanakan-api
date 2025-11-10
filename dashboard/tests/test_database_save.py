@@ -187,14 +187,14 @@ class DatabaseHelperFunctionsTests(TestCase):
         from dashboard.views import _format_product_data
         from db_pricing.categorization import ProductCategorizer
         
-        product = MockProduct('Test Product', 10000, 'http://test.com', 'pcs')
+        product = MockProduct('Test Product', 10000, 'https://test.com', 'pcs')
         categorizer = ProductCategorizer()
         
         result = _format_product_data(product, 'Gemilang Store', categorizer)
         
         self.assertEqual(result['name'], 'Test Product')
         self.assertEqual(result['price'], 10000)
-        self.assertEqual(result['url'], 'http://test.com')
+        self.assertEqual(result['url'], 'https://test.com')
         self.assertEqual(result['unit'], 'pcs')
         self.assertNotIn('category', result)
         self.assertNotIn('location', result)
@@ -203,7 +203,7 @@ class DatabaseHelperFunctionsTests(TestCase):
         from dashboard.views import _format_product_data
         from db_pricing.categorization import ProductCategorizer
         
-        product = MockProduct('Cat Tembok', 50000, 'http://test.com', 'kaleng')
+        product = MockProduct('Cat Tembok', 50000, 'https://test.com', 'kaleng')
         categorizer = ProductCategorizer()
         
         result = _format_product_data(product, 'Mitra10', categorizer)
@@ -215,7 +215,7 @@ class DatabaseHelperFunctionsTests(TestCase):
         from dashboard.views import _format_product_data
         from db_pricing.categorization import ProductCategorizer
         
-        product = MockProduct('Pasir', 300000, 'http://test.com', 'm3', 'Jakarta')
+        product = MockProduct('Pasir', 300000, 'https://test.com', 'm3', 'Jakarta')
         categorizer = ProductCategorizer()
         
         result = _format_product_data(product, 'Juragan Material', categorizer)
