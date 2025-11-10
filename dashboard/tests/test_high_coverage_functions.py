@@ -35,7 +35,7 @@ class VendorScrapingExecutionTests(TestCase):
         mock_product.name = 'Cement Product'
         mock_product.price = 100000
         mock_product.unit = 'pcs'
-        mock_product.url = 'http://example.com/product'
+        mock_product.url = 'https://example.com/product'
         
         mock_scraper.scrape.return_value = MagicMock(
             products=[mock_product]

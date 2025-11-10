@@ -36,10 +36,10 @@ class GovWageViewsTests(TestCase):
         <table id="example">
             <tbody>
                 <tr>
-                    <td>1</td><td>2.1.1.1</td><td>Test Work A</td><td>m3</td><td>Rp 100.000,-</td>
+                    <td>1</td><td>A.1.1.1</td><td>Test Work A</td><td>m3</td><td>Rp 100.000,-</td>
                 </tr>
                 <tr>
-                    <td>2</td><td>2.1.1.2</td><td>Test Work B</td><td>m2</td><td>Rp 200.000,-</td>
+                    <td>2</td><td>A.1.1.2</td><td>Test Work B</td><td>m2</td><td>Rp 200.000,-</td>
                 </tr>
             </tbody>
         </table>
@@ -47,7 +47,7 @@ class GovWageViewsTests(TestCase):
         soup = BeautifulSoup(html, 'html.parser')
         items = gvw.parse_hspk_table(soup, 'Kab. Test')
         self.assertEqual(len(items), 2)
-        self.assertEqual(items[0].work_code, '2.1.1.1')
+        self.assertEqual(items[0].work_code, 'A.1.1.1')
         self.assertEqual(items[1].unit_price_idr, 200000)
 
     def test_parse_price_range_and_filters_and_sorting(self):
@@ -185,12 +185,12 @@ class GovWageViewsTests(TestCase):
         # Test that the view exists and returns correct context instead
         from django.test import RequestFactory
         factory = RequestFactory()
-        request = factory.get('/gov-wage/')
+        _ = factory.get('/gov-wage/')
         from dashboard.gov_wage_views import gov_wage_page
         # Just verify it doesn't crash - template rendering requires static files
         # resp = gov_wage_page(request)
         # self.assertEqual(resp.status_code, 200)
-        pass
+        self.assertTrue(callable(gov_wage_page))
 
     def test_generate_mock_hspk_data(self):
         items = gvw.generate_mock_hspk_data('Kab. Test', total_items=50)

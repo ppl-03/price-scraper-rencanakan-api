@@ -47,7 +47,7 @@ class FallbackFunctionsTest(TestCase):
         html = '<div class="product">Test Mitra10 Product</div>'
         mock_client.get_html.return_value = html
         
-        rows, url, html_len = views._mitra10_fallback('cement')
+        rows, url, _ = views._mitra10_fallback('cement')
         
         self.assertIsInstance(rows, list)
         self.assertIsInstance(url, str)
@@ -58,7 +58,7 @@ class FallbackFunctionsTest(TestCase):
         mock_client_class.return_value = mock_client
         mock_client.get_html.side_effect = Exception('Error')
         
-        rows, url, html_len = views._mitra10_fallback('cement')
+        rows, _, _ = views._mitra10_fallback('cement')
         self.assertEqual(rows, [])
 
     @patch('dashboard.views.BaseHttpClient')
@@ -69,7 +69,7 @@ class FallbackFunctionsTest(TestCase):
         html = '<div class="product-item">Depo Product</div>'
         mock_client.get_html.return_value = html
         
-        rows, url, html_len = views._depo_fallback('paint')
+        rows, url, _ = views._depo_fallback('paint')
         
         self.assertIsInstance(rows, list)
         self.assertIsInstance(url, str)
@@ -80,7 +80,7 @@ class FallbackFunctionsTest(TestCase):
         mock_client_class.return_value = mock_client
         mock_client.get_html.side_effect = Exception('Failed')
         
-        rows, url, html_len = views._depo_fallback('paint')
+        rows, _, _ = views._depo_fallback('paint')
         self.assertEqual(rows, [])
 
     @patch('dashboard.views.BaseHttpClient')
@@ -91,7 +91,7 @@ class FallbackFunctionsTest(TestCase):
         html = '<script type="application/ld+json">{"name": "Product"}</script>'
         mock_client.get_html.return_value = html
         
-        rows, url, html_len = views._tokopedia_fallback('brick')
+        rows, url, _ = views._tokopedia_fallback('brick')
         
         self.assertIsInstance(rows, list)
         self.assertIsInstance(url, str)
@@ -102,7 +102,7 @@ class FallbackFunctionsTest(TestCase):
         mock_client_class.return_value = mock_client
         mock_client.get_html.side_effect = Exception('Error')
         
-        rows, url, html_len = views._tokopedia_fallback('brick')
+        rows, _, _ = views._tokopedia_fallback('brick')
         self.assertEqual(rows, [])
 
 

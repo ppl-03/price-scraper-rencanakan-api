@@ -558,14 +558,14 @@ class JSONLDParsingTest(TestCase):
         prod_data = {
             "name": "Test Product",
             "offers": {"price": "99999"},
-            "url": "http://test.com/product"
+            "url": "https://test.com/product"
         }
         
         name, price, url = views._process_jsonld_product(prod_data)
         
         self.assertEqual(name, "Test Product")
         self.assertEqual(price, 99999)
-        self.assertEqual(url, "http://test.com/product")
+        self.assertEqual(url, "https://test.com/product")
     
     def test_parse_jsonld_itemlist(self):
         """Test parsing ItemList"""

@@ -155,3 +155,70 @@ class AutoSaveProductsTests(TestCase):
         self.assertTrue(result)
         product = JuraganMaterialProduct.objects.first()
         self.assertEqual(product.location, 'Bandung')
+
+
+class DatabaseHelperFunctionsTests(TestCase):
+    """Test the refactored database helper functions"""
+    
+    def test_get_database_service_gemilang(self):
+        from dashboard.views import _get_database_service
+        service = _get_database_service('Gemilang Store')
+        self.assertIsNotNone(service)
+        self.assertEqual(service.__class__.__name__, 'GemilangDatabaseService')
+    
+    def test_get_database_service_mitra10(self):
+        from dashboard.views import _get_database_service
+        service = _get_database_service('Mitra10')
+        self.assertIsNotNone(service)
+        self.assertEqual(service.__class__.__name__, 'Mitra10DatabaseService')
+    
+    def test_get_database_service_juragan(self):
+        from dashboard.views import _get_database_service
+        service = _get_database_service('Juragan Material')
+        self.assertIsNotNone(service)
+        self.assertEqual(service.__class__.__name__, 'JuraganMaterialDatabaseService')
+    
+    def test_get_database_service_unknown(self):
+        from dashboard.views import _get_database_service
+        service = _get_database_service('Unknown Vendor')
+        self.assertIsNone(service)
+    
+    def test_format_product_data_basic(self):
+        from dashboard.views import _format_product_data
+        from db_pricing.categorization import ProductCategorizer
+        
+        product = MockProduct('Test Product', 10000, 'http://test.com', 'pcs')
+        categorizer = ProductCategorizer()
+        
+        result = _format_product_data(product, 'Gemilang Store', categorizer)
+        
+        self.assertEqual(result['name'], 'Test Product')
+        self.assertEqual(result['price'], 10000)
+        self.assertEqual(result['url'], 'http://test.com')
+        self.assertEqual(result['unit'], 'pcs')
+        self.assertNotIn('category', result)
+        self.assertNotIn('location', result)
+    
+    def test_format_product_data_with_category(self):
+        from dashboard.views import _format_product_data
+        from db_pricing.categorization import ProductCategorizer
+        
+        product = MockProduct('Cat Tembok', 50000, 'http://test.com', 'kaleng')
+        categorizer = ProductCategorizer()
+        
+        result = _format_product_data(product, 'Mitra10', categorizer)
+        
+        self.assertIn('category', result)
+        self.assertIsNotNone(result['category'])
+    
+    def test_format_product_data_with_location(self):
+        from dashboard.views import _format_product_data
+        from db_pricing.categorization import ProductCategorizer
+        
+        product = MockProduct('Pasir', 300000, 'http://test.com', 'm3', 'Jakarta')
+        categorizer = ProductCategorizer()
+        
+        result = _format_product_data(product, 'Juragan Material', categorizer)
+        
+        self.assertIn('location', result)
+        self.assertEqual(result['location'], 'Jakarta')

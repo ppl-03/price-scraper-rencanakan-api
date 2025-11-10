@@ -49,7 +49,7 @@ class ExceptionPathTests(TestCase):
         mock_client.get_html.side_effect = ConnectionError('Network error')
         mock_client_class.return_value = mock_client
         
-        rows, url, html_len = views._juragan_fallback('test')
+        rows, _, html_len = views._juragan_fallback('test')
         
         # Should return empty result, not raise exception
         self.assertEqual(rows, [])

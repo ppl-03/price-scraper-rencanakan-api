@@ -1376,68 +1376,69 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
 
 
 # ---------------- generic runners ----------------
-def _save_products_to_database(products, label: str):
+def _get_database_service(label: str):
+    """Get the appropriate database service for a vendor label."""
+    if label == GEMILANG_SOURCE:
+        from api.gemilang.database_service import GemilangDatabaseService
+        return GemilangDatabaseService()
+    elif label == MITRA10_SOURCE:
+        from api.mitra10.database_service import Mitra10DatabaseService
+        return Mitra10DatabaseService()
+    elif label == JURAGAN_MATERIAL_SOURCE:
+        from api.juragan_material.database_service import JuraganMaterialDatabaseService
+        return JuraganMaterialDatabaseService()
+    return None
 
+
+def _format_product_data(product, label: str, categorizer):
+    """Format a single product for database insertion."""
+    category = categorizer.categorize(product.name) or 'Lainnya'
+    
+    product_dict = {
+        'name': product.name,
+        'price': product.price,
+        'url': getattr(product, 'url', ''),
+        'unit': getattr(product, 'unit', ''),
+    }
+    
+    if label == MITRA10_SOURCE:
+        product_dict['category'] = category
+    
+    if label == JURAGAN_MATERIAL_SOURCE:
+        product_dict['location'] = getattr(product, 'location', 'Unknown')
+    
+    return product_dict
+
+
+def _execute_database_save(db_service, products_data, label: str):
+    """Execute the database save operation."""
+    if hasattr(db_service, 'save_with_price_update'):
+        result = db_service.save_with_price_update(products_data)
+        if result and result.get('success', False):
+            logger.info(f"{label}: Saved {result.get('inserted', 0)} new, updated {result.get('updated', 0)} products")
+            return True
+        logger.error(f"{label}: Database save failed - {result.get('error', 'Unknown error')}")
+        return False
+    
+    result = db_service.save(products_data)
+    if result:
+        logger.info(f"{label}: Saved {len(products_data)} products to database")
+        return True
+    logger.error(f"{label}: Failed to save products to database")
+    return False
+
+
+def _save_products_to_database(products, label: str):
+    """Save scraped products to the database."""
     try:
-        # Determine which database service to use based on label
-        if label == GEMILANG_SOURCE:
-            from api.gemilang.database_service import GemilangDatabaseService
-            db_service = GemilangDatabaseService()
-        elif label == MITRA10_SOURCE:
-            from api.mitra10.database_service import Mitra10DatabaseService
-            db_service = Mitra10DatabaseService()
-        elif label == JURAGAN_MATERIAL_SOURCE:
-            from api.juragan_material.database_service import JuraganMaterialDatabaseService
-            db_service = JuraganMaterialDatabaseService()
-        else:
-            # Other vendors not configured for auto-save yet
+        db_service = _get_database_service(label)
+        if not db_service:
             return True
         
-        # Format products for database saving
-        # Different vendors have different schema requirements
         categorizer = ProductCategorizer()
-        products_data = []
-        for p in products:
-            # Categorize the product
-            category = categorizer.categorize(p.name) or 'Lainnya'
-            
-            # Base product data for all vendors
-            product_dict = {
-                'name': p.name,
-                'price': p.price,
-                'url': getattr(p, 'url', ''),
-                'unit': getattr(p, 'unit', ''),
-            }
-            
-            # Add category for vendors that need it (only Mitra10)
-            # Gemilang and Juragan Material don't include category in their INSERT statements
-            if label == MITRA10_SOURCE:
-                product_dict['category'] = category
-            
-            # Only add location for vendors that support it (Juragan Material)
-            if label == JURAGAN_MATERIAL_SOURCE:
-                product_dict['location'] = getattr(p, 'location', 'Unknown')
-            
-            products_data.append(product_dict)
+        products_data = [_format_product_data(p, label, categorizer) for p in products]
         
-        # Save to database using save_with_price_update for better handling
-        if hasattr(db_service, 'save_with_price_update'):
-            result = db_service.save_with_price_update(products_data)
-            if result and result.get('success', False):
-                logger.info(f"{label}: Saved {result.get('inserted', 0)} new, updated {result.get('updated', 0)} products")
-                return True
-            else:
-                logger.error(f"{label}: Database save failed - {result.get('error', 'Unknown error')}")
-                return False
-        else:
-            # Fallback to regular save method
-            result = db_service.save(products_data)
-            if result:
-                logger.info(f"{label}: Saved {len(products_data)} products to database")
-                return True
-            else:
-                logger.error(f"{label}: Failed to save products to database")
-                return False
+        return _execute_database_save(db_service, products_data, label)
                 
     except Exception as db_error:
         logger.error(f"Failed to save {label} products to database: {str(db_error)}")
