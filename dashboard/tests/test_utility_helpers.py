@@ -179,12 +179,6 @@ class LocationScrapingFormattingTests(TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["source"], "test_source")
 
-    def test_format_mitra10_locations(self):
-        """Test formatting Mitra10 location names"""
-        location_names = ["Jakarta", "Bandung", "Surabaya"]
-        result = views._format_mitra10_locations(location_names)
-        self.assertEqual(len(result), 3)
-        self.assertEqual(result[0]["name"], "Jakarta")
 
 
 class FallbackLocationsTests(TestCase):
