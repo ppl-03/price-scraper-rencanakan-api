@@ -49,7 +49,7 @@ class Product:
     url: str
     unit: Optional[str] = None
     location: Optional[str] = None
-    sold_count: Optional[int] = None
+    sold_count: Optional[int] = None  
 
 
 @dataclass

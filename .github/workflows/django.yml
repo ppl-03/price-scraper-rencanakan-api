@@ -84,4 +84,4 @@ jobs:
 
       - name: Run tests
         run: |
-          python manage.py test api db_pricing.tests.test_connection_checker db_pricing.tests.test_status_api dashboard security --verbosity=2 --keepdb
+          python manage.py test api db_pricing.tests dashboard security --verbosity=2 --keepdb
