@@ -17,6 +17,29 @@ from .security import (
 logger = logging.getLogger(__name__)
 
 
+def _format_products_data(products):
+    """Helper function to format products data into JSON-serializable format."""
+    return [
+        {
+            'name': product.name,
+            'price': product.price,
+            'url': product.url,
+            'unit': product.unit
+        }
+        for product in products
+    ]
+
+
+def _create_scrape_response(result):
+    """Helper function to create standardized scrape response."""
+    return {
+        'success': result.success,
+        'products': _format_products_data(result.products),
+        'error_message': result.error_message,
+        'url': result.url
+    }
+
+
 def _validate_page_param(x):
     """Helper function to validate page parameter."""
     if not x:
@@ -47,22 +70,7 @@ def scrape_products(request):
             page=page
         )
         
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit
-            }
-            for product in result.products
-        ]
-        
-        response_data = {
-            'success': result.success,
-            'products': products_data,
-            'error_message': result.error_message,
-            'url': result.url
-        }
+        response_data = _create_scrape_response(result)
         
         return JsonResponse(response_data)
         
@@ -259,15 +267,7 @@ def scrape_and_save(request):
                 'anomalies': []
             }, status=500)
         
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit
-            }
-            for product in result.products
-        ]
+        products_data = _format_products_data(result.products)
         
         if not products_data:
             return JsonResponse({
@@ -313,22 +313,7 @@ def scrape_popularity(request):
         # For popularity we just set sort_by_price to False so url_builder uses sort=new
         result = scraper.scrape_products(keyword=keyword, sort_by_price=False, page=page)
 
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit
-            }
-            for product in result.products
-        ]
-
-        response_data = {
-            'success': result.success,
-            'products': products_data,
-            'error_message': result.error_message,
-            'url': result.url
-        }
+        response_data = _create_scrape_response(result)
 
         return JsonResponse(response_data)
 

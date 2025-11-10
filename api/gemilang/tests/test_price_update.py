@@ -1,6 +1,7 @@
 from db_pricing.models import GemilangProduct
 from api.gemilang.database_service import GemilangDatabaseService
 from .test_base import MySQLTestCase
+import time
 
 
 class TestSaveWithPriceUpdate(MySQLTestCase):
@@ -223,6 +224,7 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
     def test_price_update_changes_updated_at(self):
         product = GemilangProduct.objects.create(name="Product N", price=10000, url="https://test.com/n", unit="PCS")
         original_updated_at = product.updated_at
+                time.sleep(0.01)
         
         service = GemilangDatabaseService()
         data = [{"name": "Product N", "price": 12000, "url": "https://test.com/n", "unit": "PCS"}]
