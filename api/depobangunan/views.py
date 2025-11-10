@@ -11,6 +11,85 @@ ERROR_KEYWORD_REQUIRED = 'Keyword parameter is required'
 ERROR_PAGE_INVALID = 'Page parameter must be a valid integer'
 ERROR_INTERNAL_SERVER = 'Internal server error occurred'
 
+def _validate_sort_type(raw):
+    sort_type = (raw or "cheapest").lower()
+    if sort_type not in ("cheapest", "popularity"):
+        return None, JsonResponse(
+            {"error": 'sort_type must be either "cheapest" or "popularity"'}, status=400
+        )
+    return sort_type, None
+
+def _bool_from_str(s):
+    return str(s).lower() in ("true", "1", "yes")
+
+def _pick_products(sort_type, products):
+    """Return products per sort_type rule."""
+    if sort_type != "popularity":
+        return products
+    with_sales = [p for p in products if getattr(p, "sold_count", None) is not None]
+    if with_sales:
+        with_sales.sort(key=lambda x: x.sold_count, reverse=True)
+        return with_sales[:5]
+    return products[:5]
+
+def _response_no_products():
+    return JsonResponse({
+        "success": True,
+        "message": "No products found to save",
+        "saved": 0, "updated": 0, "inserted": 0, "anomalies": []
+    })
+
+def _response_scrape_failed(result):
+    return JsonResponse({
+        "success": False,
+        "error": result.error_message,
+        "saved": 0, "updated": 0, "inserted": 0, "anomalies": []
+    }, status=500)
+
+def _save_and_respond(db_service, products_data, use_price_update, result_url):
+    if use_price_update:
+        save_result = db_service.save_with_price_update(products_data)
+        if not save_result.get("success", False):
+            return JsonResponse({
+                "success": False,
+                "error": "Failed to save products to database",
+                "saved": 0, "updated": 0, "inserted": 0, "anomalies": []
+            }, status=500)
+
+        anomalies = save_result.get("anomalies", [])
+        return JsonResponse({
+            "success": True,
+            "message": (
+                f"Updated {save_result['updated_count']} products, "
+                f"inserted {save_result['new_count']} new products"
+            ),
+            "saved": save_result["updated_count"] + save_result["new_count"],
+            "updated": save_result["updated_count"],
+            "inserted": save_result["new_count"],
+            "anomalies": anomalies,
+            "anomaly_count": len(anomalies),
+            "url": result_url
+        })
+
+    # regular save
+    if not db_service.save(products_data):
+        return JsonResponse({
+            "success": False,
+            "error": "Failed to save products to database",
+            "saved": 0, "updated": 0, "inserted": 0, "anomalies": []
+        }, status=500)
+
+    return JsonResponse({
+        "success": True,
+        "message": f"Successfully saved {len(products_data)} products",
+        "saved": len(products_data),
+        "updated": 0,
+        "inserted": len(products_data),
+        "anomalies": [],
+        "url": result_url
+    })
+
+
 
 def _create_error_response(message, status=400):
     return JsonResponse({'error': message}, status=status)
@@ -152,130 +231,42 @@ def depobangunan_locations_view(request):
 @require_http_methods(["POST"])
 def scrape_and_save_products(request):
     try:
-        # Validate and parse parameters
-        keyword, error = _validate_and_parse_keyword(request.POST.get('keyword'))
+        # params
+        keyword, error = _validate_and_parse_keyword(request.POST.get("keyword"))
         if error:
             return error
-        
-        # Parse sort_type parameter from POST data (cheapest or popularity)
-        sort_type = request.POST.get('sort_type', 'cheapest').lower()
-        if sort_type not in ['cheapest', 'popularity']:
-            return JsonResponse({
-                'error': 'sort_type must be either "cheapest" or "popularity"'
-            }, status=400)
-        
-        # Set sort_by_price based on sort_type
-        # cheapest = sort by price, popularity = top_rated
-        sort_by_price = (sort_type == 'cheapest')
-        
-        page, error = _parse_page(request.POST.get('page', '0'))
+
+        sort_type, error = _validate_sort_type(request.POST.get("sort_type"))
         if error:
             return error
-        
-        # Parse use_price_update parameter
-        use_price_update = request.POST.get('use_price_update', 'false').lower() in ['true', '1', 'yes']
-        
+        sort_by_price = (sort_type == "cheapest")
+
+        page, error = _parse_page(request.POST.get("page", "0"))
+        if error:
+            return error
+
+        use_price_update = _bool_from_str(request.POST.get("use_price_update", "false"))
+
+        # scrape
         scraper = create_depo_scraper()
-        result = scraper.scrape_products(
-            keyword=keyword,
-            sort_by_price=sort_by_price,
-            page=page
-        )
-        
+        result = scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
         if not result.success:
-            return JsonResponse({
-                'success': False,
-                'error': result.error_message,
-                'saved': 0,
-                'updated': 0,
-                'inserted': 0,
-                'anomalies': []
-            }, status=500)
-        
+            return _response_scrape_failed(result)
         if not result.products:
-            return JsonResponse({
-                'success': True,
-                'message': 'No products found to save',
-                'saved': 0,
-                'updated': 0,
-                'inserted': 0,
-                'anomalies': []
-            })
-        
-        # If sort_type is popularity, filter and get only top 5 by sold_count
-        if sort_type == 'popularity':
-            # Filter products that have sold_count data
-            products_with_sales = [p for p in result.products if p.sold_count is not None]
-            
-            if products_with_sales:
-                # Sort by sold_count descending (highest first)
-                products_with_sales.sort(key=lambda x: x.sold_count, reverse=True)
-                # Get top 5 products
-                top_products = products_with_sales[:5]
-            else:
-                # No products have sold_count, just get first 5
-                top_products = result.products[:5]
-            
-            products_data = _convert_products_to_dict(top_products)
-        else:
-            # For cheapest, use all products
-            products_data = _convert_products_to_dict(result.products)
-        
+            return _response_no_products()
+
+        # choose + convert
+        chosen = _pick_products(sort_type, result.products)
+        products_data = _convert_products_to_dict(chosen)
+
+        # save & respond
         db_service = DepoBangunanDatabaseService()
-        
-        if use_price_update:
-            # Use price update mode with anomaly detection
-            save_result = db_service.save_with_price_update(products_data)
-            
-            if not save_result.get('success', False):
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Failed to save products to database',
-                    'saved': 0,
-                    'updated': 0,
-                    'inserted': 0,
-                    'anomalies': [],
-                }, status=500)
-            
-            return JsonResponse({
-                'success': True,
-                'message': f"Updated {save_result['updated_count']} products, inserted {save_result['new_count']} new products",
-                'saved': save_result['updated_count'] + save_result['new_count'],
-                'updated': save_result['updated_count'],
-                'inserted': save_result['new_count'],
-                'anomalies': save_result.get('anomalies', []),
-                'anomaly_count': len(save_result.get('anomalies', [])),
-                'url': result.url
-            })
-        else:
-            # Use regular save mode
-            save_result = db_service.save(products_data)
-            
-            if not save_result:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Failed to save products to database',
-                    'saved': 0,
-                    'updated': 0,
-                    'inserted': 0,
-                    'anomalies': []
-                }, status=500)
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Successfully saved {len(products_data)} products',
-                'saved': len(products_data),
-                'updated': 0,
-                'inserted': len(products_data),
-                'anomalies': [],
-                'url': result.url
-            })
-        
+        return _save_and_respond(db_service, products_data, use_price_update, result.url)
+
     except Exception as e:
-        logger.error(f"Unexpected error in scrape and save: {str(e)}")
-        return JsonResponse({
-            'error': 'Internal server error occurred'
-        }, status=500)
+        logger.error(f"Unexpected error in scrape and save: {e}")
+        return JsonResponse({"error": ERROR_INTERNAL_SERVER}, status=500)
+
 
 
 @require_http_methods(["GET"])
