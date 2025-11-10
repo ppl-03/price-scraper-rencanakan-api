@@ -2,11 +2,6 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 class Mitra10DatabaseService:
-    """Handles Mitra10 product database operations with validation and anomaly tracking."""
-
-    # =========================
-    # Validation
-    # =========================
     def _validate_data(self, data):
         """Ensure all required keys exist and price is a valid non-negative integer."""
         if not data:
@@ -19,9 +14,6 @@ class Mitra10DatabaseService:
                 return False
         return True
 
-    # =========================
-    # Core Query Helpers
-    # =========================
     def _execute_many(self, sql, params_list):
         """Execute multiple insert queries in a single transaction."""
         with transaction.atomic(), connection.cursor() as cursor:
@@ -33,16 +25,21 @@ class Mitra10DatabaseService:
             cursor.execute(sql, params)
             return cursor.fetchone()
 
-    # =========================
-    # Insert / Update Logic
-    # =========================
     def _insert_product(self, cursor, item, now):
         cursor.execute(
             """
-            INSERT INTO mitra10_products (name, price, url, unit, category, created_at, updated_at)
+            INSERT INTO mitra10_products (name, price, url, unit, location, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (item["name"], item["price"], item["url"], item["unit"], item.get("category"), now, now),
+            (
+                item.get("name"),
+                item.get("price"),
+                item.get("url"),
+                item.get("unit"),
+                item.get("location", ""),
+                now,
+                now,
+            ),
         )
         return 1
 
@@ -55,17 +52,14 @@ class Mitra10DatabaseService:
             cursor.execute(
                 """
                 UPDATE mitra10_products
-                SET price = %s, category = %s, updated_at = %s
+                SET price = %s, updated_at = %s
                 WHERE id = %s
                 """,
-                (new_price, item.get("category"), now, existing_id),
+                (new_price, now, existing_id),
             )
             return 1
         return 0
 
-    # =========================
-    # Anomaly Detection
-    # =========================
     def _detect_anomaly(self, item, old_price, new_price):
         if old_price == 0:
             return None
@@ -81,9 +75,6 @@ class Mitra10DatabaseService:
             }
         return None
 
-    # =========================
-    # Public Methods
-    # =========================
     def save(self, data):
         """Insert multiple Mitra10 products at once."""
         if not self._validate_data(data):
@@ -91,10 +82,21 @@ class Mitra10DatabaseService:
 
         now = timezone.now()
         sql = """
-            INSERT INTO mitra10_products (name, price, url, unit, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO mitra10_products (name, price, url, unit, location, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        params_list = [(d["name"], d["price"], d["url"], d["unit"], now, now) for d in data]
+        params_list = [
+            (
+                d.get("name"),
+                d.get("price"),
+                d.get("url"),
+                d.get("unit"),
+                d.get("location", ""),
+                now,
+                now,
+            )
+            for d in data
+        ]
         self._execute_many(sql, params_list)
         return True
 
