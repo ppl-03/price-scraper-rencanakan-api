@@ -173,6 +173,7 @@ class PriceAnomaly(models.Model):
         ('reviewed', 'Reviewed'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
+        ('applied', 'Applied to Database'),
     ]
     
     vendor = models.CharField(max_length=50, choices=VENDOR_CHOICES)
