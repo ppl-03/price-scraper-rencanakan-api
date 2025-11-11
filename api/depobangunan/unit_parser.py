@@ -229,12 +229,18 @@ class DepoBangunanUnitParser:
     
     def parse_unit_from_product_name(self, product_name: str) -> Optional[str]:
         """Parse unit from product name."""
-        return self.extractor.extract_unit_from_name(product_name)
+        unit = self.extractor.extract_unit_from_name(product_name)
+        
+        # If unit is None or 'X', default to 'PCS'
+        if unit is None or unit == 'X':
+            return 'PCS'
+        
+        return unit
     
     def parse_unit_from_detail_page(self, html_content: str) -> Optional[str]:
         """Parse unit from product detail page HTML."""
         if not html_content or not isinstance(html_content, str):
-            return None
+            return 'PCS'  # Default to PCS if no content
         
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -243,21 +249,21 @@ class DepoBangunanUnitParser:
             tables = soup.find_all('table')
             for table in tables:
                 unit = self._extract_unit_from_table(table)
-                if unit:
+                if unit and unit != 'X':
                     return unit
             
             # Look for specification divs or spans
             spec_elements = soup.find_all(['div', 'span'], string=re.compile(r'ukuran|size', re.IGNORECASE))
             for element in spec_elements:
                 unit = self._extract_unit_near_element(element)
-                if unit:
+                if unit and unit != 'X':
                     return unit
             
-            return None
+            return 'PCS'  # Default to PCS if no unit found
             
         except Exception as e:
             logger.warning(f"Error parsing unit from detail page: {e}")
-            return None
+            return 'PCS'  # Default to PCS on error
     
     def _extract_unit_from_table(self, table) -> Optional[str]:
         """Extract unit from specification table."""
