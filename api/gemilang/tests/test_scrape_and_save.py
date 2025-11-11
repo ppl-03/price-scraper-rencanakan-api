@@ -219,4 +219,146 @@ class TestScrapeAndSaveEndpoint(TestCase):
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)
         self.assertIn('error', response_data)
-
+    
+    @patch('api.gemilang.views.create_gemilang_location_scraper')
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_scrape_and_save_with_location_success(self, mock_create_scraper, mock_create_location_scraper):
+        mock_location_scraper = MagicMock()
+        mock_location_result = MagicMock()
+        mock_location_result.success = True
+        
+        mock_location1 = MagicMock()
+        mock_location1.name = "GEMILANG - BANJARMASIN SUTOYO"
+        mock_location2 = MagicMock()
+        mock_location2.name = "GEMILANG - BANJARMASIN KM"
+        mock_location_result.locations = [mock_location1, mock_location2]
+        
+        mock_location_scraper.scrape_locations.return_value = mock_location_result
+        mock_create_location_scraper.return_value = mock_location_scraper
+        
+        mock_scraper = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        
+        mock_product = MagicMock()
+        mock_product.name = "Test Product"
+        mock_product.price = 10000
+        mock_product.url = "https://test.com/product"
+        mock_product.unit = "PCS"
+        mock_result.products = [mock_product]
+        
+        mock_scraper.scrape_products.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        data = {
+            'keyword': 'test',
+            'sort_by_price': True,
+            'page': 0,
+            'use_price_update': False
+        }
+        
+        response = self._post_with_token(data)
+        
+        mock_create_location_scraper.assert_called_once()
+        mock_location_scraper.scrape_locations.assert_called_once_with(timeout=30)
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data['success'])
+        
+        saved_product = GemilangProduct.objects.first()
+        self.assertIsNotNone(saved_product)
+        self.assertEqual(saved_product.location, "GEMILANG - BANJARMASIN SUTOYO, GEMILANG - BANJARMASIN KM")
+    
+    @patch('api.gemilang.views.create_gemilang_location_scraper')
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_scrape_and_save_location_scraping_fails(self, mock_create_scraper, mock_create_location_scraper):
+        mock_location_scraper = MagicMock()
+        mock_location_result = MagicMock()
+        mock_location_result.success = False
+        mock_location_result.locations = []
+        
+        mock_location_scraper.scrape_locations.return_value = mock_location_result
+        mock_create_location_scraper.return_value = mock_location_scraper
+        
+        mock_scraper = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        
+        mock_product = MagicMock()
+        mock_product.name = "Test Product"
+        mock_product.price = 10000
+        mock_product.url = "https://test.com/product"
+        mock_product.unit = "PCS"
+        mock_result.products = [mock_product]
+        
+        mock_scraper.scrape_products.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        data = {
+            'keyword': 'test',
+            'use_price_update': False
+        }
+        
+        response = self._post_with_token(data)
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data['success'])
+        
+        saved_product = GemilangProduct.objects.first()
+        self.assertIsNotNone(saved_product)
+        self.assertEqual(saved_product.location, "")
+    
+    @patch('api.gemilang.views.create_gemilang_location_scraper')
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_scrape_and_save_all_five_stores(self, mock_create_scraper, mock_create_location_scraper):
+        mock_location_scraper = MagicMock()
+        mock_location_result = MagicMock()
+        mock_location_result.success = True
+        
+        stores = [
+            "GEMILANG - BANJARMASIN SUTOYO",
+            "GEMILANG - BANJARMASIN KM",
+            "GEMILANG - BANJARBARU",
+            "GEMILANG - PALANGKARAYA",
+            "GEMILANG - PALANGKARAYA KM.8"
+        ]
+        
+        mock_locations = []
+        for store_name in stores:
+            mock_loc = MagicMock()
+            mock_loc.name = store_name
+            mock_locations.append(mock_loc)
+        
+        mock_location_result.locations = mock_locations
+        mock_location_scraper.scrape_locations.return_value = mock_location_result
+        mock_create_location_scraper.return_value = mock_location_scraper
+        
+        mock_scraper = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        
+        mock_product = MagicMock()
+        mock_product.name = "Test Product"
+        mock_product.price = 10000
+        mock_product.url = "https://test.com/product"
+        mock_product.unit = "PCS"
+        mock_result.products = [mock_product]
+        
+        mock_scraper.scrape_products.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        data = {'keyword': 'test', 'use_price_update': False}
+        
+        response = self._post_with_token(data)
+        
+        self.assertEqual(response.status_code, 200)
+        
+        saved_product = GemilangProduct.objects.first()
+        self.assertIsNotNone(saved_product)
+        expected_location = ", ".join(stores)
+        self.assertEqual(saved_product.location, expected_location)
+        
+        for store in stores:
+            self.assertIn(store, saved_product.location)
