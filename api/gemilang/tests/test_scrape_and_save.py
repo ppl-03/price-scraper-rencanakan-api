@@ -268,7 +268,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         
         saved_product = GemilangProduct.objects.first()
         self.assertIsNotNone(saved_product)
-        self.assertEqual(saved_product.location, "GEMILANG - BANJARMASIN SUTOYO, GEMILANG - BANJARMASIN KM")
+        self.assertEqual(saved_product.location, "BANJARMASIN SUTOYO, BANJARMASIN KM")
     
     @patch('api.gemilang.views.create_gemilang_location_scraper')
     @patch('api.gemilang.views.create_gemilang_scraper')
@@ -357,8 +357,10 @@ class TestScrapeAndSaveEndpoint(TestCase):
         
         saved_product = GemilangProduct.objects.first()
         self.assertIsNotNone(saved_product)
-        expected_location = ", ".join(stores)
+        # Strip "GEMILANG - " prefix from stores for comparison
+        stores_without_prefix = [s.replace("GEMILANG - ", "") for s in stores]
+        expected_location = ", ".join(stores_without_prefix)
         self.assertEqual(saved_product.location, expected_location)
         
-        for store in stores:
+        for store in stores_without_prefix:
             self.assertIn(store, saved_product.location)

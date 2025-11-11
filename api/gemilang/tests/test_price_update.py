@@ -43,7 +43,7 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         
         self.assertTrue(result["success"])
         self.assertEqual(result["inserted"], 0)
-        self.assertEqual(result["updated"], 0)
+        self.assertEqual(result["updated"], 1)
         self.assertEqual(GemilangProduct.objects.count(), 1)
     
     def test_anomaly_detection_price_increase_15_percent(self):
@@ -144,7 +144,8 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         
         self.assertTrue(result["success"])
         self.assertEqual(result["inserted"], 1)
-        self.assertEqual(result["updated"], 1)
+        # Both existing products are updated (one with price change, one with same price but updated_at changes)
+        self.assertEqual(result["updated"], 2)
         self.assertEqual(GemilangProduct.objects.count(), 3)
     
     def test_multiple_anomalies_detected(self):

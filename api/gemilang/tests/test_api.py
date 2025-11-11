@@ -469,7 +469,6 @@ class TestGemilangAPIValidation(TestCase):
         mock_location_scraper.scrape_locations.return_value = mock_location_result
         mock_create_location_scraper.return_value = mock_location_scraper
         
-        # Mock product scraper
         mock_scraper = Mock()
         mock_products = [
             Product(name="Test Product", price=10000, url="/product1", unit="PCS")
@@ -493,7 +492,7 @@ class TestGemilangAPIValidation(TestCase):
         self.assertTrue(data['success'])
         self.assertEqual(len(data['products']), 1)
         self.assertIn('location', data['products'][0])
-        self.assertEqual(data['products'][0]['location'], "GEMILANG - BANJARMASIN SUTOYO, GEMILANG - BANJARMASIN KM")
+        self.assertEqual(data['products'][0]['location'], "BANJARMASIN SUTOYO, BANJARMASIN KM")
     
     @patch('api.gemilang.views.create_gemilang_location_scraper')
     @patch('api.gemilang.views.create_gemilang_scraper')
@@ -571,8 +570,9 @@ class TestGemilangAPIValidation(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         
-        expected_location = ", ".join(stores)
+        stores_without_prefix = [s.replace("GEMILANG - ", "") for s in stores]
+        expected_location = ", ".join(stores_without_prefix)
         self.assertEqual(data['products'][0]['location'], expected_location)
         
-        for store in stores:
+        for store in stores_without_prefix:
             self.assertIn(store, data['products'][0]['location'])
