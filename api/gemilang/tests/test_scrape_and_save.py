@@ -69,7 +69,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         
         mock_product = MagicMock()
         mock_product.name = "Test Product"
-        mock_product.price = 12000
+        mock_product.price = 11000  # 10% increase - below 15% threshold, so it auto-updates
         mock_product.url = "https://test.com/product"
         mock_product.unit = "PCS"
         mock_result.products = [mock_product]
@@ -87,9 +87,11 @@ class TestScrapeAndSaveEndpoint(TestCase):
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
         self.assertTrue(response_data['success'])
+        # 10% increase - below anomaly threshold, so price DOES update
         self.assertEqual(response_data['updated'], 1)
         self.assertEqual(response_data['inserted'], 0)
-        self.assertEqual(response_data['anomaly_count'], 1)
+        # No anomaly since change is < 15%
+        self.assertEqual(response_data['anomaly_count'], 0)
     
     @patch('api.gemilang.views.create_gemilang_scraper')
     def test_scrape_and_save_no_products(self, mock_create_scraper):
