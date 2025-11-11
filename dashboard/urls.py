@@ -23,6 +23,9 @@ urlpatterns = [
     path("prices/<int:pk>/delete/confirm/", views.curated_price_delete, name="curated_price_delete"),
     path("prices/new/from-scrape/", views.curated_price_from_scrape, name="curated_price_from_scrape"),
     
+    # Price Anomalies
+    path("anomalies/", views.price_anomalies, name="price_anomalies"),
+    
     # Government Wage HSPK URLs
     path("gov-wage/", gov_wage_views.gov_wage_page, name="gov_wage_page"),
     path("api/gov-wage/data/", gov_wage_views.get_wage_data, name="get_wage_data"),
