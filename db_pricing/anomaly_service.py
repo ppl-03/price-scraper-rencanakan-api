@@ -200,34 +200,50 @@ class PriceAnomalyService:
                     'updated': 0
                 }
             
-            # Map vendor to table name
-            table_map = {
-                'gemilang': 'gemilang_products',
-                'mitra10': 'mitra10_products',
-                'tokopedia': 'tokopedia_products',
-                'depobangunan': 'depobangunan_products',
-                'juragan_material': 'juragan_material_products',
+            # Map vendor to pre-defined UPDATE queries (prevents SQL injection)
+            # Each query is hardcoded - no dynamic table name construction
+            VENDOR_UPDATE_QUERIES = {
+                'gemilang': """
+                    UPDATE gemilang_products
+                    SET price = %s, updated_at = %s
+                    WHERE name = %s AND url = %s AND unit = %s
+                """,
+                'mitra10': """
+                    UPDATE mitra10_products
+                    SET price = %s, updated_at = %s
+                    WHERE name = %s AND url = %s AND unit = %s
+                """,
+                'tokopedia': """
+                    UPDATE tokopedia_products
+                    SET price = %s, updated_at = %s
+                    WHERE name = %s AND url = %s AND unit = %s
+                """,
+                'depobangunan': """
+                    UPDATE depobangunan_products
+                    SET price = %s, updated_at = %s
+                    WHERE name = %s AND url = %s AND unit = %s
+                """,
+                'juragan_material': """
+                    UPDATE juragan_material_products
+                    SET price = %s, updated_at = %s
+                    WHERE name = %s AND url = %s AND unit = %s
+                """,
             }
             
-            if anomaly.vendor not in table_map:
+            if anomaly.vendor not in VENDOR_UPDATE_QUERIES:
                 return {
                     'success': False,
                     'message': f'Unknown vendor: {anomaly.vendor}',
                     'updated': 0
                 }
             
-            table_name = table_map[anomaly.vendor]
+            # Get pre-defined query (no f-string formatting)
+            update_sql = VENDOR_UPDATE_QUERIES[anomaly.vendor]
             
             # Update the product price in database
             with transaction.atomic():
                 with connection.cursor() as cursor:
-                    # Update product based on name, url, and unit match
-                    update_sql = f"""
-                        UPDATE {table_name}
-                        SET price = %s, updated_at = %s
-                        WHERE name = %s AND url = %s AND unit = %s
-                    """
-                    
+                    # Execute with fully parameterized query
                     cursor.execute(
                         update_sql,
                         (
