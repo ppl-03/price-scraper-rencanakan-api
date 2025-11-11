@@ -483,8 +483,8 @@ class DepoBangunanDatabaseService:
             1 (always, as one product is inserted)
         """
         cursor.execute(
-            "INSERT INTO depobangunan_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-            (item["name"], item["price"], item["url"], item["unit"], now, now)
+            "INSERT INTO depobangunan_products (name, price, url, unit, location, category, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (item["name"], item["price"], item["url"], item["unit"], item.get("location", ""), item.get("category", ""), now, now)
         )
         return 1
     
@@ -504,12 +504,12 @@ class DepoBangunanDatabaseService:
 
         sql = """
             INSERT INTO depobangunan_products
-                (name, price, url, unit, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                (name, price, url, unit, location, category, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         params_list = [
-            (it["name"], it["price"], it["url"], it["unit"], now, now)
+            (it["name"], it["price"], it["url"], it["unit"], it.get("location", ""), it.get("category", ""), now, now)
             for it in data
         ]
 
