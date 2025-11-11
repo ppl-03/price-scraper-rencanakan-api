@@ -5,7 +5,6 @@ import logging
 
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
-from db_pricing.auto_categorization_service import AutoCategorizationService
 from .security import (
     require_api_token,
     validate_input,
@@ -17,8 +16,13 @@ from .security import (
 logger = logging.getLogger(__name__)
 
 
+def _clean_location_name(location_name: str) -> str:
+    if location_name.startswith('GEMILANG - '):
+        return location_name.replace('GEMILANG - ', '', 1)
+    return location_name
+
+
 def _validate_page_param(x):
-    """Helper function to validate page parameter."""
     if not x:
         return InputValidator.validate_integer(0, 'page', min_value=0, max_value=100)
     if str(x).lstrip('-').isdigit():
@@ -43,11 +47,17 @@ def scrape_products(request):
         location_scraper = create_gemilang_location_scraper()
         location_result = location_scraper.scrape_locations(timeout=30)
         
+        logger.info(f"[scrape_products] Location scraping - Success: {location_result.success}, Count: {len(location_result.locations) if location_result.locations else 0}")
+        
         store_locations = []
         if location_result.success and location_result.locations:
-            store_locations = [loc.name for loc in location_result.locations]
+            store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
+            logger.info(f"[scrape_products] Found {len(store_locations)} locations")
+        else:
+            logger.warning(f"[scrape_products] No locations found - Success: {location_result.success}")
         
         all_stores_location = ", ".join(store_locations) if store_locations else ""
+        logger.info(f"[scrape_products] Location string length: {len(all_stores_location)}")
         
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
@@ -56,7 +66,6 @@ def scrape_products(request):
             page=page
         )
         
-        # Return products with ALL store locations in one field
         products_data = [
             {
                 'name': product.name,
@@ -256,14 +265,19 @@ def scrape_and_save(request):
         location_scraper = create_gemilang_location_scraper()
         location_result = location_scraper.scrape_locations(timeout=30)
         
+        logger.info(f"Location scraping result - Success: {location_result.success}, Locations count: {len(location_result.locations) if location_result.locations else 0}")
+        if not location_result.success:
+            logger.error(f"Location scraping failed with error: {location_result.error_message}")
+        
         store_locations = []
         if location_result.success and location_result.locations:
-            store_locations = [loc.name for loc in location_result.locations]
-            logger.info(f"Found {len(store_locations)} Gemilang store locations")
+            store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
+            logger.info(f"Found {len(store_locations)} Gemilang store locations: {store_locations[:3]}")  # Log first 3 locations
         else:
-            logger.warning("Could not fetch store locations, will save without locations")
+            logger.warning(f"Could not fetch store locations - Success: {location_result.success}, Has locations: {bool(location_result.locations)}, will save without locations")
         
         all_stores_location = ", ".join(store_locations) if store_locations else ""
+        logger.info(f"Final location string length: {len(all_stores_location)}, Preview: {all_stores_location[:200]}")
         
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
@@ -309,8 +323,15 @@ def scrape_and_save(request):
         if error_response:
             return error_response
         
+        # Categorize products before saving
+        from db_pricing.categorization import ProductCategorizer
+        categorizer = ProductCategorizer()
+        for product in products_data:
+            category = categorizer.categorize(product['name'])
+            product['category'] = category if category else ''
+            logger.info(f"Categorized '{product['name']}' as '{category}'")
+        
         db_service = GemilangDatabaseService()
-        auto_categorization = AutoCategorizationService()
         
         if params['use_price_update']:
             return _handle_price_update_save(db_service, products_data)

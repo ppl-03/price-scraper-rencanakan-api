@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.db import connection
+from django.views.decorators.csrf import csrf_exempt
 import bleach
 
 logger = logging.getLogger(__name__)
@@ -571,6 +572,7 @@ def require_api_token(required_permission: str = None):
             pass
     """
     def decorator(view_func):
+        @csrf_exempt
         @wraps(view_func)
         def wrapped_view(request, *args, **kwargs):
             # Validate token
