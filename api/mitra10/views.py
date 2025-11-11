@@ -239,10 +239,9 @@ def scrape_and_save_products(request):
             
             # Choose scraping method based on sort_type
             if sort_type == 'popularity':
-                # Use scrape_by_popularity for popularity sorting
                 result = scraper.scrape_by_popularity(
                     keyword=query,
-                    top_n=100,  # Get more products for database
+                    top_n=5,  # Top 5 best sellers for popularity mode
                     page=page
                 )
             elif sort_type == 'cheapest':
@@ -271,6 +270,19 @@ def scrape_and_save_products(request):
                 'error_message': result.error_message
             }, status=400)
         
+        # Scrape locations 
+        try:
+            location_scraper = create_mitra10_location_scraper()
+            loc_result = location_scraper.scrape_locations()
+            if loc_result.get('success') and loc_result.get('locations'):
+                # join discovered locations into a single string per run
+                run_location_value = ', '.join([str(l) for l in loc_result.get('locations', [])])
+            else:
+                run_location_value = ''
+        except Exception as e:
+            logger.warning(f"Failed to scrape locations; continuing without locations: {e}")
+            run_location_value = ''
+        
         # Format products data, include sold_count if available (for popularity sorting)
         products_data = []
         for product in result.products:
@@ -278,7 +290,8 @@ def scrape_and_save_products(request):
                 'name': product.name,
                 'price': product.price,
                 'url': product.url,
-                'unit': product.unit
+                'unit': product.unit,
+                'location': run_location_value
             }
             # Include sold_count if it exists (for popularity mode)
             if hasattr(product, 'sold_count') and product.sold_count is not None:
