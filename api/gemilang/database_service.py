@@ -2,6 +2,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 from typing import List, Dict, Any, Tuple
 import logging
+from db_pricing.anomaly_service import PriceAnomalyService
 
 logger = logging.getLogger(__name__)
 
@@ -76,53 +77,106 @@ class GemilangDatabaseService:
             }
         return None
 
-    def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
-        new_price = item["price"]
-        if existing_price != new_price:
-            anomaly = self._check_anomaly(item, existing_price, new_price)
-            if anomaly:
-                anomalies.append(anomaly)
-            cursor.execute(
-                "UPDATE gemilang_products SET price = %s, updated_at = %s WHERE id = %s",
-                (new_price, now, existing_id)
+    def _save_detected_anomalies(self, anomalies: List[Dict[str, Any]]) -> None:
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('gemilang', anomalies)
+        if not anomaly_result['success']:
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
+    def save_with_price_update(
+        self, 
+        data: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        is_valid, error_msg = self._validate_data(data)
+        if not is_valid:
+            logger.warning(f"Data validation failed: {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "updated": 0,
+                "inserted": 0,
+                "anomalies": []
+            }
+        
+        try:
+            now = timezone.now()
+            updated_count = 0
+            inserted_count = 0
+            anomalies = []
+            
+            self._validate_column_names(['id', 'name', 'price', 'url', 'unit', 'created_at', 'updated_at'])
+            
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    for item in data:
+                        name = self._sanitize_string(item["name"])
+                        url = self._sanitize_string(item["url"])
+                        unit = self._sanitize_string(item["unit"])
+                        price = int(item["price"])
+                        
+                        select_sql = """
+                            SELECT id, price 
+                            FROM gemilang_products 
+                            WHERE name = %s AND url = %s AND unit = %s
+                        """
+                        cursor.execute(select_sql, (name, url, unit))
+                        existing = cursor.fetchone()
+                        
+                        if existing:
+                            existing_id, existing_price = existing
+                            
+                            if existing_price != price:
+                                anomaly = self._check_anomaly(item, existing_price, price)
+                                if anomaly:
+                                    anomalies.append(anomaly)
+                                    logger.warning(
+                                        f"Price anomaly detected for {name}: "
+                                        f"{existing_price} -> {price}"
+                                    )
+                                
+                                update_sql = """
+                                    UPDATE gemilang_products 
+                                    SET price = %s, updated_at = %s 
+                                    WHERE id = %s
+                                """
+                                cursor.execute(update_sql, (price, now, existing_id))
+                                updated_count += 1
+                        else:
+                            insert_sql = """
+                                INSERT INTO gemilang_products 
+                                (name, price, url, unit, created_at, updated_at) 
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                            """
+                            cursor.execute(
+                                insert_sql,
+                                (name, price, url, unit, now, now)
+                            )
+                            inserted_count += 1
+            
+            logger.info(
+                f"Save with update completed: {updated_count} updated, "
+                f"{inserted_count} inserted, {len(anomalies)} anomalies"
             )
-            return 1
-        return 0
-
-    def _insert_new_product(self, cursor, item, now):
-        cursor.execute(
-            "INSERT INTO gemilang_products (name, price, url, unit, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-            (item["name"], item["price"], item["url"], item["unit"], now, now)
-        )
-        return 1
-
-    def save_with_price_update(self, data):
-        if not self._validate_data(data):
-            return {"success": False, "updated": 0, "inserted": 0, "anomalies": []}
-
-        now = timezone.now()
-        updated_count = 0
-        inserted_count = 0
-        anomalies = []
-
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                for item in data:
-                    cursor.execute(
-                        "SELECT id, price FROM gemilang_products WHERE name = %s AND url = %s AND unit = %s",
-                        (item["name"], item["url"], item["unit"])
-                    )
-                    existing = cursor.fetchone()
-
-                    if existing:
-                        existing_id, existing_price = existing
-                        updated_count += self._update_existing_product(cursor, item, existing_id, existing_price, now, anomalies)
-                    else:
-                        inserted_count += self._insert_new_product(cursor, item, now)
-
-        return {
-            "success": True,
-            "updated": updated_count,
-            "inserted": inserted_count,
-            "anomalies": anomalies
-        }
+            
+            # Save anomalies to database for review
+            self._save_detected_anomalies(anomalies)
+            
+            return {
+                "success": True,
+                "updated": updated_count,
+                "inserted": inserted_count,
+                "anomalies": anomalies
+            }
+            
+        except Exception as e:
+            logger.error(f"Database save_with_price_update failed: {type(e).__name__}")
+            return {
+                "success": False,
+                "error": "Database operation failed",
+                "updated": 0,
+                "inserted": 0,
+                "anomalies": []
+            }

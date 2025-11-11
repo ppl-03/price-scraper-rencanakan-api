@@ -1,12 +1,10 @@
-<!doctype html>
-<html lang="id">
-<head>
-  <meta charset="utf-8">
-  <title>Harga Satuan – Rencanakan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  {% load static %}
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
+{% extends 'dashboard/base_with_sidebar.html' %}
+
+{% block title %}Harga Satuan – Rencanakan{% endblock %}
+
+{% block extra_css %}
+{% load static %}
+<style>
     /* Right-align price column */
     .price-align-right, .c-price {
       text-align: right !important;
@@ -21,6 +19,9 @@
 
     .content-wrapper{ margin-top:24px; }
     .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+
+    /* Results card minimum height for consistency */
+    #resultsCard { min-height: 600px; }
 
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
@@ -166,21 +167,12 @@
 
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
   </style>
-</head>
-<body>
-  <!-- Top bar with logo only -->
-  <header class="topbar py-3">
-    <div class="container d-flex align-items-center justify-content-between">
-      <div class="brand-wrap">
-        <img class="brand-logo" src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan logo">
-      </div>
-      <div class="d-flex align-items-center gap-3">
-        <img class="avatar" src="https://i.imgur.com/7k12rjS.png" alt="profile">
-      </div>
-    </div>
-  </header>
+{% endblock %}
 
-  <div class="container content-wrapper">
+{% block content %}
+  <!-- Main content wrapper -->
+  <div class="container-fluid px-4 py-3">
+    <!-- Removed old topbar header since navbar is now in sidebar -->
 
     <!-- Oval warning banner ABOVE the search bar (only if messages exist) -->
     {% if messages %}
@@ -196,7 +188,7 @@
     {% endif %}
 
     <!-- Backend search (hits your scrapers) -->
-    <form id="searchForm" action="{% url 'home' %}" method="get" class="mb-3" novalidate>
+    <form id="searchForm" action="{% url 'dashboard:dashboard_home' %}" method="get" class="mb-3" novalidate>
       <div class="input-group">
         <input id="qInput" type="text" name="q" class="form-control"
                placeholder="Cari produk (contoh: semen, pasir, batu...)"
@@ -215,16 +207,22 @@
           Filter & Pencarian
         </h6>
         
-        <!-- Row 1: Text filter and Vendor -->
+        <!-- Row 1: Text filter, Vendor, and Category -->
         <div class="row g-3 mb-3">
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label for="filterInput" class="form-label small text-muted">Filter Hasil</label>
             <input id="filterInput" type="text" class="form-control" placeholder="Ketik untuk memfilter hasil...">
           </div>
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label for="vendorSelect" class="form-label small text-muted">Vendor</label>
             <select id="vendorSelect" class="form-select">
               <option value="">Semua vendor</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label for="categorySelect" class="form-label small text-muted">Kategori</label>
+            <select id="categorySelect" class="form-select">
+              <option value="">Semua kategori</option>
             </select>
           </div>
         </div>
@@ -275,7 +273,7 @@
     </div>
 
     <!-- Results card -->
-    <div class="card">
+    <div id="resultsCard" class="card">
       <!-- Inline loading state -->
       <div id="loadingInline" class="loading-inline">
         <output id="loadingStatus" class="loading-panel" aria-live="polite" aria-label="Mengambil harga">
@@ -293,10 +291,11 @@
           <thead>
             <tr>
               <th style="width:5%">No.</th>
-              <th class="th-sort" data-key="item" style="width:35%">Nama Produk</th>
-              <th class="th-sort price-align-right" data-key="price" style="width:15%">Harga</th>
-              <th style="width:8%">Unit</th>
-              <th class="th-sort" data-key="vendor" style="width:15%">Vendor</th>
+              <th class="th-sort" data-key="item" style="width:28%">Nama Produk</th>
+              <th class="th-sort" data-key="category" style="width:13%">Kategori</th>
+              <th class="th-sort price-align-right" data-key="price" style="width:12%">Harga</th>
+              <th style="width:7%">Unit</th>
+              <th class="th-sort" data-key="vendor" style="width:13%">Vendor</th>
               <th class="th-sort" data-key="location" style="width:22%">Lokasi</th>
             </tr>
           </thead>
@@ -306,6 +305,7 @@
               <tr>
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
+                <td class="c-category">{{ r.category|default:"Lainnya" }}</td>
                 <td class="c-price price-align-right">{{ r.value }}</td>
                 <td class="c-unit">{{ r.unit|default:"—" }}</td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
@@ -333,7 +333,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="6" class="empty-state">
+                <td colspan="7" class="empty-state">
                   <div class="empty-state-icon">Tidak ada data</div>
                   <h5>Belum ada data harga</h5>
                   <p class="mb-0">Gunakan form pencarian di atas untuk mulai mencari harga produk</p>
@@ -352,8 +352,9 @@
 
     <div class="footer">© 2025 rencanakan.id</div>
   </div>
+{% endblock %}
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}
   <script>
     // ---------- Price formatting: "IDR 30,400" (code, comma thousands, NO decimals) ----------
     const idf = new Intl.NumberFormat("en-US", {
@@ -468,6 +469,7 @@
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
       const data = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
+      const category = tr.querySelector(".c-category")?.textContent?.trim() || "Lainnya";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const category = tr.dataset.category?.trim() || "";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
@@ -492,7 +494,7 @@
       // Normalize empty unit to dash
       const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
       
-      return { item, vendor, category, price: priceNum, unit: normalizedUnit, location, allLocations };
+      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
     });
 
     // Populate vendor dropdown (for…of)
@@ -503,6 +505,15 @@
       const opt = document.createElement("option");
       opt.value = v; opt.textContent = v;
       vendorSelect.appendChild(opt);
+    }
+    
+    // Populate category dropdown (for…of)
+    const categorySelect = document.getElementById("categorySelect");
+    const uniqueCategories = [...new Set(data.map(d => d.category).filter(Boolean))].sort();
+    for (const c of uniqueCategories) {
+      const opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      categorySelect.appendChild(opt);
     }
 
     // Populate location dropdown with vendor grouping and submenus
@@ -638,11 +649,11 @@
     function applyFilters() {
       const q = (filterInput.value || "").toLowerCase();
       const v = vendorSelect.value || "";
-      const c = categorySelect.value || "";
+      const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
       return data.filter(d => {
-        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q);
+        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q) || d.category.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
         const cm = !c || d.category === c;
         
@@ -707,6 +718,7 @@
         tr.innerHTML = `
           <td>${start + idx + 1}</td>
           <td class="c-item">${d.item}</td>
+          <td class="c-category">${d.category || 'Lainnya'}</td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
           <td class="c-unit">${d.unit || '—'}</td>
           <td class="c-vendor">${d.vendor}</td>
@@ -959,6 +971,4 @@
       </div>
     </div>
   </div>
-
-</body>
-</html>
+{% endblock %}
