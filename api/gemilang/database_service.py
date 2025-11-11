@@ -231,19 +231,22 @@ class GemilangDatabaseService:
                             if existing_price != price:
                                 anomaly = self._check_anomaly(item, existing_price, price)
                                 if anomaly:
+                                    # Price change detected - save anomaly for admin approval
                                     anomalies.append(anomaly)
                                     logger.warning(
                                         f"Price anomaly detected for {name}: "
-                                        f"{existing_price} -> {price}"
+                                        f"{existing_price} -> {price}. Pending admin approval."
                                     )
-                                
-                                update_sql = """
-                                    UPDATE gemilang_products 
-                                    SET price = %s, updated_at = %s 
-                                    WHERE id = %s
-                                """
-                                cursor.execute(update_sql, (price, now, existing_id))
-                                updated_count += 1
+                                    # Do NOT update price - wait for admin approval
+                                else:
+                                    # Small price change (< 15%) - update automatically
+                                    update_sql = """
+                                        UPDATE gemilang_products 
+                                        SET price = %s, updated_at = %s 
+                                        WHERE id = %s
+                                    """
+                                    cursor.execute(update_sql, (price, now, existing_id))
+                                    updated_count += 1
                         else:
                             insert_sql = """
                                 INSERT INTO gemilang_products 

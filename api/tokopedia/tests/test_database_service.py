@@ -246,7 +246,8 @@ class TestTokopediaDatabaseService(TransactionTestCase):
         result = service.save_with_price_update(data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 1)
+        # 20% increase = anomaly, so updated=0 (price does NOT update)
+        self.assertEqual(result["updated"], 0)
         self.assertEqual(len(result["anomalies"]), 1)
         
         anomaly = result["anomalies"][0]

@@ -122,17 +122,29 @@ class JuraganMaterialDatabaseService:
         if existing_price != new_price:
             anomaly = self._check_anomaly(item, existing_price, new_price)
             if anomaly:
+                # Price change detected - save anomaly for admin approval
                 anomalies.append(anomaly)
-            cursor.execute(
-                "UPDATE juragan_material_products SET price = %s, updated_at = %s WHERE id = %s",
-                (new_price, now, existing_id)
-            )
-            return 1
+                import logging
+                logger = logging.getLogger(__name__)
+                item_name = item["name"] if isinstance(item, dict) else item.name
+                logger.warning(
+                    f"Price anomaly detected for {item_name}: "
+                    f"{existing_price} -> {new_price}. Pending admin approval."
+                )
+                # Do NOT update price - wait for admin approval
+                return 0
+            else:
+                # Small price change (< 15%) - update automatically
+                cursor.execute(
+                    "UPDATE juragan_material_products SET price = %s, updated_at = %s WHERE id = %s",
+                    (new_price, now, existing_id)
+                )
+                return 1
         return 0
 
     def _insert_new_product(self, cursor, item, now):
         cursor.execute(
-            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s. %s, %s, %s)",
+            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
             self._create_product_params(item, now)
         )
         return 1

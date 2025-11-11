@@ -888,7 +888,8 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         result = service.save_with_price_update(updated_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated_count"], 1)
+        # 20% increase = anomaly, so updated_count=0 (price does NOT update)
+        self.assertEqual(result["updated_count"], 0)
         self.assertEqual(len(result["anomalies"]), 1)
         
         anomaly = result["anomalies"][0]
@@ -992,14 +993,15 @@ class TestDepoBangunanPriceAnomalyDetection(MySQLTestCase):
         service.save(initial_data)
         
         updated_data = [
-            {"name": "Product 1", "price": 12000, "url": "https://test.com/1", "unit": "PCS"},
-            {"name": "Product 2", "price": 21000, "url": "https://test.com/2", "unit": "BOX"},
-            {"name": "Product 3", "price": 30000, "url": "https://test.com/3", "unit": "UNIT"}
+            {"name": "Product 1", "price": 12000, "url": "https://test.com/1", "unit": "PCS"},  # 20% = anomaly
+            {"name": "Product 2", "price": 21000, "url": "https://test.com/2", "unit": "BOX"},  # 5% = auto-update
+            {"name": "Product 3", "price": 30000, "url": "https://test.com/3", "unit": "UNIT"}  # new insert
         ]
         result = service.save_with_price_update(updated_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated_count"], 2)
+        # Only Product 2 updates (5% change), Product 1 is anomaly (20% change)
+        self.assertEqual(result["updated_count"], 1)
         self.assertEqual(result["new_count"], 1)
         self.assertEqual(len(result["anomalies"]), 1)
         self.assertEqual(result["anomalies"][0]["name"], "Product 1")
