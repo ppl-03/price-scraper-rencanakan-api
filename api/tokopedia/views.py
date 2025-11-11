@@ -3,7 +3,14 @@ from django.views.decorators.http import require_http_methods
 from typing import Optional, Tuple
 from .factory import create_tokopedia_scraper
 from .database_service import TokopediaDatabaseService
+from db_pricing.auto_categorization_service import AutoCategorizationService
 import re
+from .url_builder_ulasan import TokopediaUrlBuilderUlasan
+from .http_client import TokopediaHttpClient
+from .html_parser import TokopediaHtmlParser
+from .scraper import TokopediaPriceScraper
+import logging
+logger = logging.getLogger(__name__)
 
 # Constants
 DEFAULT_LIMIT = '20'
@@ -200,26 +207,67 @@ def _format_scrape_result(result, db_result=None) -> dict:
 
 def _save_products_to_database(products) -> dict:
     """
-    Save scraped products to database.
+    Save scraped products to database and auto-categorize them.
     
     Args:
         products: List of product dictionaries
         
     Returns:
-        Database operation result
+      Database operation result with categorization info
     """
     if not products:
-        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': []}
+        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
     
     try:
         db_service = TokopediaDatabaseService()
-        return db_service.save_with_price_update(products)
+        result = db_service.save_with_price_update(products)
+        # Auto-categorize newly inserted products
+        categorized_count = 0
+
+        if result.get('success') and result.get('inserted', 0) > 0:
+
+            try:
+
+                from db_pricing.models import TokopediaProduct
+
+                
+
+                # Get recently inserted products (ones without category)
+
+                uncategorized_products = TokopediaProduct.objects.filter(category='').order_by('-id')[:result['inserted']]
+
+                product_ids = list(uncategorized_products.values_list('id', flat=True))
+
+                
+
+                if product_ids:
+
+                    categorization_service = AutoCategorizationService()
+
+                    categorization_result = categorization_service.categorize_products('tokopedia', product_ids)
+
+                    categorized_count = categorization_result.get('categorized', 0)
+
+                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new Tokopedia products")
+
+            except Exception as cat_error:
+
+                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+
+                # Don't fail the entire operation if categorization fails
+
+        
+
+        result['categorized'] = categorized_count
+
+        return result
+
     except Exception as e:
         # Log the error but don't fail the entire request
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Database save error: {str(e)}")
-        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': []}
+        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
 
 
 def _convert_products_to_dict(products) -> list:
@@ -399,5 +447,54 @@ def scrape_products_with_filters(request):
     except Exception as e:
         return _create_error_response(
             f"Tokopedia scraper with filters error: {str(e)}", 
+            status=500
+        )
+
+
+@require_http_methods(["GET"])
+def scrape_products_ulasan(request):
+    """Scrape products sorted by 'ulasan' (popularity/reviews).
+
+    This endpoint uses `TokopediaUrlBuilderUlasan` which sets the
+    Tokopedia `ob=5` parameter. It mirrors `scrape_products_with_filters`
+    but forces the ulasan/popularity ordering.
+    """
+    try:
+        # Parse common parameters
+        params, error = _parse_common_parameters(request)
+        if error:
+            return error
+
+        # Parse filter parameters
+        filters, error = _parse_filter_parameters(request)
+        if error:
+            return error
+
+        # Build a scraper that uses the ulasan URL builder
+        http_client = TokopediaHttpClient()
+        url_builder = TokopediaUrlBuilderUlasan()
+        html_parser = TokopediaHtmlParser()
+        scraper = TokopediaPriceScraper(http_client, url_builder, html_parser)
+
+        # Use sort_by_price=False so the ulasan builder emits ob=5
+        result = scraper.scrape_products_with_filters(
+            keyword=params['query'],
+            sort_by_price=False,
+            page=params['page'],
+            min_price=filters['min_price'],
+            max_price=filters['max_price'],
+            location=filters['location'],
+            limit=params['limit']
+        )
+
+        # Handle result and save to database
+        result, db_result = _handle_scraping_result(result)
+
+        # Format and return response
+        return JsonResponse(_format_scrape_result(result, db_result))
+
+    except Exception as e:
+        return _create_error_response(
+            f"Tokopedia scraper (ulasan) error: {str(e)}",
             status=500
         )
