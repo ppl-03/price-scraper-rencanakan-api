@@ -32,6 +32,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         mock_product.price = 10000
         mock_product.url = "https://test.com/product"
         mock_product.unit = "PCS"
+        mock_product.category = "General"
         mock_result.products = [mock_product]
         
         mock_scraper.scrape_products.return_value = mock_result
@@ -72,6 +73,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         mock_product.price = 12000
         mock_product.url = "https://test.com/product"
         mock_product.unit = "PCS"
+        mock_product.category = "General"
         mock_result.products = [mock_product]
         
         mock_scraper.scrape_products.return_value = mock_result
@@ -245,6 +247,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         mock_product.price = 10000
         mock_product.url = "https://test.com/product"
         mock_product.unit = "PCS"
+        mock_product.category = "General"
         mock_result.products = [mock_product]
         
         mock_scraper.scrape_products.return_value = mock_result
@@ -290,6 +293,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         mock_product.price = 10000
         mock_product.url = "https://test.com/product"
         mock_product.unit = "PCS"
+        mock_product.category = "General"
         mock_result.products = [mock_product]
         
         mock_scraper.scrape_products.return_value = mock_result
@@ -344,6 +348,7 @@ class TestScrapeAndSaveEndpoint(TestCase):
         mock_product.price = 10000
         mock_product.url = "https://test.com/product"
         mock_product.unit = "PCS"
+        mock_product.category = "General"
         mock_result.products = [mock_product]
         
         mock_scraper.scrape_products.return_value = mock_result

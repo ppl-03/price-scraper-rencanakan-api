@@ -249,9 +249,6 @@ def _handle_regular_save(db_service, products_data):
         }, status=500)
 
 
-@require_http_methods(["POST"])
-@require_api_token(required_permission='write')
-@enforce_resource_limits
 def _fetch_store_locations():
     """Helper to fetch and process store locations"""
     location_scraper = create_gemilang_location_scraper()
@@ -283,10 +280,13 @@ def _categorize_products(products_data):
     
     for product in products_data:
         category = categorizer.categorize(product['name'])
-        product['category'] = category if category else ''
+        product['category'] = category if category else None
         logger.info(f"Categorized '{product['name']}' as '{category}'")
 
 
+@require_http_methods(["POST"])
+@require_api_token(required_permission='write')
+@enforce_resource_limits
 def scrape_and_save(request):
     try:
         body, error_response = _parse_request_body(request)
