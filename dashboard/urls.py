@@ -3,6 +3,7 @@ from django.urls import path
 from dashboard.views import home
 from . import views
 from . import gov_wage_views
+from . import scheduler_views
 
 app_name = 'dashboard'
 
@@ -32,4 +33,10 @@ urlpatterns = [
     path("api/gov-wage/pagination/", gov_wage_views.get_pagination_info, name="get_pagination_info"),
     path("api/gov-wage/regions/", gov_wage_views.get_available_regions, name="get_available_regions"),
     path("api/gov-wage/search/", gov_wage_views.search_work_code, name="search_work_code"),
+    
+    # Scheduler URLs
+    path("scheduler/", scheduler_views.scheduler_settings, name="scheduler_settings"),
+    path("scheduler/update/", scheduler_views.update_schedule, name="update_schedule"),
+    path("scheduler/run-now/", scheduler_views.run_scheduler_now, name="run_scheduler_now"),
+    path("scheduler/status/", scheduler_views.get_scheduler_status, name="get_scheduler_status"),
 ]
