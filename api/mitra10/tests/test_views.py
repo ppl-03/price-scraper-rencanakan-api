@@ -795,9 +795,7 @@ class TestMitra10Views(TestCase):
         save_result = {'success': True, 'inserted': 2, 'updated': 0, 'anomalies': []}
         mock_service_instance = self._create_mock_db_service(save_result)
         mock_db_service.return_value = mock_service_instance
-
-        mock_product_1 = MagicMock(id=1, name="Product 1", category='')
-        mock_product_2 = MagicMock(id=2, name="Product 2", category='')
+        
         mock_queryset = MagicMock()
         mock_queryset.values_list.return_value = [1, 2]
         
