@@ -41,7 +41,7 @@ class ApplyAnomalyFrontendUITestCase(TestCase):
         
         # Check for btn-apply CSS definition
         self.assertIn('.btn-apply', content)
-        self.assertIn('background-color: #28a745', content)
+        self.assertIn('background-color: #1e7e34', content)
 
     def test_approve_and_apply_button_css_exists(self):
         """Test that btn-approve-apply CSS class is defined in the template"""
@@ -51,7 +51,7 @@ class ApplyAnomalyFrontendUITestCase(TestCase):
         
         # Check for btn-approve-apply CSS definition
         self.assertIn('.btn-approve-apply', content)
-        self.assertIn('background-color: #17a2b8', content)
+        self.assertIn('background-color: #117a8b', content)
 
     def test_applied_badge_css_exists(self):
         """Test that badge-applied CSS class is defined in the template"""

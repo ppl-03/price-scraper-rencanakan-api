@@ -492,29 +492,32 @@
 
     .btn-review {
         background-color: #fd7e14;
-        color: Grey;
+        color: #000000;
     }
 
     .btn-review:hover {
         background-color: #e76d00;
+        color: #000000;
     }
 
     .btn-apply {
-        background-color: #28a745;
-        color: white;
+        background-color: #1e7e34;
+        color: #ffffff;
     }
 
     .btn-apply:hover {
-        background-color: #218838;
+        background-color: #145523;
+        color: #ffffff;
     }
 
     .btn-approve-apply {
-        background-color: #17a2b8;
-        color: white;
+        background-color: #117a8b;
+        color: #ffffff;
     }
 
     .btn-approve-apply:hover {
-        background-color: #138496;
+        background-color: #0c5460;
+        color: #ffffff;
     }
 
     .empty-state {
@@ -1038,6 +1041,59 @@
             .catch(error => console.error('Error loading anomalies:', error));
     }
 
+    function getActionButtonsForStatus(anomaly) {
+        if (anomaly.status === 'pending') {
+            return `
+                <button class="btn-action btn-approve" onclick="reviewAnomaly(${anomaly.id}, 'approved')">
+                    <i class="fas fa-check"></i> Approve
+                </button>
+                <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+                <button class="btn-action btn-approve-apply" onclick="approveAndApply(${anomaly.id})">
+                    <i class="fas fa-bolt"></i> Approve & Apply
+                </button>
+                <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                    <i class="fas fa-edit"></i> Review
+                </button>
+            `;
+        }
+        
+        if (anomaly.status === 'approved') {
+            return `
+                <button class="btn-action btn-apply" onclick="applyAnomaly(${anomaly.id})">
+                    <i class="fas fa-check-circle"></i> Apply Price
+                </button>
+                <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+                <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                    <i class="fas fa-edit"></i> Edit Notes
+                </button>
+            `;
+        }
+        
+        if (anomaly.status === 'reviewed') {
+            return `
+                <button class="btn-action btn-approve" onclick="reviewAnomaly(${anomaly.id}, 'approved')">
+                    <i class="fas fa-check"></i> Approve
+                </button>
+                <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+                <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                    <i class="fas fa-edit"></i> Edit Notes
+                </button>
+            `;
+        }
+        
+        return `
+            <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                <i class="fas fa-edit"></i> Edit Notes
+            </button>
+        `;
+    }
+
     function renderAnomalies(anomalies) {
         const container = document.getElementById('anomalies-list');
         
@@ -1116,44 +1172,7 @@
                     <button class="btn-action btn-view" onclick="viewAnomalyDetail(${anomaly.id})">
                         <i class="fas fa-eye"></i> View Detail
                     </button>
-                    ${anomaly.status === 'pending' ? `
-                        <button class="btn-action btn-approve" onclick="reviewAnomaly(${anomaly.id}, 'approved')">
-                            <i class="fas fa-check"></i> Approve
-                        </button>
-                        <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                        <button class="btn-action btn-approve-apply" onclick="approveAndApply(${anomaly.id})">
-                            <i class="fas fa-bolt"></i> Approve & Apply
-                        </button>
-                        <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
-                            <i class="fas fa-edit"></i> Review
-                        </button>
-                    ` : anomaly.status === 'approved' ? `
-                        <button class="btn-action btn-apply" onclick="applyAnomaly(${anomaly.id})">
-                            <i class="fas fa-check-circle"></i> Apply Price
-                        </button>
-                        <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                        <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
-                            <i class="fas fa-edit"></i> Edit Notes
-                        </button>
-                    ` : anomaly.status === 'reviewed' ? `
-                        <button class="btn-action btn-approve" onclick="reviewAnomaly(${anomaly.id}, 'approved')">
-                            <i class="fas fa-check"></i> Approve
-                        </button>
-                        <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                        <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
-                            <i class="fas fa-edit"></i> Edit Notes
-                        </button>
-                    ` : `
-                        <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
-                            <i class="fas fa-edit"></i> Edit Notes
-                        </button>
-                    `}
+                    ${getActionButtonsForStatus(anomaly)}
                 </div>
             </div>
         `).join('');
