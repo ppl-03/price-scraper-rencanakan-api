@@ -530,3 +530,239 @@ class TestDepoBangunanLocationAPI(TestCase):
         self.assertEqual(response.status_code, 200)
         # Negative timeout should be passed as-is; scraper will validate it
         mock_scraper.scrape_locations.assert_called_once_with(timeout=-10)
+
+
+class TestDepoBangunanSaveProductsHelper(TestCase):
+    """Test the _save_products helper function and its categorization logic."""
+    
+    @patch('db_pricing.models.DepoBangunanProduct')
+    @patch('api.depobangunan.views.AutoCategorizationService')
+    def test_save_products_with_price_update_and_categorization(self, mock_cat_service_cls, mock_model):
+        """Test that _save_products triggers categorization for new products."""
+        from api.depobangunan.views import _save_products
+        
+        # Mock database service
+        mock_db_service = MagicMock()
+        mock_db_service.save_with_price_update.return_value = {
+            'success': True,
+            'new_count': 2,
+            'updated_count': 0,
+            'anomalies': []
+        }
+        
+        # Mock categorization service
+        mock_cat_service = mock_cat_service_cls.return_value
+        mock_cat_service.categorize_products.return_value = {
+            'total': 2,
+            'categorized': 2,
+            'uncategorized': 0
+        }
+        
+        # Mock DepoBangunanProduct.objects
+        mock_products = MagicMock()
+        mock_products.values_list.return_value = [1, 2]
+        mock_model.objects.filter.return_value.order_by.return_value.__getitem__.return_value = mock_products
+        
+        products_data = [
+            {'name': 'Product 1', 'price': 1000, 'url': '/p1', 'unit': 'pcs', 'location': 'Jakarta'},
+            {'name': 'Product 2', 'price': 2000, 'url': '/p2', 'unit': 'pcs', 'location': 'Jakarta'}
+        ]
+        
+        response_data, error = _save_products(mock_db_service, products_data, True, 'http://test.com')
+        
+        # Verify no error
+        self.assertIsNone(error)
+        self.assertTrue(response_data['success'])
+        self.assertEqual(response_data['categorized'], 2)
+        self.assertEqual(response_data['inserted'], 2)
+        
+        # Verify categorization was called
+        mock_cat_service.categorize_products.assert_called_once()
+    
+    @patch('db_pricing.models.DepoBangunanProduct')
+    @patch('api.depobangunan.views.AutoCategorizationService')
+    def test_save_products_categorization_exception_handling(self, mock_cat_service_cls, mock_model):
+        """Test that categorization failures don't break the save operation."""
+        from api.depobangunan.views import _save_products
+        
+        # Mock database service
+        mock_db_service = MagicMock()
+        mock_db_service.save_with_price_update.return_value = {
+            'success': True,
+            'new_count': 1,
+            'updated_count': 0,
+            'anomalies': []
+        }
+        
+        # Mock categorization service to raise exception
+        mock_cat_service = mock_cat_service_cls.return_value
+        mock_cat_service.categorize_products.side_effect = Exception("Categorization failed")
+        
+        # Mock DepoBangunanProduct.objects
+        mock_products = MagicMock()
+        mock_products.values_list.return_value = [1]
+        mock_model.objects.filter.return_value.order_by.return_value.__getitem__.return_value = mock_products
+        
+        products_data = [{'name': 'Product 1', 'price': 1000, 'url': '/p1', 'unit': 'pcs', 'location': 'Jakarta'}]
+        
+        response_data, error = _save_products(mock_db_service, products_data, True, 'http://test.com')
+        
+        # Verify operation still succeeded despite categorization failure
+        self.assertIsNone(error)
+        self.assertTrue(response_data['success'])
+        self.assertEqual(response_data['categorized'], 0)
+    
+    def test_save_products_without_price_update(self):
+        """Test saving products without price update (no categorization)."""
+        from api.depobangunan.views import _save_products
+        
+        mock_db_service = MagicMock()
+        mock_db_service.save.return_value = True
+        
+        products_data = [{'name': 'Product 1', 'price': 1000, 'url': '/p1', 'unit': 'pcs', 'location': 'Jakarta'}]
+        
+        response_data, error = _save_products(mock_db_service, products_data, False, 'http://test.com')
+        
+        # Verify
+        self.assertIsNone(error)
+        self.assertTrue(response_data['success'])
+        self.assertEqual(response_data['categorized'], 0)
+        self.assertEqual(response_data['saved'], 1)
+    
+    def test_save_products_db_failure(self):
+        """Test handling of database save failure."""
+        from api.depobangunan.views import _save_products
+        
+        mock_db_service = MagicMock()
+        mock_db_service.save_with_price_update.return_value = {'success': False}
+        
+        products_data = [{'name': 'Product 1', 'price': 1000, 'url': '/p1', 'unit': 'pcs', 'location': 'Jakarta'}]
+        
+        response_data, error = _save_products(mock_db_service, products_data, True, 'http://test.com')
+        
+        # Verify error response
+        self.assertIsNone(response_data)
+        self.assertIsNotNone(error)
+
+
+class TestDepoBangunanSaveProductsToDatabaseHelper(TestCase):
+    """Test the _save_products_to_database helper function."""
+    
+    @patch('db_pricing.models.DepoBangunanProduct')
+    @patch('api.depobangunan.views.AutoCategorizationService')
+    @patch('api.depobangunan.views.DepoBangunanDatabaseService')
+    def test_save_products_to_database_success(self, mock_db_service_cls, mock_cat_service_cls, mock_model):
+        """Test successful save and categorization."""
+        from api.depobangunan.views import _save_products_to_database
+        from api.interfaces import Product
+        
+        # Create mock products
+        products = [
+            Product(name='Product 1', price=1000, url='/p1', unit='pcs', location='Jakarta'),
+            Product(name='Product 2', price=2000, url='/p2', unit='pcs', location='Jakarta')
+        ]
+        
+        # Mock database service
+        mock_db_instance = mock_db_service_cls.return_value
+        mock_db_instance.save_with_price_update.return_value = {
+            'success': True,
+            'new_count': 2,
+            'updated_count': 0,
+            'anomalies': []
+        }
+        
+        # Mock categorization service
+        mock_cat_instance = mock_cat_service_cls.return_value
+        mock_cat_instance.categorize_products.return_value = {
+            'total': 2,
+            'categorized': 2,
+            'uncategorized': 0
+        }
+        
+        # Mock DepoBangunanProduct.objects
+        mock_products = MagicMock()
+        mock_products.values_list.return_value = [1, 2]
+        mock_model.objects.filter.return_value.order_by.return_value.__getitem__.return_value = mock_products
+        
+        result = _save_products_to_database(products)
+        
+        # Verify
+        self.assertTrue(result['success'])
+        self.assertEqual(result['categorized'], 2)
+    
+    def test_save_products_to_database_empty_products(self):
+        """Test handling of empty products list."""
+        from api.depobangunan.views import _save_products_to_database
+        
+        result = _save_products_to_database([])
+        
+        # Verify
+        self.assertFalse(result['success'])
+        self.assertEqual(result['categorized'], 0)
+    
+    @patch('api.depobangunan.views.DepoBangunanDatabaseService')
+    def test_save_products_to_database_db_exception(self, mock_db_service_cls):
+        """Test handling of database exception."""
+        from api.depobangunan.views import _save_products_to_database
+        from api.interfaces import Product
+        
+        products = [Product(name='Product 1', price=1000, url='/p1', unit='pcs', location='Jakarta')]
+        
+        # Mock database service to raise exception
+        mock_db_instance = mock_db_service_cls.return_value
+        mock_db_instance.save_with_price_update.side_effect = Exception("DB Error")
+        
+        result = _save_products_to_database(products)
+        
+        # Verify
+        self.assertFalse(result['success'])
+        self.assertEqual(result['categorized'], 0)
+
+
+class TestDepoBangunanScrapeLocationNames(TestCase):
+    """Test the _scrape_location_names helper function."""
+    
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_scrape_location_names_exception_handling(self, mock_create_scraper):
+        """Test that location scraping exceptions are caught and don't break the flow."""
+        from api.depobangunan.views import _scrape_location_names
+        
+        # Mock scraper to raise exception
+        mock_create_scraper.side_effect = Exception("Location scraper failed")
+        
+        result = _scrape_location_names()
+        
+        # Verify empty string returned on exception
+        self.assertEqual(result, '')
+    
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_scrape_location_names_no_locations(self, mock_create_scraper):
+        """Test handling when no locations are found."""
+        from api.depobangunan.views import _scrape_location_names
+        from api.interfaces import LocationScrapingResult
+        
+        mock_scraper = MagicMock()
+        mock_result = LocationScrapingResult(locations=[], success=True, error_message=None)
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        result = _scrape_location_names()
+        
+        # Verify empty string returned
+        self.assertEqual(result, '')
+    
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_scrape_location_names_failure(self, mock_create_scraper):
+        """Test handling when scraping fails."""
+        from api.depobangunan.views import _scrape_location_names
+        from api.interfaces import LocationScrapingResult
+        
+        mock_scraper = MagicMock()
+        mock_result = LocationScrapingResult(locations=[], success=False, error_message="Failed")
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        
+        result = _scrape_location_names()
+        
+        # Verify empty string returned
+        self.assertEqual(result, '')
