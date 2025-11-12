@@ -184,3 +184,10 @@ class TestMitra10DatabaseService(TestCase):
         service = Mitra10DatabaseService()
         result = service._validate_data(data)
         self.assertFalse(result)
+
+    def test_detect_anomaly_with_zero_old_price(self):
+        """Test that no anomaly is detected when old price is 0"""
+        service = Mitra10DatabaseService()
+        item = {"name": "Test Item", "url": "https://test.com", "unit": "pcs"}
+        result = service._detect_anomaly(item, 0, 10000)
+        self.assertIsNone(result)
