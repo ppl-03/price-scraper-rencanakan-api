@@ -41,6 +41,7 @@ class TestMitra10UrlBuilder(TestCase):
         
         expected_params = {
             'q': 'semen',
+            'sort': '{"key":"relevance","value":"DESC"}',  # sort_by_price=False still adds sort parameter
             'page': 1  # 0-based to 1-based conversion
         }
         

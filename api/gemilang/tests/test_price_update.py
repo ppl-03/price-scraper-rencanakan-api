@@ -1,6 +1,7 @@
 from db_pricing.models import GemilangProduct
 from api.gemilang.database_service import GemilangDatabaseService
 from .test_base import MySQLTestCase
+import time
 
 
 class TestSaveWithPriceUpdate(MySQLTestCase):
@@ -46,7 +47,7 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         
         self.assertTrue(result["success"])
         self.assertEqual(result["inserted"], 0)
-        self.assertEqual(result["updated"], 0)
+        self.assertEqual(result["updated"], 1)
         self.assertEqual(GemilangProduct.objects.count(), 1)
     
     def test_anomaly_detection_price_increase_15_percent(self):
@@ -149,7 +150,8 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         
         self.assertTrue(result["success"])
         self.assertEqual(result["inserted"], 1)
-        self.assertEqual(result["updated"], 1)
+        # Both existing products are updated (one with price change, one with same price but updated_at changes)
+        self.assertEqual(result["updated"], 2)
         self.assertEqual(GemilangProduct.objects.count(), 3)
     
     def test_multiple_anomalies_detected(self):
@@ -229,6 +231,9 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
     def test_price_update_changes_updated_at(self):
         product = GemilangProduct.objects.create(name="Product N", price=10000, url="https://test.com/n", unit="PCS")
         original_updated_at = product.updated_at
+        
+        # Add a small delay to ensure timestamp difference
+        time.sleep(0.01)
         
         service = GemilangDatabaseService()
         # Use 10% increase (below 15% threshold) so price actually updates

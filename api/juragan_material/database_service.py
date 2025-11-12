@@ -37,10 +37,11 @@ class JuraganMaterialDatabaseService:
 
         now = timezone.now()
 
+        # Include category column to avoid DB errors when category has no default
         sql = """
             INSERT INTO juragan_material_products
-                (name, price, url, unit, location, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s,%s)
+                (name, price, url, unit, location, category, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         params_list = [
             self._create_product_params(item, now)
@@ -56,10 +57,13 @@ class JuraganMaterialDatabaseService:
     
     def _create_product_params(self, item, now):
         """Helper method to create product parameters for database insertion."""
+        # Provide empty string for category when not present to satisfy DB schema
         if isinstance(item, dict):
-            return (item["name"], item["price"], item["url"], item["unit"], item["location"], now, now)
+            category = item.get("category", "")
+            return (item["name"], item["price"], item["url"], item["unit"], item["location"], category, now, now)
         elif isinstance(item, object):
-            return (item.name, item.price, item.url, item.unit,item.location,now, now)
+            category = getattr(item, 'category', '')
+            return (item.name, item.price, item.url, item.unit, item.location, category, now, now)
     
     def _extract_product_identifiers(self, item):
         """Helper method to extract product identifiers (name, url, unit) from item."""
@@ -143,8 +147,9 @@ class JuraganMaterialDatabaseService:
         return 0
 
     def _insert_new_product(self, cursor, item, now):
+        # Insert with category column (default to empty string if not provided)
         cursor.execute(
-            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO juragan_material_products (name, price, url, unit, location, category, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             self._create_product_params(item, now)
         )
         return 1
