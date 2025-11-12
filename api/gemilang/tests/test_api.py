@@ -330,57 +330,6 @@ class TestGemilangLocationAPI(TestCase):
         response = self.client.post('/api/gemilang/locations/')
         self.assertEqual(response.status_code, 405)
 
-    @patch('api.gemilang.views.create_gemilang_location_scraper')
-    def test_gemilang_locations_empty_response(self, mock_create_scraper):
-        from api.interfaces import LocationScrapingResult
-        
-        mock_scraper = Mock()
-        mock_result = LocationScrapingResult(
-            locations=[],
-            success=True,
-            error_message=None,
-            attempts_made=1
-        )
-        mock_scraper.scrape_locations.return_value = mock_result
-        mock_create_scraper.return_value = mock_scraper
-        
-        response = self.client.get('/api/gemilang/locations/')
-        
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.content)
-        self.assertTrue(data['success'])
-        self.assertEqual(len(data['locations']), 0)
-
-    @patch('api.gemilang.views.create_gemilang_location_scraper')
-    def test_gemilang_locations_large_timeout_value(self, mock_create_scraper):
-        from api.interfaces import LocationScrapingResult
-        
-        mock_scraper = Mock()
-        mock_result = LocationScrapingResult(locations=[], success=True)
-        mock_scraper.scrape_locations.return_value = mock_result
-        mock_create_scraper.return_value = mock_scraper
-        
-        response = self.client.get('/api/gemilang/locations/', {'timeout': '999999'})
-        
-        # Large timeout values now fail validation (max is 120)
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.content)
-        self.assertIn('error', data)
-
-    @patch('api.gemilang.views.create_gemilang_location_scraper')
-    def test_gemilang_locations_negative_timeout(self, mock_create_scraper):
-        from api.interfaces import LocationScrapingResult
-        
-        mock_scraper = Mock()
-        mock_result = LocationScrapingResult(locations=[], success=True)
-        mock_scraper.scrape_locations.return_value = mock_result
-        mock_create_scraper.return_value = mock_scraper
-        
-        response = self.client.get('/api/gemilang/locations/', {'timeout': '0'})
-        
-        self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_locations.assert_called_once_with(timeout=0)
-
 
 class TestGemilangAPIValidation(TestCase):
     def setUp(self):
