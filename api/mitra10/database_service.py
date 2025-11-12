@@ -28,14 +28,15 @@ class Mitra10DatabaseService:
     def _insert_product(self, cursor, item, now):
         cursor.execute(
             """
-            INSERT INTO mitra10_products (name, price, url, unit, location, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO mitra10_products (name, price, url, unit, category, location, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 item.get("name"),
                 item.get("price"),
                 item.get("url"),
                 item.get("unit"),
+                item.get("category", ""),
                 item.get("location", ""),
                 now,
                 now,
@@ -82,8 +83,8 @@ class Mitra10DatabaseService:
 
         now = timezone.now()
         sql = """
-            INSERT INTO mitra10_products (name, price, url, unit, location, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO mitra10_products (name, price, url, unit, category, location, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         params_list = [
             (
@@ -91,6 +92,7 @@ class Mitra10DatabaseService:
                 d.get("price"),
                 d.get("url"),
                 d.get("unit"),
+                d.get("category", ""),
                 d.get("location", ""),
                 now,
                 now,
