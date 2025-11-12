@@ -53,7 +53,7 @@ class TokopediaDashboardIntegrationTests(TestCase):
         self.assertEqual(mock_run_vendor.call_count, 5)
         tokopedia_call = mock_run_vendor.call_args_list[4]
         maker_func = tokopedia_call[0][2]
-        scraper, url_builder = maker_func()
+        _, url_builder = maker_func()
         self.assertIsInstance(url_builder, TokopediaUrlBuilderUlasan)
         
     def test_trigger_scrape_uses_ulasan_scraper(self):
@@ -193,7 +193,7 @@ class TokopediaScraperParameterTests(TestCase):
         self.assertEqual(call_kwargs.get('limit'), 20)
         
     def test_scraper_receives_sort_by_price_parameter(self):
-        scraper, url_builder = views._create_tokopedia_ulasan_scraper()
+        _, url_builder = views._create_tokopedia_ulasan_scraper()
         
         url = url_builder.build_search_url("test", sort_by_price=True, page=0)
         
