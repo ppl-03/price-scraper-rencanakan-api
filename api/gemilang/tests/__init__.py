@@ -13,6 +13,7 @@ from . import (
     test_unit_parser,
     test_url_builder,
     test_urls,
+    test_scrape_popularity
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "test_unit_parser",
     "test_url_builder",
     "test_urls",
+    "test_scrape_popularity",
 ]

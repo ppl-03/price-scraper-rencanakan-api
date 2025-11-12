@@ -1,5 +1,5 @@
 from django.test import TestCase
-from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct
+from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct, TokopediaProduct
 from db_pricing.categorization import ProductCategorizer
 
 

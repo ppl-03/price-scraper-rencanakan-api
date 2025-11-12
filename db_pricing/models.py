@@ -55,7 +55,8 @@ class GemilangProduct(models.Model):
     price = models.IntegerField(validators=[MinValueValidator(0)])
     url = models.URLField(max_length=1000)
     unit = models.CharField(max_length=50, blank=True, default='')
-    category = models.CharField(max_length=100, blank=True, default='', db_default='')
+    category = models.CharField(max_length=100, blank=True, default='')
+    location = models.TextField(max_length=200,default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -143,7 +144,7 @@ class TokopediaProduct(models.Model):
     url = models.URLField(max_length=1000)
     unit = models.CharField(max_length=50, blank=True, default='')
     location = models.CharField(max_length=200, blank=True, default='')
-    category = models.CharField(max_length=100, blank=True, null=True)
+    category = models.CharField(max_length=100, blank=True, default='', db_default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -152,6 +153,7 @@ class TokopediaProduct(models.Model):
         indexes = [
             models.Index(fields=['name']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['category']),
         ]
 
     def __str__(self):
