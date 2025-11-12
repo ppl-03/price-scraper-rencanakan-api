@@ -4,6 +4,10 @@ from typing import Optional, Tuple
 from .factory import create_tokopedia_scraper
 from .database_service import TokopediaDatabaseService
 import re
+from .url_builder_ulasan import TokopediaUrlBuilderUlasan
+from .http_client import TokopediaHttpClient
+from .html_parser import TokopediaHtmlParser
+from .scraper import TokopediaPriceScraper
 
 # Constants
 DEFAULT_LIMIT = '20'
@@ -399,5 +403,54 @@ def scrape_products_with_filters(request):
     except Exception as e:
         return _create_error_response(
             f"Tokopedia scraper with filters error: {str(e)}", 
+            status=500
+        )
+
+
+@require_http_methods(["GET"])
+def scrape_products_ulasan(request):
+    """Scrape products sorted by 'ulasan' (popularity/reviews).
+
+    This endpoint uses `TokopediaUrlBuilderUlasan` which sets the
+    Tokopedia `ob=5` parameter. It mirrors `scrape_products_with_filters`
+    but forces the ulasan/popularity ordering.
+    """
+    try:
+        # Parse common parameters
+        params, error = _parse_common_parameters(request)
+        if error:
+            return error
+
+        # Parse filter parameters
+        filters, error = _parse_filter_parameters(request)
+        if error:
+            return error
+
+        # Build a scraper that uses the ulasan URL builder
+        http_client = TokopediaHttpClient()
+        url_builder = TokopediaUrlBuilderUlasan()
+        html_parser = TokopediaHtmlParser()
+        scraper = TokopediaPriceScraper(http_client, url_builder, html_parser)
+
+        # Use sort_by_price=False so the ulasan builder emits ob=5
+        result = scraper.scrape_products_with_filters(
+            keyword=params['query'],
+            sort_by_price=False,
+            page=params['page'],
+            min_price=filters['min_price'],
+            max_price=filters['max_price'],
+            location=filters['location'],
+            limit=params['limit']
+        )
+
+        # Handle result and save to database
+        result, db_result = _handle_scraping_result(result)
+
+        # Format and return response
+        return JsonResponse(_format_scrape_result(result, db_result))
+
+    except Exception as e:
+        return _create_error_response(
+            f"Tokopedia scraper (ulasan) error: {str(e)}",
             status=500
         )

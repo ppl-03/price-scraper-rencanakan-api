@@ -344,3 +344,36 @@ class TestDepoBangunanLocationParser(TestCase):
         finally:
             sys.modules.pop('lxml', None)
 
+
+
+class TestLocationParserEdgeCases(TestCase):
+    
+    def test_parse_locations_with_none_html(self):
+        """Test parse_locations with None HTML"""
+        parser = DepoBangunanLocationParser()
+        result = parser.parse_locations(None)
+        self.assertEqual(result, [])
+    
+    def test_parse_locations_with_empty_html(self):
+        """Test parse_locations with empty HTML"""
+        parser = DepoBangunanLocationParser()
+        result = parser.parse_locations("")
+        self.assertEqual(result, [])
+    
+    def test_parse_locations_with_invalid_items(self):
+        """Test parsing locations when items don't have required data"""
+        html = '''
+        <html>
+            <body>
+                <select id="ktplocation">
+                    <option value="">Invalid</option>
+                    <option>No value attribute</option>
+                </select>
+            </body>
+        </html>
+        '''
+        
+        parser = DepoBangunanLocationParser()
+        result = parser.parse_locations(html)
+        # Should skip invalid items
+        self.assertIsInstance(result, list)

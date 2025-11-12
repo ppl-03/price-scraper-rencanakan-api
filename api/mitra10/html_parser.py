@@ -9,6 +9,9 @@ from .unit_parser import Mitra10UnitParser
 
 logger = logging.getLogger(__name__)
 
+MAX_SOLD_TEXT_LEN = 64
+RB_RIBU_PATTERN = re.compile(r"\b(\d{1,4}(?:[.,]\d{1,3})?)\s*(?:rb|ribu)\b", re.IGNORECASE)
+
 
 class HtmlElementExtractor:
     """Helper class for extracting data from HTML elements using selectors"""
@@ -241,7 +244,60 @@ class Mitra10HtmlParser(IHtmlParser, SafeExtractionMixin):
         if not unit and name:
             unit = self.unit_parser.parse_unit(f"<div><h2>{name}</h2></div>")
         
-        return Product(name=name, price=price, url=url, unit=unit)
+        # Extract sold count
+        sold_count = self._extract_sold_count(item)
+        
+        return Product(name=name, price=price, url=url, unit=unit, sold_count=sold_count)
+    
+    def _extract_sold_count(self, item) -> Optional[int]:
+        """Extract and normalize sold count from product item"""
+        # Look for text containing "terjual" (sold in Indonesian)
+        sold_text = None
+        
+        # Search for text with "terjual" in the item
+        for text_element in item.find_all(text=True):
+            text = text_element.strip().lower()
+            if 'terjual' in text:
+                sold_text = text
+                break
+        
+        if not sold_text:
+            return None
+        
+        # Normalize sold count
+        return self._normalize_sold_count(sold_text)
+    
+    def _normalize_sold_count(self, sold_text: str) -> Optional[int]:
+        """
+        Normalize sold count text to integer
+        Examples:
+        - "38 Terjual" -> 38
+        - "1 rb+ terjual" -> 1000
+        """
+        sold_text = sold_text.lower().replace('terjual', '').strip()
+        # Truncate to a reasonable length to avoid regex backtracking on pathological input
+        limited = sold_text[:MAX_SOLD_TEXT_LEN]
+
+        # Handle "rb" or "ribu" format (thousands) using a bounded regex
+        if 'rb' in limited or 'ribu' in limited:
+            match = RB_RIBU_PATTERN.search(limited)
+            if match:
+                number_str = match.group(1).replace('.', '').replace(',', '.')
+                try:
+                    number = float(number_str)
+                    return int(number * 1000)
+                except ValueError:
+                    return None
+
+        # Handle regular numbers: extract consecutive digits only (no regex for safety)
+        number_str = ''.join(ch for ch in limited if ch.isdigit())
+        if number_str:
+            try:
+                return int(number_str)
+            except ValueError:
+                return None
+        
+        return None
     
     def _extract_product_name(self, item) -> Optional[str]:
         # Try primary selectors
