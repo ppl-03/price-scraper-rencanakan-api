@@ -568,7 +568,7 @@ class TestDepoBangunanSaveProductsHelper(TestCase):
             {'name': 'Product 2', 'price': 2000, 'url': '/p2', 'unit': 'pcs', 'location': 'Jakarta'}
         ]
         
-        response_data, error = _save_products(mock_db_service, products_data, True, 'http://test.com')
+        response_data, error = _save_products(mock_db_service, products_data, True, 'https://test.com')
         
         # Verify no error
         self.assertIsNone(error)
@@ -605,7 +605,7 @@ class TestDepoBangunanSaveProductsHelper(TestCase):
         
         products_data = [{'name': 'Product 1', 'price': 1000, 'url': '/p1', 'unit': 'pcs', 'location': 'Jakarta'}]
         
-        response_data, error = _save_products(mock_db_service, products_data, True, 'http://test.com')
+        response_data, error = _save_products(mock_db_service, products_data, True, 'https://test.com')
         
         # Verify operation still succeeded despite categorization failure
         self.assertIsNone(error)
@@ -621,7 +621,7 @@ class TestDepoBangunanSaveProductsHelper(TestCase):
         
         products_data = [{'name': 'Product 1', 'price': 1000, 'url': '/p1', 'unit': 'pcs', 'location': 'Jakarta'}]
         
-        response_data, error = _save_products(mock_db_service, products_data, False, 'http://test.com')
+        response_data, error = _save_products(mock_db_service, products_data, False, 'https://test.com')
         
         # Verify
         self.assertIsNone(error)
@@ -638,7 +638,7 @@ class TestDepoBangunanSaveProductsHelper(TestCase):
         
         products_data = [{'name': 'Product 1', 'price': 1000, 'url': '/p1', 'unit': 'pcs', 'location': 'Jakarta'}]
         
-        response_data, error = _save_products(mock_db_service, products_data, True, 'http://test.com')
+        response_data, error = _save_products(mock_db_service, products_data, True, 'https://test.com')
         
         # Verify error response
         self.assertIsNone(response_data)
