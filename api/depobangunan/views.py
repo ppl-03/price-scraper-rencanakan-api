@@ -10,6 +10,91 @@ logger = logging.getLogger(__name__)
 ERROR_KEYWORD_REQUIRED = 'Keyword parameter is required'
 ERROR_PAGE_INVALID = 'Page parameter must be a valid integer'
 ERROR_INTERNAL_SERVER = 'Internal server error occurred'
+ERROR_SAVE_DB_FAILED = 'Failed to save products to database'
+
+# ---------- Helper functions ----------
+
+def _parse_sorting_params(request):
+    sort_type = request.POST.get('sort_type', '').lower()
+    if sort_type and sort_type not in ['cheapest', 'popularity']:
+        return None, None, _create_error_response('Invalid sort_type. Must be "cheapest" or "popularity"')
+    sort_by_price = _parse_sort_by_price(request.POST.get('sort_by_price', 'true'))
+    if not sort_type:
+        sort_type = 'cheapest' if sort_by_price else 'popularity'
+    return sort_type, sort_by_price, None
+
+
+def _parse_boolean(value):
+    return value.lower() in ['true', '1', 'yes']
+
+
+def _scrape_products_by_type(scraper, keyword, sort_type, sort_by_price, page):
+    if sort_type == 'popularity':
+        result = scraper.scrape_popularity_products(keyword=keyword, top_n=5, page=page)
+        if result.success and result.products:
+            result.products = _sort_popularity_products(result.products)
+        return result
+    return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
+
+
+def _sort_popularity_products(products):
+    with_sold = [p for p in products if getattr(p, 'sold_count', None) is not None]
+    without_sold = [p for p in products if getattr(p, 'sold_count', None) is None]
+    with_sold.sort(key=lambda p: p.sold_count, reverse=True)
+    return with_sold[:5] + without_sold[:max(0, 5 - len(with_sold))]
+
+
+def _empty_product_response():
+    return JsonResponse({
+        'success': True,
+        'message': 'No products found to save',
+        'saved': 0,
+        'inserted': 0,
+        'updated': 0,
+        'anomalies': []
+    })
+
+
+def _convert_products(products, location_value):
+    return [
+        {
+            'name': p.name,
+            'price': p.price,
+            'url': p.url,
+            'unit': p.unit,
+            'location': location_value
+        }
+        for p in products
+    ]
+
+
+def _save_products(db_service, products_data, use_price_update, result_url):
+    if use_price_update:
+        save_result = db_service.save_with_price_update(products_data)
+        if not save_result.get('success'):
+            return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
+        return ({
+            'success': True,
+            'message': 'Products scraped and saved with price update',
+            'saved': save_result.get('updated_count', 0) + save_result.get('new_count', 0),
+            'inserted': save_result.get('new_count', 0),
+            'updated': save_result.get('updated_count', 0),
+            'anomalies': save_result.get('anomalies', []),
+            'url': result_url
+        }, None)
+
+    save_result = db_service.save(products_data)
+    if not save_result:
+        return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
+    return ({
+        'success': True,
+        'message': f'Successfully saved {len(products_data)} products',
+        'saved': len(products_data),
+        'inserted': len(products_data),
+        'updated': 0,
+        'anomalies': [],
+        'url': result_url
+    }, None)
 
 
 def _create_error_response(message, status=400):
@@ -217,129 +302,39 @@ def depobangunan_locations_view(request):
 @require_http_methods(["POST"])
 def scrape_and_save_products(request):
     try:
-        # Validate and parse parameters
         keyword, error = _validate_and_parse_keyword(request.POST.get('keyword'))
         if error:
             return error
-        
-        # Parse sort_type parameter ('cheapest' or 'popularity')
-        sort_type = request.POST.get('sort_type', '').lower()
-        
-        # Validate sort_type if provided
-        if sort_type and sort_type not in ['cheapest', 'popularity']:
-            return _create_error_response('Invalid sort_type. Must be either "cheapest" or "popularity"')
-        
-        # Handle backward compatibility with sort_by_price
-        sort_by_price_param = request.POST.get('sort_by_price', 'true')
-        sort_by_price = _parse_sort_by_price(sort_by_price_param)
-        
-        # Determine final sort_type
-        if not sort_type:
-            sort_type = 'cheapest' if sort_by_price else 'popularity'
-        
+
+        sort_type, sort_by_price, error = _parse_sorting_params(request)
+        if error:
+            return error
+
         page, error = _parse_page(request.POST.get('page', '0'))
         if error:
             return error
-        
-        # Check if price update mode is requested
-        use_price_update = request.POST.get('use_price_update', 'false').lower() in ['true', '1', 'yes']
-        
+
+        use_price_update = _parse_boolean(request.POST.get('use_price_update', 'false'))
         scraper = create_depo_scraper()
-        
-        # Choose scraping method based on sort_type
-        if sort_type == 'popularity':
-            result = scraper.scrape_popularity_products(
-                keyword=keyword,
-                top_n=5,
-                page=page
-            )
-            # Sort products by sold_count in descending order
-            if result.success and result.products:
-                products_with_sold_count = [p for p in result.products if hasattr(p, 'sold_count') and p.sold_count is not None]
-                products_without_sold_count = [p for p in result.products if not hasattr(p, 'sold_count') or p.sold_count is None]
-                
-                # Sort products with sold_count
-                products_with_sold_count.sort(key=lambda p: p.sold_count, reverse=True)
-                
-                # Take top 5 products with sold_count, or all if less than 5
-                result.products = products_with_sold_count[:5] + products_without_sold_count[:max(0, 5-len(products_with_sold_count))]
-        else:
-            # Default to scrape_products (cheapest)
-            result = scraper.scrape_products(
-                keyword=keyword,
-                sort_by_price=sort_by_price,
-                page=page
-            )
-        
+
+        result = _scrape_products_by_type(scraper, keyword, sort_type, sort_by_price, page)
         if not result.success:
             return _create_error_response(result.error_message, 500)
-        
         if not result.products:
-            return JsonResponse({
-                'success': True,
-                'message': 'No products found to save',
-                'saved': 0,
-                'inserted': 0,
-                'updated': 0,
-                'anomalies': []
-            })
-        
-        # Scrape locations and get location names
+            return _empty_product_response()
+
         run_location_value = _scrape_location_names()
-        
-        # Convert products to dict and inject location
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit,
-                'location': run_location_value
-            }
-            for product in result.products
-        ]
-        
+        products_data = _convert_products(result.products, run_location_value)
+
         db_service = DepoBangunanDatabaseService()
-        
-        if use_price_update:
-            # Use price update mode
-            save_result = db_service.save_with_price_update(products_data)
-            
-            if not save_result.get('success'):
-                return _create_error_response('Failed to save products to database', 500)
-            
-            response_data = {
-                'success': True,
-                'message': 'Products scraped and saved with price update',
-                'saved': save_result.get('updated_count', 0) + save_result.get('new_count', 0),
-                'inserted': save_result.get('new_count', 0),
-                'updated': save_result.get('updated_count', 0),
-                'anomalies': save_result.get('anomalies', []),
-                'url': result.url
-            }
-        else:
-            # Regular save mode
-            save_result = db_service.save(products_data)
-            
-            if not save_result:
-                return _create_error_response('Failed to save products to database', 500)
-            
-            response_data = {
-                'success': True,
-                'message': f'Successfully saved {len(products_data)} products',
-                'saved': len(products_data),
-                'inserted': len(products_data),
-                'updated': 0,
-                'anomalies': [],
-                'url': result.url
-            }
-        
+        response_data, error = _save_products(db_service, products_data, use_price_update, result.url)
+        if error:
+            return error
         return JsonResponse(response_data)
-        
+
     except Exception as e:
         logger.error(f"Unexpected error in scrape and save: {str(e)}")
         return _create_error_response(ERROR_INTERNAL_SERVER, 500)
-
 
 @require_http_methods(["GET"])
 def scrape_popularity(request):
@@ -453,7 +448,7 @@ def scrape_and_save_popularity(request):
         save_result = db_service.save(products_data)
         
         if not save_result:
-            return _create_error_response('Failed to save products to database', 500)
+            return _create_error_response(ERROR_SAVE_DB_FAILED, 500)
         
         response_data = {
             'success': True,
