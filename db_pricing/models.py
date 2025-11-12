@@ -99,6 +99,7 @@ class DepoBangunanProduct(models.Model):
     url = models.URLField(max_length=1000)
     unit = models.CharField(max_length=50, blank=True, default='')
     category = models.CharField(max_length=100, blank=True, default='', db_default='')
+    location = models.TextField(max_length=200, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
