@@ -1053,6 +1053,9 @@
                 <button class="btn-action btn-approve-apply" onclick="approveAndApply(${anomaly.id})">
                     <i class="fas fa-bolt"></i> Approve & Apply
                 </button>
+                <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                    <i class="fas fa-edit"></i> Review
+                </button>
             `;
         }
         
@@ -1063,6 +1066,9 @@
                 </button>
                 <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
                     <i class="fas fa-times"></i> Reject
+                </button>
+                <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                    <i class="fas fa-edit"></i> Edit Notes
                 </button>
             `;
         }
@@ -1075,10 +1081,17 @@
                 <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
                     <i class="fas fa-times"></i> Reject
                 </button>
+                <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                    <i class="fas fa-edit"></i> Edit Notes
+                </button>
             `;
         }
         
-        return ``;
+        return `
+            <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
+                <i class="fas fa-edit"></i> Edit Notes
+            </button>
+        `;
     }
 
     function renderAnomalies(anomalies) {
