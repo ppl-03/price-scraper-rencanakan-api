@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .factory import create_depo_scraper, create_depo_location_scraper
 from .database_service import DepoBangunanDatabaseService
+from db_pricing.auto_categorization_service import AutoCategorizationService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,54 @@ ERROR_INTERNAL_SERVER = 'Internal server error occurred'
 ERROR_SAVE_DB_FAILED = 'Failed to save products to database'
 
 # ---------- Helper functions ----------
+
+def _save_products_to_database(products):
+    """
+    Helper function to save products to database and auto-categorize them.
+    
+    Args:
+        products: List of product objects from scraping result
+        
+    Returns:
+        dict: Database operation result with categorization info
+    """
+    if not products:
+        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
+    
+    try:
+        # Convert products to dict format if needed
+        products_data = _convert_products_to_dict(products)
+        
+        # Save to database with price update
+        db_service = DepoBangunanDatabaseService()
+        result = db_service.save_with_price_update(products_data)
+        
+        # Auto-categorize newly inserted products
+        categorized_count = 0
+        if result.get('success') and result.get('new_count', 0) > 0:
+            try:
+                from db_pricing.models import DepoBangunanProduct
+                
+                # Get recently inserted products (ones without category)
+                uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:result['new_count']]
+                product_ids = list(uncategorized_products.values_list('id', flat=True))
+                
+                if product_ids:
+                    categorization_service = AutoCategorizationService()
+                    categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
+                    categorized_count = categorization_result.get('categorized', 0)
+                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
+            except Exception as cat_error:
+                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+                # Don't fail the entire operation if categorization fails
+        
+        result['categorized'] = categorized_count
+        return result
+        
+    except Exception as db_error:
+        logger.error(f"Failed to save DepoBangunan products to database: {str(db_error)}")
+        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
+
 
 def _parse_sorting_params(request):
     sort_type = request.POST.get('sort_type', '').lower()
@@ -73,12 +122,33 @@ def _save_products(db_service, products_data, use_price_update, result_url):
         save_result = db_service.save_with_price_update(products_data)
         if not save_result.get('success'):
             return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
+        
+        # Auto-categorize newly inserted products
+        categorized_count = 0
+        if save_result.get('new_count', 0) > 0:
+            try:
+                from db_pricing.models import DepoBangunanProduct
+                
+                # Get recently inserted products (ones without category)
+                uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:save_result['new_count']]
+                product_ids = list(uncategorized_products.values_list('id', flat=True))
+                
+                if product_ids:
+                    categorization_service = AutoCategorizationService()
+                    categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
+                    categorized_count = categorization_result.get('categorized', 0)
+                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
+            except Exception as cat_error:
+                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+                # Don't fail the entire operation if categorization fails
+        
         return ({
             'success': True,
             'message': 'Products scraped and saved with price update',
             'saved': save_result.get('updated_count', 0) + save_result.get('new_count', 0),
             'inserted': save_result.get('new_count', 0),
             'updated': save_result.get('updated_count', 0),
+            'categorized': categorized_count,
             'anomalies': save_result.get('anomalies', []),
             'url': result_url
         }, None)
@@ -86,12 +156,32 @@ def _save_products(db_service, products_data, use_price_update, result_url):
     save_result = db_service.save(products_data)
     if not save_result:
         return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
+    
+    # Auto-categorize newly saved products
+    categorized_count = 0
+    try:
+        from db_pricing.models import DepoBangunanProduct
+        
+        # Get recently inserted products (ones without category)
+        uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:len(products_data)]
+        product_ids = list(uncategorized_products.values_list('id', flat=True))
+        
+        if product_ids:
+            categorization_service = AutoCategorizationService()
+            categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
+            categorized_count = categorization_result.get('categorized', 0)
+            logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
+    except Exception as cat_error:
+        logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+        # Don't fail the entire operation if categorization fails
+    
     return ({
         'success': True,
         'message': f'Successfully saved {len(products_data)} products',
         'saved': len(products_data),
         'inserted': len(products_data),
         'updated': 0,
+        'categorized': categorized_count,
         'anomalies': [],
         'url': result_url
     }, None)
