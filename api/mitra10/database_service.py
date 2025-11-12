@@ -1,5 +1,6 @@
 from django.db import connection, transaction
 from django.utils import timezone
+from db_pricing.anomaly_service import PriceAnomalyService
 
 class Mitra10DatabaseService:
     """Handles Mitra10 product database operations with validation and anomaly tracking."""
@@ -81,6 +82,17 @@ class Mitra10DatabaseService:
             }
         return None
 
+    def _save_detected_anomalies(self, anomalies):
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('mitra10', anomalies)
+        if not anomaly_result['success']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
     # =========================
     # Public Methods
     # =========================
@@ -117,5 +129,8 @@ class Mitra10DatabaseService:
                     updated += self._update_product(cursor, item, existing_id, existing_price, now, anomalies)
                 else:
                     inserted += self._insert_product(cursor, item, now)
+
+        # Save anomalies to database for review
+        self._save_detected_anomalies(anomalies)
 
         return {"success": True, "updated": updated, "inserted": inserted, "anomalies": anomalies}
