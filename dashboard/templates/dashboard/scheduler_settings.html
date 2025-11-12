@@ -1,0 +1,581 @@
+{% extends 'dashboard/base_with_sidebar.html' %}
+
+{% block title %}Scheduler Settings - Rencanakan{% endblock %}
+
+{% block extra_css %}
+{% load static %}
+<style>
+    :root {
+        --primary-color: #00365a;
+        --accent-color: #3498db;
+        --success-color: #27ae60;
+        --danger-color: #e74c3c;
+    }
+    
+    body {
+        background-color: #f8f9fa;
+    }
+    
+    /* Make main content full width */
+    .main-content {
+        width: 100%;
+        max-width: none;
+        padding: 0;
+    }
+    
+    .scheduler-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    
+    .page-header {
+        background: linear-gradient(135deg, #00365a 0%, #005a8b 100%);
+        color: white;
+        padding: 2rem 2.5rem;
+        margin: 0 0 2rem 0;
+        border-radius: 0;
+    }
+    
+    .page-header h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.75rem;
+        font-weight: 600;
+    }
+    
+    .page-header p {
+        margin: 0;
+        opacity: 0.9;
+    }
+        
+    .server-time-card {
+        background: linear-gradient(135deg, var(--accent-color) 0%, #2980b9 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .server-time-label {
+        font-size: 0.875rem;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .server-time-display {
+        font-size: 3rem;
+        font-weight: 300;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 0.1em;
+    }
+    
+    .server-date {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin-top: 0.5rem;
+    }
+    
+    .status-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 2rem;
+    }
+    
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    
+    .status-badge.inactive {
+        background: #fee;
+        color: var(--danger-color);
+    }
+    
+    .status-badge.active {
+        background: #efe;
+        color: var(--success-color);
+    }
+    
+    .config-section {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 2rem;
+    }
+        
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .form-label {
+            font-weight: 500;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-select, .form-control {
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            padding: 0.75rem 1rem;
+            transition: all 0.3s;
+        }
+        
+        .form-select:focus, .form-control:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        
+        .vendor-checkbox {
+            padding: 1rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            transition: all 0.3s;
+        }
+        
+        .vendor-checkbox:hover {
+            border-color: var(--accent-color);
+            background: #f8f9fa;
+        }
+        
+        .vendor-checkbox input:checked ~ label {
+            color: var(--accent-color);
+            font-weight: 500;
+        }
+        
+        .btn-primary {
+            background: var(--accent-color);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        
+        .btn-success:hover {
+            background: #229954;
+        }
+        
+        .alert {
+            border-radius: 8px;
+            border: none;
+            padding: 1rem 1.5rem;
+        }
+        
+        .custom-schedule-section {
+            display: none;
+            margin-top: 1rem;
+        }
+        
+        .custom-schedule-card {
+            padding: 1.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .custom-schedule-card h6 {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        
+        .days-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .days-grid .form-check {
+            margin: 0;
+        }
+        
+        .days-grid .form-check-input:checked ~ .form-check-label {
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+        
+        #schedulePreview {
+            margin-top: 1rem;
+            margin-bottom: 0;
+        }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="fas fa-clock"></i>
+        Scheduler Settings
+    </h1>
+    <p>Configure and manage automatic scraping schedules</p>
+</div>
+
+<div class="scheduler-container">
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+<!-- Server Time -->
+<div class="server-time-card">
+    <div class="server-time-label">Server Time</div>
+    <div class="server-time-display" id="serverTime">
+        {{ server_time|date:"H:i:s" }}
+    </div>
+    <div class="server-date">
+        {{ server_time|date:"l, F d, Y" }}
+    </div>
+</div>
+
+<!-- Current Status -->
+<div class="status-card">
+    <h5 class="mb-3"><i class="fas fa-info-circle"></i> Current Status</h5>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-2">
+                <strong>Scheduler Status</strong>
+                                <div class="mt-2">
+                                    {% if config.enabled %}
+                                        <span class="status-badge active">
+                                            <i class="bi bi-check-circle-fill"></i>
+                                            Active
+                                        </span>
+                                    {% else %}
+                                        <span class="status-badge inactive">
+                                            <i class="bi bi-x-circle-fill"></i>
+                                            Inactive
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-2">
+                                <strong>Current Schedule</strong>
+                                <div class="mt-2">
+                                    <span class="badge bg-secondary">{{ config.schedule_type|title }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Configuration -->
+                <div class="config-section">
+                    <h5 class="section-title">
+                        <i class="bi bi-gear"></i>
+                        Schedule Configuration
+                    </h5>
+
+                    <form method="post" action="{% url 'dashboard:update_schedule' %}">
+                        {% csrf_token %}
+                        
+                        <!-- Schedule Type -->
+                        <div class="mb-4">
+                            <label for="scheduleType" class="form-label">
+                                <i class="bi bi-calendar3"></i> Schedule Type
+                            </label>
+                            <select class="form-select" id="scheduleType" name="schedule_type" required>
+                                <option value="disabled" {% if config.schedule_type == 'disabled' %}selected{% endif %}>
+                                    Disabled
+                                </option>
+                                <option value="hourly" {% if config.schedule_type == 'hourly' %}selected{% endif %}>
+                                    Hourly (Every hour)
+                                </option>
+                                <option value="daily" {% if config.schedule_type == 'daily' %}selected{% endif %}>
+                                    Daily (Every day at midnight)
+                                </option>
+                                <option value="weekly" {% if config.schedule_type == 'weekly' %}selected{% endif %}>
+                                    Weekly (Every Monday at midnight)
+                                </option>
+                                <option value="custom" {% if config.schedule_type == 'custom' %}selected{% endif %}>
+                                    Custom Schedule
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Custom Schedule Configuration -->
+                        <div class="custom-schedule-section" id="customScheduleSection">
+                            <div class="custom-schedule-card">
+                                <h6 class="mb-3">
+                                    <i class="bi bi-calendar-check"></i> Custom Schedule Settings
+                                </h6>
+                                
+                                <!-- Frequency Selection -->
+                                <div class="mb-3">
+                                    <label class="form-label">Run every</label>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="customInterval" 
+                                                   name="custom_interval"
+                                                   value="{{ config.custom_interval|default:'1' }}"
+                                                   min="1" 
+                                                   max="365">
+                                        </div>
+                                        <div class="col-md-8">
+                                            <select class="form-select" id="customUnit" name="custom_unit">
+                                                <option value="minutes" {% if config.custom_unit == 'minutes' %}selected{% endif %}>Minute(s)</option>
+                                                <option value="hours" {% if config.custom_unit == 'hours' %}selected{% endif %}>Hour(s)</option>
+                                                <option value="days" {% if config.custom_unit == 'days' or not config.custom_unit %}selected{% endif %}>Day(s)</option>
+                                                <option value="weeks" {% if config.custom_unit == 'weeks' %}selected{% endif %}>Week(s)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Time Selection -->
+                                <div class="mb-3" id="timeSelection">
+                                    <label for="customTime" class="form-label">At time</label>
+                                    <input type="time" 
+                                           class="form-control" 
+                                           id="customTime" 
+                                           name="custom_time"
+                                           value="{{ config.custom_time|default:'00:00' }}">
+                                    <small class="text-muted">Specify when the scheduler should run</small>
+                                </div>
+
+                                <!-- Days of Week Selection (for weekly) -->
+                                <div class="mb-3" id="daysSelection" style="display: none;">
+                                    <label class="form-label">On days</label>
+                                    <div class="days-grid">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="custom_days" value="monday" id="day_mon">
+                                            <label class="form-check-label" for="day_mon">Mon</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="custom_days" value="tuesday" id="day_tue">
+                                            <label class="form-check-label" for="day_tue">Tue</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="custom_days" value="wednesday" id="day_wed">
+                                            <label class="form-check-label" for="day_wed">Wed</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="custom_days" value="thursday" id="day_thu">
+                                            <label class="form-check-label" for="day_thu">Thu</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="custom_days" value="friday" id="day_fri">
+                                            <label class="form-check-label" for="day_fri">Fri</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="custom_days" value="saturday" id="day_sat">
+                                            <label class="form-check-label" for="day_sat">Sat</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="custom_days" value="sunday" id="day_sun">
+                                            <label class="form-check-label" for="day_sun">Sun</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Schedule Preview -->
+                                <div class="alert alert-info" id="schedulePreview">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>Schedule:</strong> <span id="previewText">Every 1 day(s) at 00:00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vendor Selection -->
+                        <div class="mb-4">
+                            <label class="form-label">
+                                <i class="bi bi-shop"></i> Select Vendors
+                            </label>
+                            <div class="row">
+                                {% for vendor_key, vendor_info in available_vendors.items %}
+                                <div class="col-md-6">
+                                    <div class="vendor-checkbox">
+                                        <div class="form-check">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   name="vendors" 
+                                                   value="{{ vendor_key }}"
+                                                   id="vendor_{{ vendor_key }}"
+                                                   {% if vendor_key in config.vendors %}checked{% endif %}>
+                                            <label class="form-check-label" for="vendor_{{ vendor_key }}">
+                                                {{ vendor_info.name }}
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Pages Per Keyword -->
+                        <div class="mb-4">
+                            <label for="pagesPerKeyword" class="form-label">
+                                <i class="bi bi-file-earmark-text"></i> Pages Per Keyword
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="pagesPerKeyword" 
+                                   name="pages_per_keyword"
+                                   value="{{ config.pages_per_keyword }}"
+                                   min="1" 
+                                   max="10">
+                            <small class="text-muted">Number of pages to scrape for each keyword (1-10)</small>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Update Schedule
+                            </button>
+                            <button type="button" class="btn btn-success" id="runNowBtn">
+                                <i class="fas fa-play"></i> Run Now
+                            </button>
+                        </div>
+                    </form>
+                </div>
+</div>
+
+<script>
+    // Update server time
+    function updateServerTime() {
+        const timeElement = document.getElementById('serverTime');
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        timeElement.textContent = `${hours}:${minutes}:${seconds}`;
+    }
+    
+    setInterval(updateServerTime, 1000);
+
+        // Toggle custom schedule section
+        const scheduleTypeSelect = document.getElementById('scheduleType');
+        const customScheduleSection = document.getElementById('customScheduleSection');
+        const customInterval = document.getElementById('customInterval');
+        const customUnit = document.getElementById('customUnit');
+        const customTime = document.getElementById('customTime');
+        const timeSelection = document.getElementById('timeSelection');
+        const daysSelection = document.getElementById('daysSelection');
+        const previewText = document.getElementById('previewText');
+        
+        function toggleCustomSchedule() {
+            if (scheduleTypeSelect.value === 'custom') {
+                customScheduleSection.style.display = 'block';
+                updateSchedulePreview();
+            } else {
+                customScheduleSection.style.display = 'none';
+            }
+        }
+        
+        function updateSchedulePreview() {
+            const interval = customInterval.value || 1;
+            const unit = customUnit.value;
+            const time = customTime.value || '00:00';
+            
+            let preview = '';
+            
+            if (unit === 'minutes') {
+                preview = `Every ${interval} minute(s)`;
+                timeSelection.style.display = 'none';
+                daysSelection.style.display = 'none';
+            } else if (unit === 'hours') {
+                preview = `Every ${interval} hour(s)`;
+                timeSelection.style.display = 'none';
+                daysSelection.style.display = 'none';
+            } else if (unit === 'days') {
+                preview = `Every ${interval} day(s) at ${time}`;
+                timeSelection.style.display = 'block';
+                daysSelection.style.display = 'none';
+            } else if (unit === 'weeks') {
+                const selectedDays = Array.from(document.querySelectorAll('input[name="custom_days"]:checked'))
+                    .map(cb => cb.nextElementSibling.textContent);
+                const daysText = selectedDays.length > 0 ? selectedDays.join(', ') : 'No days selected';
+                preview = `Every ${interval} week(s) on ${daysText} at ${time}`;
+                timeSelection.style.display = 'block';
+                daysSelection.style.display = 'block';
+            }
+            
+            previewText.textContent = preview;
+        }
+        
+        // Event listeners for custom schedule
+        scheduleTypeSelect.addEventListener('change', toggleCustomSchedule);
+        customInterval.addEventListener('input', updateSchedulePreview);
+        customUnit.addEventListener('change', updateSchedulePreview);
+        customTime.addEventListener('change', updateSchedulePreview);
+        
+        // Add listeners to day checkboxes
+        document.querySelectorAll('input[name="custom_days"]').forEach(checkbox => {
+            checkbox.addEventListener('change', updateSchedulePreview);
+        });
+        
+        toggleCustomSchedule(); // Initialize
+
+        // Run scheduler now
+        document.getElementById('runNowBtn').addEventListener('click', function() {
+            if (!confirm('Run scheduler now? This will start scraping immediately.')) {
+                return;
+            }
+            
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Running...';
+            
+            fetch("{% url 'dashboard:run_scheduler_now' %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Scheduler run completed successfully!');
+                    location.reload();
+                } else {
+                    alert('Scheduler run failed: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-play"></i> Run Now';
+            });
+    });
+</script>
+{% endblock %}
