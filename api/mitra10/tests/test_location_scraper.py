@@ -231,3 +231,48 @@ class TestMitra10LocationScraper(unittest.TestCase):
             result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
             self.assertEqual(result, ["MITRA10 RETRY"])
 
+    def test_extract_locations_popup_close_with_dialog(self):
+        """Test popup close mechanism when popup is present (lines 50-51)"""
+        mock_client = AsyncMock()
+        mock_page = MagicMock()
+        mock_client.page = mock_page
+        mock_client._ensure_browser = AsyncMock()
+        
+        # Set all Playwright async methods
+        mock_page.goto = AsyncMock()
+        mock_page.wait_for_load_state = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.wait_for_function = AsyncMock()
+        mock_page.wait_for_timeout = AsyncMock()
+        mock_page.content = AsyncMock(return_value="""
+        <div role=\"presentation\">
+            <li><span>Test Location</span></li>
+        </div>
+        """)
+        
+        # Mock locator for popup - make it count > 0 to trigger lines 50-51
+        mock_locator = MagicMock()
+        mock_locator.count = AsyncMock(return_value=1)  # Popup present
+        mock_page.locator.return_value = mock_locator
+        
+        # Mock mouse click
+        mock_mouse = MagicMock()
+        mock_mouse.click = AsyncMock()
+        mock_mouse.move = AsyncMock()
+        mock_mouse.down = AsyncMock()
+        mock_mouse.up = AsyncMock()
+        mock_page.mouse = mock_mouse
+        
+        # Mock store button
+        mock_first = MagicMock()
+        mock_first.scroll_into_view_if_needed = AsyncMock()
+        mock_first.click = AsyncMock()
+        mock_locator.first = mock_first
+        
+        with patch('api.mitra10.location_scraper.Mitra10LocationParser') as mock_parser:
+            mock_parser.parse.return_value = ["Test Location"]
+            result = asyncio.run(self.scraper._extract_locations(mock_client, self.url))
+            self.assertEqual(result, ["Test Location"])
+            # Verify popup close was attempted
+            mock_mouse.click.assert_called_once_with(100, 100)
+
