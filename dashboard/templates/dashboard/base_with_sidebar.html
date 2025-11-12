@@ -214,6 +214,13 @@
                         <span class="nav-link-text">HSPK</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'price_anomalies' %}active{% endif %}" 
+                       href="{% url 'dashboard:price_anomalies' %}">
+                        <i class="fas fa-chart-line"></i>
+                        <span class="nav-link-text">Price Anomalies</span>
+                    </a>
+                </li>
             </ul>
             
             <div class="sidebar-footer">
