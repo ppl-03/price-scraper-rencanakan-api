@@ -1,14 +1,24 @@
 from django.test import TestCase
+from django.db import connection
 from api.mitra10.table_validator import Mitra10TableValidator
 from unittest.mock import patch
 from django.conf import settings
+import unittest
 
 class TestMitra10TableValidator(TestCase):
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
+        "Test requires MySQL database"
+    )
     def test_check_table_exists(self):
         validator = Mitra10TableValidator()
         result = validator.check_table_exists()
         self.assertTrue(result)
     
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
+        "Test requires MySQL database"
+    )
     def test_get_table_schema(self):
         validator = Mitra10TableValidator()
         schema = validator.get_table_schema()
@@ -21,11 +31,19 @@ class TestMitra10TableValidator(TestCase):
         self.assertIn('created_at', schema)
         self.assertIn('updated_at', schema)
     
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
+        "Test requires MySQL database"
+    )
     def test_validate_schema(self):
         validator = Mitra10TableValidator()
         result = validator.validate_schema()
         self.assertTrue(result)
     
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
+        "Test requires MySQL database"
+    )
     def test_schema_structure(self):
         validator = Mitra10TableValidator()
         schema = validator.get_table_schema()
@@ -35,11 +53,19 @@ class TestMitra10TableValidator(TestCase):
         self.assertIn('default', schema['name'])
         self.assertIn('primary_key', schema['name'])
     
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
+        "Test requires MySQL database"
+    )
     def test_id_is_primary_key(self):
         validator = Mitra10TableValidator()
         schema = validator.get_table_schema()
         self.assertTrue(schema['id']['primary_key'])
     
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
+        "Test requires MySQL database"
+    )
     def test_required_columns_exist(self):
         validator = Mitra10TableValidator()
         schema = validator.get_table_schema()
