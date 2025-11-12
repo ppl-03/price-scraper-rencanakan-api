@@ -170,7 +170,7 @@ class BaseScheduler:
             return int(res.get('inserted', 0) or res.get('new_count', 0) or res.get('saved', 0) or 0)
         return 0
     
-    def _save_products(self, db_service, products_data, use_price_update, vendor, keyword):
+    def _save_products(self, db_service, products_data, use_price_update, vendor, keyword, vendor_result):
         """Save products to database and return count saved."""
         try:
             if use_price_update and hasattr(db_service, 'save_with_price_update'):
@@ -181,6 +181,7 @@ class BaseScheduler:
                 return self._extract_saved_count_from_regular_save(res, products_data)
         except Exception as e:
             error_msg = f'{vendor} database save failed for keyword "{keyword}": {type(e).__name__}: {str(e)}'
+            vendor_result['errors'].append(error_msg)
             logger.error(error_msg)
             return 0
     
@@ -204,7 +205,7 @@ class BaseScheduler:
         
         saved_count = 0
         if db_service and products_data:
-            saved_count = self._save_products(db_service, products_data, use_price_update, vendor, keyword)
+            saved_count = self._save_products(db_service, products_data, use_price_update, vendor, keyword, vendor_result)
         
         return products_found, saved_count
     
