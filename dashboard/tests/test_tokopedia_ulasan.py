@@ -69,7 +69,7 @@ class TokopediaFallbackTests(TestCase):
     def test_try_simple_tokopedia_url_uses_ulasan(self, mock_human_get):
         mock_human_get.return_value = '<html><body></body></html>'
         
-        products, url, html_len = views._try_simple_tokopedia_url("semen", sort_by_price=True, page=0)
+        _, _, _ = views._try_simple_tokopedia_url("semen", sort_by_price=True, page=0)
         
         mock_human_get.assert_called_once()
         called_url = mock_human_get.call_args[0][0]
@@ -79,7 +79,7 @@ class TokopediaFallbackTests(TestCase):
     def test_tokopedia_fallback_uses_updated_simple_url(self, mock_try_simple):
         mock_try_simple.return_value = ([], "https://test.com", 100)
         
-        products, url, html_len = views._tokopedia_fallback("semen", sort_by_price=True, page=0)
+        _, _, _ = views._tokopedia_fallback("semen", sort_by_price=True, page=0)
         
         mock_try_simple.assert_called_once_with("semen", True, 0)
 
@@ -89,11 +89,11 @@ class TokopediaUlasanE2ETests(TestCase):
     @patch('dashboard.views.TokopediaHttpClient')
     @patch('dashboard.views.TokopediaHtmlParser')
     def test_ulasan_scraper_full_flow(self, mock_parser_class, mock_client_class):
-        mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
+        _ = MagicMock()
+        mock_client_class.return_value = _
         
-        mock_parser = MagicMock()
-        mock_parser_class.return_value = mock_parser
+        _ = MagicMock()
+        mock_parser_class.return_value = _
         
         scraper, url_builder = views._create_tokopedia_ulasan_scraper()
         
@@ -115,12 +115,12 @@ class TokopediaUlasanE2ETests(TestCase):
             }
         ]
         
-        request = Mock()
-        keyword = "semen"
+        _ = Mock()
+        _ = "semen"
         
         results = views._run_vendor_to_prices(
-            request,
-            keyword,
+            _,
+            _,
             views._create_tokopedia_ulasan_scraper,
             views.TOKOPEDIA_SOURCE,
             fallback=views._tokopedia_fallback,
@@ -175,12 +175,12 @@ class TokopediaScraperParameterTests(TestCase):
     def test_scraper_receives_limit_parameter(self, mock_safe_scrape):
         mock_safe_scrape.return_value = MagicMock(success=True, products=[])
         
-        request = Mock()
+        _ = Mock()
         
         with patch('dashboard.views._fetch_len', return_value=1000):
             with patch('dashboard.views.messages'):
                 views._execute_vendor_scraping(
-                    request,
+                    _,
                     "semen",
                     views._create_tokopedia_ulasan_scraper,
                     views.TOKOPEDIA_SOURCE,
