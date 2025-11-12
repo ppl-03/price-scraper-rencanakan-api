@@ -212,7 +212,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             }
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.location, location_string)
@@ -227,7 +227,7 @@ class TestGemilangDatabaseService(MySQLTestCase):
             }
         ]
         service = GemilangDatabaseService()
-        success, error_msg = service.save(data)
+        success, _ = service.save(data)
         self.assertTrue(success)
         product = GemilangProduct.objects.first()
         self.assertEqual(product.location, "")

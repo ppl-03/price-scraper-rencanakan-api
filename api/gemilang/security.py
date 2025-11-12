@@ -572,7 +572,12 @@ def require_api_token(required_permission: str = None):
             pass
     """
     def decorator(view_func):
-        @csrf_exempt
+        # CSRF exemption is safe here because this API uses token-based authentication
+        # via X-API-Token header, not cookie-based sessions. CSRF attacks exploit
+        # automatic cookie submission by browsers, but API tokens must be explicitly
+        # included in request headers by the client. This is standard practice for
+        # REST APIs and recommended by OWASP for stateless authentication.
+        @csrf_exempt  # NOSONAR - Safe for token-based API authentication
         @wraps(view_func)
         def wrapped_view(request, *args, **kwargs):
             # Validate token
