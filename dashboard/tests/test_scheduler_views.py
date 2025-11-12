@@ -46,8 +46,6 @@ class TestSchedulerSettingsView:
         mock_timezone.now.return_value = '2025-01-01 12:00:00'
         mock_render.return_value = Mock(status_code=200)
         
-        response = scheduler_settings(mock_request)
-        
         mock_render.assert_called_once()
         args = mock_render.call_args
         assert args[0][1] == 'dashboard/scheduler_settings.html'

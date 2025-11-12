@@ -45,7 +45,10 @@
     
     .page-header p {
         margin: 0;
-        opacity: 0.9;
+        /* Use a near-solid white color instead of reducing opacity.
+           Reducing opacity on text lowers contrast against the background
+           gradient and can fail WCAG contrast checks. */
+        color: rgba(255, 255, 255, 0.95);
     }
         
     .server-time-card {
@@ -338,7 +341,7 @@
                                 
                                 <!-- Frequency Selection -->
                                 <div class="mb-3">
-                                    <label class="form-label">Run every</label>
+                                    <label for="customInterval" class="form-label">Run every</label>
                                     <div class="row g-2">
                                         <div class="col-md-4">
                                             <input type="number" 
@@ -372,8 +375,8 @@
                                 </div>
 
                                 <!-- Days of Week Selection (for weekly) -->
-                                <div class="mb-3" id="daysSelection" style="display: none;">
-                                    <label class="form-label">On days</label>
+                                <fieldset class="mb-3" id="daysSelection" style="display: none;">
+                                    <legend class="form-label">On days</legend>
                                     <div class="days-grid">
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="checkbox" name="custom_days" value="monday" id="day_mon">
@@ -404,7 +407,7 @@
                                             <label class="form-check-label" for="day_sun">Sun</label>
                                         </div>
                                     </div>
-                                </div>
+                                </fieldset>
 
                                 <!-- Schedule Preview -->
                                 <div class="alert alert-info" id="schedulePreview">
@@ -415,10 +418,10 @@
                         </div>
 
                         <!-- Vendor Selection -->
-                        <div class="mb-4">
-                            <label class="form-label">
+                        <fieldset class="mb-4">
+                            <legend class="form-label">
                                 <i class="bi bi-shop"></i> Select Vendors
-                            </label>
+                            </legend>
                             <div class="row">
                                 {% for vendor_key, vendor_info in available_vendors.items %}
                                 <div class="col-md-6">
@@ -438,7 +441,7 @@
                                 </div>
                                 {% endfor %}
                             </div>
-                        </div>
+                        </fieldset>
 
                         <!-- Pages Per Keyword -->
                         <div class="mb-4">
@@ -538,9 +541,9 @@
         customTime.addEventListener('change', updateSchedulePreview);
         
         // Add listeners to day checkboxes
-        document.querySelectorAll('input[name="custom_days"]').forEach(checkbox => {
+        for (const checkbox of document.querySelectorAll('input[name="custom_days"]')) {
             checkbox.addEventListener('change', updateSchedulePreview);
-        });
+        }
         
         toggleCustomSchedule(); // Initialize
 
