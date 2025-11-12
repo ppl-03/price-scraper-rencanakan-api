@@ -110,6 +110,9 @@ class GemilangDatabaseService:
         return True, ""
     
     def _sanitize_string(self, value: str) -> str:
+        """Sanitize string value, handling None values."""
+        if value is None:
+            return ""
         value = value.replace('\x00', '')
         value = value[:1000]
         return value
