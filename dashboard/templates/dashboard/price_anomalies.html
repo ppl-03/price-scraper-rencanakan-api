@@ -328,6 +328,11 @@
         color: #842029;
     }
 
+    .badge-applied {
+        background-color: #d1ecf1;
+        color: #0c5460;
+    }
+
     .anomaly-details {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -487,11 +492,32 @@
 
     .btn-review {
         background-color: #fd7e14;
-        color: Grey;
+        color: #000000;
     }
 
     .btn-review:hover {
         background-color: #e76d00;
+        color: #000000;
+    }
+
+    .btn-apply {
+        background-color: #1e7e34;
+        color: #ffffff;
+    }
+
+    .btn-apply:hover {
+        background-color: #145523;
+        color: #ffffff;
+    }
+
+    .btn-approve-apply {
+        background-color: #117a8b;
+        color: #ffffff;
+    }
+
+    .btn-approve-apply:hover {
+        background-color: #0c5460;
+        color: #ffffff;
     }
 
     .empty-state {
@@ -1015,6 +1041,46 @@
             .catch(error => console.error('Error loading anomalies:', error));
     }
 
+    function getActionButtonsForStatus(anomaly) {
+        if (anomaly.status === 'pending') {
+            return `
+                <button class="btn-action btn-approve" onclick="reviewAnomaly(${anomaly.id}, 'approved')">
+                    <i class="fas fa-check"></i> Approve
+                </button>
+                <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+                <button class="btn-action btn-approve-apply" onclick="approveAndApply(${anomaly.id})">
+                    <i class="fas fa-bolt"></i> Approve & Apply
+                </button>
+            `;
+        }
+        
+        if (anomaly.status === 'approved') {
+            return `
+                <button class="btn-action btn-apply" onclick="applyAnomaly(${anomaly.id})">
+                    <i class="fas fa-check-circle"></i> Apply Price
+                </button>
+                <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+            `;
+        }
+        
+        if (anomaly.status === 'reviewed') {
+            return `
+                <button class="btn-action btn-approve" onclick="reviewAnomaly(${anomaly.id}, 'approved')">
+                    <i class="fas fa-check"></i> Approve
+                </button>
+                <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+            `;
+        }
+        
+        return ``;
+    }
+
     function renderAnomalies(anomalies) {
         const container = document.getElementById('anomalies-list');
         
@@ -1047,10 +1113,6 @@
                     <div class="detail-item">
                         <span class="detail-label">Unit</span>
                         <span class="detail-value">${escapeHtml(anomaly.unit || 'N/A')}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Location</span>
-                        <span class="detail-value">${escapeHtml(anomaly.location || 'N/A')}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Detected</span>
@@ -1093,21 +1155,7 @@
                     <button class="btn-action btn-view" onclick="viewAnomalyDetail(${anomaly.id})">
                         <i class="fas fa-eye"></i> View Detail
                     </button>
-                    ${anomaly.status === 'pending' ? `
-                        <button class="btn-action btn-approve" onclick="reviewAnomaly(${anomaly.id}, 'approved')">
-                            <i class="fas fa-check"></i> Approve
-                        </button>
-                        <button class="btn-action btn-reject" onclick="reviewAnomaly(${anomaly.id}, 'rejected')">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                        <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
-                            <i class="fas fa-edit"></i> Review
-                        </button>
-                    ` : `
-                        <button class="btn-action btn-review" onclick="openReviewModal(${anomaly.id})">
-                            <i class="fas fa-edit"></i> Edit Notes
-                        </button>
-                    `}
+                    ${getActionButtonsForStatus(anomaly)}
                 </div>
             </div>
         `).join('');
@@ -1251,6 +1299,62 @@
         });
     }
 
+    function applyAnomaly(anomalyId) {
+        if (!confirm('Are you sure you want to apply this price change to the product database?')) {
+            return;
+        }
+
+        fetch(`/api/pricing/anomalies/${anomalyId}/apply/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Price applied successfully!');
+                loadAnomalies(currentPage);
+                loadStatistics();
+            } else {
+                alert('Error: ' + (data.message || data.error || 'Failed to apply price'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error applying anomaly');
+        });
+    }
+
+    function approveAndApply(anomalyId) {
+        if (!confirm('Are you sure you want to approve and immediately apply this price change?')) {
+            return;
+        }
+
+        fetch(`/api/pricing/anomalies/${anomalyId}/approve-and-apply/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Anomaly approved and price applied successfully!');
+                loadAnomalies(currentPage);
+                loadStatistics();
+            } else {
+                alert('Error: ' + (data.message || data.error || 'Failed to approve and apply'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error approving and applying anomaly');
+        });
+    }
+
     function formatPrice(price) {
         return new Intl.NumberFormat('id-ID').format(price);
     }
@@ -1271,7 +1375,8 @@
             'pending': 'Pending Review',
             'reviewed': 'Reviewed',
             'approved': 'Approved',
-            'rejected': 'Rejected'
+            'rejected': 'Rejected',
+            'applied': 'Applied'
         };
         return statuses[status] || status;
     }

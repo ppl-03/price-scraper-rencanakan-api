@@ -40,7 +40,8 @@ class TestDepoBangunanLocationParser(TestCase):
         
         # Check first location
         location1 = locations[0]
-        self.assertIn("Depo Bangunan", location1.name)
+        # Location names should NOT contain "Depo Bangunan" prefix
+        self.assertNotIn("Depo Bangunan -", location1.name)
         self.assertIsNotNone(location1.code)
         self.assertGreater(len(location1.code), 0)
 
@@ -92,7 +93,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_with_whitespace)
         if len(locations) > 0:
-            self.assertEqual(locations[0].name, "Depo Bangunan - Test Store")
+            self.assertEqual(locations[0].name, "Test Store")
 
     def test_extract_address_with_alamat_prefix(self):
         """Test address extraction handles 'Alamat:' prefix"""
@@ -138,7 +139,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_special_chars)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].name, "Depo Bangunan - Store & Co.")
+        self.assertEqual(locations[0].name, "Store & Co.")
         self.assertIn("123/A-B", locations[0].code)
 
     def test_parse_locations_with_nested_elements(self):
@@ -169,9 +170,9 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_multiple)
         self.assertEqual(len(locations), 3)
-        self.assertEqual(locations[0].name, "Depo Bangunan - Store A")
-        self.assertEqual(locations[1].name, "Depo Bangunan - Store B")
-        self.assertEqual(locations[2].name, "Depo Bangunan - Store C")
+        self.assertEqual(locations[0].name, "Store A")
+        self.assertEqual(locations[1].name, "Store B")
+        self.assertEqual(locations[2].name, "Store C")
 
     def test_parse_locations_with_unicode_characters(self):
         """Test parser handles Unicode characters"""
@@ -221,7 +222,7 @@ class TestDepoBangunanLocationParser(TestCase):
         locations = self.parser.parse_locations(html_wrong_case)
         # Should only match exact case "Depo Bangunan -"
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].name, "Depo Bangunan - Correct Case")
+        self.assertEqual(locations[0].name, "Correct Case")
 
     def test_parse_locations_with_html_entities(self):
         """Test parser handles HTML entities"""
@@ -252,7 +253,7 @@ class TestDepoBangunanLocationParser(TestCase):
         """
         locations = self.parser.parse_locations(html_mixed)
         self.assertEqual(len(locations), 1)
-        self.assertEqual(locations[0].name, "Depo Bangunan - Valid Store")
+        self.assertEqual(locations[0].name, "Valid Store")
 
     def test_parse_large_number_of_locations(self):
         """Test parser can handle many locations"""
@@ -299,10 +300,15 @@ class TestDepoBangunanLocationParser(TestCase):
             self.assertNotIn("Jadwal Buka", locations[0].code)
 
     def test_text_cleaner_clean_store_name_prefix(self):
-        # name without 'depo bangunan' should get prefix
-        raw = 'Super Supplier'
+        # name with 'Depo Bangunan -' prefix should have it removed
+        raw = 'Depo Bangunan - Super Supplier'
         cleaned = TextCleaner.clean_store_name(raw)
-        self.assertTrue(cleaned.startswith('DEPO BANGUNAN -'))
+        self.assertEqual(cleaned, 'Super Supplier')
+        
+        # name without 'Depo Bangunan -' should remain as is (just stripped)
+        raw2 = 'Super Supplier'
+        cleaned2 = TextCleaner.clean_store_name(raw2)
+        self.assertEqual(cleaned2, 'Super Supplier')
 
     def test_html_element_extractor_extract_store_name_exception(self):
         # Header object whose get_text raises exception
