@@ -1,5 +1,6 @@
 from django.db import connection, transaction
 from django.utils import timezone
+from db_pricing.anomaly_service import PriceAnomalyService
 
 class JuraganMaterialDatabaseService:
     def _validate_dict_item(self, item):
@@ -105,6 +106,17 @@ class JuraganMaterialDatabaseService:
             return self._create_anomaly_object(item, existing_price, new_price, price_diff_pct)
         return None
 
+    def _save_detected_anomalies(self, anomalies):
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('juragan_material', anomalies)
+        if not anomaly_result['success']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
         new_price = item["price"] if isinstance(item, dict) else item.price
         if existing_price != new_price:
@@ -120,7 +132,7 @@ class JuraganMaterialDatabaseService:
 
     def _insert_new_product(self, cursor, item, now):
         cursor.execute(
-            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s. %s, %s, %s)",
+            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
             self._create_product_params(item, now)
         )
         return 1
@@ -158,6 +170,9 @@ class JuraganMaterialDatabaseService:
                     updated, inserted = self._process_single_item(cursor, item, now, anomalies)
                     updated_count += updated
                     inserted_count += inserted
+
+        # Save anomalies to database for review
+        self._save_detected_anomalies(anomalies)
 
         return {
             "success": True,

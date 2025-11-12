@@ -5,6 +5,7 @@ import logging
 
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
+from db_pricing.auto_categorization_service import AutoCategorizationService
 from .security import (
     require_api_token,
     validate_input,
@@ -292,5 +293,5 @@ def scrape_and_save(request):
     except Exception as e:
         logger.error(f"Unexpected error in scrape_and_save: {type(e).__name__}")
         return JsonResponse({
-            'error': 'Internal server error occurred'
+            'error': f'Internal server error: {str(e)}'
         }, status=500)
