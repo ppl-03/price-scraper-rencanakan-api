@@ -252,6 +252,41 @@ def _handle_regular_save(db_service, products_data):
 @require_http_methods(["POST"])
 @require_api_token(required_permission='write')
 @enforce_resource_limits
+def _fetch_store_locations():
+    """Helper to fetch and process store locations"""
+    location_scraper = create_gemilang_location_scraper()
+    location_result = location_scraper.scrape_locations(timeout=30)
+    
+    logger.info(f"Location scraping result - Success: {location_result.success}, Locations count: {len(location_result.locations) if location_result.locations else 0}")
+    
+    if not location_result.success:
+        logger.error(f"Location scraping failed with error: {location_result.error_message}")
+        return ""
+    
+    if not location_result.locations:
+        logger.warning("No locations found, will save without locations")
+        return ""
+    
+    store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
+    logger.info(f"Found {len(store_locations)} Gemilang store locations: {store_locations[:3]}")
+    
+    all_stores_location = ", ".join(store_locations)
+    logger.info(f"Final location string length: {len(all_stores_location)}, Preview: {all_stores_location[:200]}")
+    
+    return all_stores_location
+
+
+def _categorize_products(products_data):
+    """Helper to categorize products"""
+    from db_pricing.categorization import ProductCategorizer
+    categorizer = ProductCategorizer()
+    
+    for product in products_data:
+        category = categorizer.categorize(product['name'])
+        product['category'] = category if category else ''
+        logger.info(f"Categorized '{product['name']}' as '{category}'")
+
+
 def scrape_and_save(request):
     try:
         body, error_response = _parse_request_body(request)
@@ -262,22 +297,7 @@ def scrape_and_save(request):
         if error_response:
             return error_response
         
-        location_scraper = create_gemilang_location_scraper()
-        location_result = location_scraper.scrape_locations(timeout=30)
-        
-        logger.info(f"Location scraping result - Success: {location_result.success}, Locations count: {len(location_result.locations) if location_result.locations else 0}")
-        if not location_result.success:
-            logger.error(f"Location scraping failed with error: {location_result.error_message}")
-        
-        store_locations = []
-        if location_result.success and location_result.locations:
-            store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
-            logger.info(f"Found {len(store_locations)} Gemilang store locations: {store_locations[:3]}")  # Log first 3 locations
-        else:
-            logger.warning(f"Could not fetch store locations - Success: {location_result.success}, Has locations: {bool(location_result.locations)}, will save without locations")
-        
-        all_stores_location = ", ".join(store_locations) if store_locations else ""
-        logger.info(f"Final location string length: {len(all_stores_location)}, Preview: {all_stores_location[:200]}")
+        all_stores_location = _fetch_store_locations()
         
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
@@ -323,20 +343,14 @@ def scrape_and_save(request):
         if error_response:
             return error_response
         
-        # Categorize products before saving
-        from db_pricing.categorization import ProductCategorizer
-        categorizer = ProductCategorizer()
-        for product in products_data:
-            category = categorizer.categorize(product['name'])
-            product['category'] = category if category else ''
-            logger.info(f"Categorized '{product['name']}' as '{category}'")
+        _categorize_products(products_data)
         
         db_service = GemilangDatabaseService()
         
         if params['use_price_update']:
             return _handle_price_update_save(db_service, products_data)
-        else:
-            return _handle_regular_save(db_service, products_data)
+        
+        return _handle_regular_save(db_service, products_data)
         
     except Exception as e:
         logger.error(f"Unexpected error in scrape_and_save: {type(e).__name__}")
