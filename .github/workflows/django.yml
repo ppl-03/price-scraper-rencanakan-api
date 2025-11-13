@@ -88,6 +88,7 @@ jobs:
           python -m coverage run --source='.' manage.py test api db_pricing.tests.test_connection_checker db_pricing.tests.test_status_api security --verbosity=2 --keepdb
           python -m coverage report
           python -m coverage xml
+          python -m coverage json
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
@@ -96,3 +97,7 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
+
+      - name: Update Coverage Badge
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: we-cli/coverage-badge-action@main
