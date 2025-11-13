@@ -85,9 +85,9 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          coverage run --source='.' manage.py test api dashboard --verbosity=2 --keepdb
-          coverage report
-          coverage xml
+          python -m coverage run --source='.' manage.py test api db_pricing.tests.test_connection_checker db_pricing.tests.test_status_api security --verbosity=2 --keepdb
+          python -m coverage report
+          python -m coverage xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
