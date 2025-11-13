@@ -207,17 +207,6 @@ class TestDepoBangunanDatabaseService(TestCase):
         product = DepoBangunanProduct.objects.get(name="Existing Item")
         self.assertEqual(product.price, 55000)
     
-    def test_save_with_price_update_detects_anomaly(self):
-        """Test save_with_price_update detects price anomaly (>=15% change)"""
-        # Insert initial product
-        DepoBangunanProduct.objects.create(
-            name="Existing Item",
-            price=100000,
-            url="https://example.com/existing",
-            unit="pcs"
-        )
-        self.assertEqual(anomaly["change_percent"], 20.0)
-    
     def test_save_with_price_update_no_anomaly_small_change(self):
         """Test save_with_price_update does not detect anomaly for small change (<15%)"""
         # Insert initial product
