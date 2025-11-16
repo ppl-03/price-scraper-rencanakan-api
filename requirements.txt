@@ -23,3 +23,6 @@ typing_extensions==4.15.0
 urllib3==2.5.0
 wheel==0.45.1
 whitenoise==6.11.0
+pytest==9.0.1
+pytest-django==4.11.1
+pytest-env==1.1.5
