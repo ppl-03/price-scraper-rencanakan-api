@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.core.paginator import Paginator
 from django.db.models import Q
 from db_pricing.utils import check_database_connection, check_gemilang_table_exists
@@ -45,6 +45,7 @@ def check_database_status(request):
 
 # ==================== PRICE ANOMALY VIEWS ====================
 
+@ensure_csrf_cookie
 @require_http_methods(["GET"])
 def list_price_anomalies(request):
     """
