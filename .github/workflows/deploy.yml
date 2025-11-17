@@ -1,0 +1,38 @@
+name: CD
+on:
+  workflow_run:
+    workflows: ["Django Tests"]
+    types:
+      - completed
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'development' || github.event.workflow_run.head_branch == 'staging' || github.event.workflow_run.head_branch == 'main') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set environment variables
+        id: set-vars
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          if [ "$BRANCH" = "development" ]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-development" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-dev.service" >> $GITHUB_ENV
+          elif [ "$BRANCH" = "staging" ]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-staging" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-staging.service" >> $GITHUB_ENV
+          elif [ "$BRANCH" = "main" ]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-production" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-prod.service" >> $GITHUB_ENV
+          fi
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd $DEPLOY_DIR
+            git pull origin ${{ github.event.workflow_run.head_branch }}
+            pip install -r requirements.txt
+            sudo systemctl restart $SERVICE_NAME
