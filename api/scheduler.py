@@ -340,8 +340,8 @@ class BaseScheduler:
         
         for vendor in vendors:
             self._process_single_vendor(
-                vendor=vendor, server_time=server_time, summary=summary,
-                use_price_update=use_price_update, 
+                vendor=vendor, summary=summary,
+                use_price_update=use_price_update,
                 max_products_per_keyword=max_products_per_keyword,
                 search_keyword=search_keyword
             )
