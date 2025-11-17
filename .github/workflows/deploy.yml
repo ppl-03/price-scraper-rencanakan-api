@@ -2,17 +2,23 @@ name: CD
 on:
   workflow_run:
     workflows: ["Django Tests"]
-    types:
-      - completed
+    types: [completed]
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'development' || github.event.workflow_run.head_branch == 'staging' || github.event.workflow_run.head_branch == 'main') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' &&
+            (github.event.workflow_run.head_branch == 'development' ||
+             github.event.workflow_run.head_branch == 'staging' ||
+             github.event.workflow_run.head_branch == 'main') }}
+
     runs-on: ubuntu-latest
 
     steps:
       - name: Set safe branch variable
-        run: echo "SAFE_BRANCH=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_ENV
+        env:
+          SAFE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          echo "SAFE_BRANCH=$SAFE_BRANCH" >> $GITHUB_ENV
 
       - name: Set environment variables (validated)
         run: |
@@ -40,6 +46,10 @@ jobs:
 
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6 # v0.1.10
+        env:
+          DEPLOY_DIR: ${{ env.DEPLOY_DIR }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          SAFE_BRANCH: ${{ env.SAFE_BRANCH }}
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
