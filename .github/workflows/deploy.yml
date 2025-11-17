@@ -4,16 +4,19 @@ on:
     workflows: ["Django Tests"]
     types:
       - completed
+
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'development' || github.event.workflow_run.head_branch == 'staging' || github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
+
     steps:
-      - name: Set environment variables
-        id: set-vars
+      - name: Set safe branch variable
+        run: echo "SAFE_BRANCH=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_ENV
+
+      - name: Set environment variables (validated)
         run: |
-          # Only allow known branch names to prevent command injection
-          case "${{ github.event.workflow_run.head_branch }}" in
+          case "$SAFE_BRANCH" in
             development)
               echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-development" >> $GITHUB_ENV
               echo "SERVICE_NAME=price-scraper-rencanakan-api-dev.service" >> $GITHUB_ENV
@@ -27,12 +30,14 @@ jobs:
               echo "SERVICE_NAME=price-scraper-rencanakan-api-prod.service" >> $GITHUB_ENV
               ;;
             *)
-              echo "Invalid branch name. Exiting." >&2
+              echo "Invalid branch name" >&2
               exit 1
               ;;
           esac
+
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6 # v0.1.10
         with:
@@ -40,16 +45,15 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            # Only allow git pull for known branches
-            case "${{ github.event.workflow_run.head_branch }}" in
+            case "$SAFE_BRANCH" in
               development|staging|main)
-                cd $DEPLOY_DIR
-                git pull origin "${{ github.event.workflow_run.head_branch }}"
+                cd "$DEPLOY_DIR"
+                git pull origin "$SAFE_BRANCH"
                 pip install -r requirements.txt
-                sudo systemctl restart $SERVICE_NAME
+                sudo systemctl restart "$SERVICE_NAME"
                 ;;
               *)
-                echo "Invalid branch name for deployment. Exiting." >&2
+                echo "Invalid branch name" >&2
                 exit 1
                 ;;
             esac
