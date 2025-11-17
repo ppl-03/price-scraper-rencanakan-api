@@ -118,20 +118,21 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.mysql',
             'NAME': db_name,
-            "USER": db_user,
-            "PASSWORD": db_password,
-            "HOST": db_host,
-            "PORT": db_port,
-            # good defaults for emoji / wide characters & stable time behavior
-            "OPTIONS": {
-                "charset": "utf8mb4",
-                "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone = '+00:00'",
+            'USER': db_user,
+            'PASSWORD': db_password,
+            'HOST': db_host,
+            'PORT': db_port,
+            'OPTIONS': {
+                'ssl': {
+                    'ssl': True,
+                    'ssl_mode': 'REQUIRED',
+                },
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'charset': 'utf8mb4',
             },
             'TEST': {
-                'NAME': test_db_name,  # Use test database with proper naming
-                'CHARSET': 'utf8mb4',
-                'COLLATION': 'utf8mb4_unicode_ci',
-            },
+                'NAME': test_db_name,
+            }
         }
     }
 
