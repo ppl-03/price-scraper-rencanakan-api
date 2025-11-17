@@ -15,21 +15,6 @@ from api.tokopedia.scheduler import TokopediaScheduler
 
 logger = logging.getLogger(__name__)
 
-# Store scheduler configuration (in production, use database)
-# scheduler_config = {
-#     'enabled': False,
-#     'schedule_type': 'disabled',  # disabled, hourly, daily, weekly, custom
-#     'custom_interval': 1,
-#     'custom_unit': 'days',
-#     'custom_time': '00:00',
-#     'custom_days': [],
-#     'vendors': ['gemilang', 'depobangunan', 'juragan_material', 'mitra10', 'tokopedia'],
-#     # 'pages_per_keyword': 1,
-#     'search_keyword':'',
-#     'last_run': None,
-#     'next_run': None
-# }
-# Path untuk file config
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'scheduler_config.json')
 
 def load_scheduler_config():
@@ -149,75 +134,6 @@ def scheduler_settings(request):
     }
     return render(request, 'dashboard/scheduler_settings.html', context)
 
-# @require_POST
-# def update_schedule(request):
-#     """Update scheduler configuration"""
-#     try:
-#         schedule_type = request.POST.get('schedule_type', 'disabled')
-        
-#         # Validate schedule type
-#         valid_types = ['disabled', 'hourly', 'daily', 'weekly', 'custom']
-#         if schedule_type not in valid_types:
-#             messages.error(request, f'Invalid schedule type: {schedule_type}')
-#             return redirect('dashboard:scheduler_settings')
-        
-#         # Update configuration
-#         scheduler_config['schedule_type'] = schedule_type
-#         scheduler_config['enabled'] = schedule_type != 'disabled'
-#         search_keyword = request.POST.get('search_keyword')  # Tambahkan ini
-#         print("SEARCH KEYWORDD:", search_keyword)
-
-        
-#         # Update custom schedule settings if provided
-#         if schedule_type == 'custom':
-#             try:
-#                 interval = int(request.POST.get('custom_interval', 1))
-#                 scheduler_config['custom_interval'] = max(1, interval)
-#             except ValueError:
-#                 scheduler_config['custom_interval'] = 1
-            
-#             scheduler_config['custom_unit'] = request.POST.get('custom_unit', 'days')
-#             scheduler_config['custom_time'] = request.POST.get('custom_time', '00:00')
-#             scheduler_config['custom_days'] = request.POST.getlist('custom_days')
-        
-#         # Update vendor selection
-#         selected_vendors = request.POST.getlist('vendors')
-#         if selected_vendors:
-#             scheduler_config['vendors'] = selected_vendors
-        
-#         # Update pages per keyword
-#         # try:
-#         #     pages = int(request.POST.get('pages_per_keyword', 1))
-#         #     scheduler_config['pages_per_keyword'] = max(1, pages)
-#         # except ValueError:
-#         #     scheduler_config['pages_per_keyword'] = 1
-        
-#         # Update search keyword
-#         scheduler_config['search_keyword'] = search_keyword  # Simpan keyword
-
-#         # Create human-readable message
-#         if schedule_type == 'custom':
-#             interval = scheduler_config['custom_interval']
-#             unit = scheduler_config['custom_unit']
-#             time = scheduler_config['custom_time']
-#             schedule_msg = f'Custom: Every {interval} {unit}'
-#             if unit in ['days', 'weeks']:
-#                 schedule_msg += f' at {time}'
-#         else:
-#             schedule_msg = schedule_type.title()
-        
-#         messages.success(
-#             request, 
-#             f'Scheduler updated to: {schedule_msg}'
-#         )
-#         logger.info(f'Scheduler configuration updated: {scheduler_config}')
-        
-#     except Exception as e:
-#         messages.error(request, f'Failed to update scheduler: {str(e)}')
-#         logger.error(f'Scheduler update error: {e}', exc_info=True)
-    
-#     return redirect('dashboard:scheduler_settings')
-
 @require_POST
 def update_schedule(request):
     """Update scheduler configuration"""
@@ -262,12 +178,8 @@ def run_scheduler_now(request):
         formdata = request.POST.dict()
         vendors = request.POST.getlist('vendors')
         keyword = formdata.get('search_keyword')
-        # print("KEYWORDDD:", keyword)
-        # Set 1 as default for pages
-        # pages=1
         results = {}
         for vendor_key in vendors:
-            # print("VENDOR KEY:", vendor_key)
             vendor_info = AVAILABLE_VENDORS.get(vendor_key)
             if not vendor_info:
                 continue
@@ -280,7 +192,6 @@ def run_scheduler_now(request):
                 summary = scheduler.run(
                     server_time=timezone.now(),
                     vendors=[vendor_key],
-                    # pages_per_keyword=pages,
                     search_keyword=keyword
                 )
                 
@@ -315,18 +226,6 @@ def run_scheduler_now(request):
             'success': False,
             'error': str(e)
         }, status=500)
-
-# @require_GET
-# def get_scheduler_status(request):
-#     """Get current scheduler status"""
-#     return JsonResponse({
-#         'enabled': scheduler_config['enabled'],
-#         'schedule_type': scheduler_config['schedule_type'],
-#         'vendors': scheduler_config['vendors'],
-#         'last_run': scheduler_config.get('last_run'),
-#         'next_run': scheduler_config.get('next_run'),
-#         'server_time': timezone.now().isoformat()
-#     })
 
 @require_GET
 def get_scheduler_status(request):

@@ -8,7 +8,6 @@ class JuraganMaterialScheduler(BaseScheduler):
             server_time=server_time,
             vendors=vendors,
             search_keyword=search_keyword,
-            # pages_per_keyword=pages_per_keyword,
             use_price_update=use_price_update,
             max_products_per_keyword=max_products_per_keyword,
             expected_start_time=expected_start_time

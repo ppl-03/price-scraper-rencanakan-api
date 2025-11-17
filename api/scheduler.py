@@ -287,19 +287,13 @@ class BaseScheduler:
             vendor_result['status'] = 'success'
             summary['successful_vendors'] += 1
     
-    def _process_single_vendor(self, vendor, server_time, summary,use_price_update, max_products_per_keyword, search_keyword=None):
+    def _process_single_vendor(self, vendor, summary,use_price_update, max_products_per_keyword, search_keyword=None):
         """Process scraping for a single vendor."""
         vendor_start = time.time()
         vendor_result = self._initialize_vendor_result()
         
         try:
-            # cats = self.get_categories(vendor, server_time)
-            # if not cats:
-            #     self._handle_no_categories(vendor, vendor_result, summary)
-            #     return
-            
-            # vendor_result['keywords'] = len(cats)
-            pages_per_keyword = 1  # Could be parameterized if needed
+            pages_per_keyword = 1  
             
             
             try:

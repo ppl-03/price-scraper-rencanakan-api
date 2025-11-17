@@ -7,7 +7,6 @@ class TokopediaScheduler(BaseScheduler):
         return super().run(
             server_time=server_time,
             vendors=vendors,
-            # pages_per_keyword=pages_per_keyword,
             search_keyword=search_keyword,
             use_price_update=use_price_update,
             max_products_per_keyword=max_products_per_keyword,
