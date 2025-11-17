@@ -1,34 +1,52 @@
 from django.db import connection, transaction
 from django.utils import timezone
 from db_pricing.anomaly_service import PriceAnomalyService
+import logging
+logger = logging.getLogger(__name__)
 
 
 class TokopediaDatabaseService:
     def _validate_data(self, data):
-        """
-        Validate input data before database operations.
-        Prevents malicious data from reaching SQL queries.
-        """
+        """Validate input data before database operations."""
         if not data:
+            logger.warning("No data to validate")
             return False
         
         for item in data:
             # Check required fields
-            if not all(k in item for k in ("name", "price", "url", "unit", "location")):
+            required_keys = ("name", "price", "url")
+            if not all(k in item for k in required_keys):
+                missing = [k for k in required_keys if k not in item]
+                logger.warning(f"Missing required keys: {missing}")
                 return False
             
-            # Validate price is non-negative integer
+            # Validate price
             if not isinstance(item["price"], int) or item["price"] < 0:
+                logger.warning(f"Invalid price: {item.get('price')}")
                 return False
             
-            # Validate types to prevent injection through type coercion
+            # Validate types
             if not isinstance(item["name"], str):
+                logger.warning(f"Invalid name type: {type(item['name'])}")
                 return False
             if not isinstance(item["url"], str):
+                logger.warning(f"Invalid url type: {type(item['url'])}")
                 return False
+            
+            # ✅ FIX: Convert None to empty string for optional fields
+            if item.get("unit") is None:
+                item["unit"] = ''
+            if item.get("location") is None:
+                item["location"] = ''
+            if item.get("category") is None:
+                item["category"] = ''
+            
+            # Now validate types after conversion
             if not isinstance(item["unit"], str):
+                logger.warning(f"Invalid unit type: {type(item['unit'])}")
                 return False
             if not isinstance(item["location"], str):
+                logger.warning(f"Invalid location type: {type(item['location'])}")
                 return False
         
         return True
