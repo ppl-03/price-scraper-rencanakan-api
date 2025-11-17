@@ -340,6 +340,104 @@ class TestLoggerGuards(unittest.TestCase):
             mock_logger.info.assert_called()
 
 
+class TestEdgeCaseCoverage(unittest.TestCase):
+    """Test edge cases to achieve 100% coverage"""
+    
+    def setUp(self):
+        self.parser = GemilangUnitParser()
+    
+    def test_extract_specifications_with_attributeerror_in_span(self):
+        """Test AttributeError handling in span extraction (line 326)"""
+        from api.gemilang.unit_parser import SpecificationFinder
+        from bs4 import BeautifulSoup
+        import logging
+        
+        finder = SpecificationFinder()
+        html = '<div><span>ukuran: 5 kg</span><span>test</span></div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Set logger to DEBUG level to trigger the isEnabledFor check
+        original_level = logging.getLogger('api.gemilang.unit_parser').level
+        logging.getLogger('api.gemilang.unit_parser').setLevel(logging.DEBUG)
+        
+        try:
+            # Mock one span to raise AttributeError
+            spans = soup.find_all('span')
+            if len(spans) > 0:
+                with patch.object(spans[0], 'get_text', side_effect=AttributeError("Test error")):
+                    # Should handle the error gracefully and log at DEBUG level
+                    specs = finder._extract_from_spans(soup)
+                    # Should return list (may be empty or have other spans)
+                    self.assertIsInstance(specs, list)
+        finally:
+            logging.getLogger('api.gemilang.unit_parser').setLevel(original_level)
+    
+    def test_extract_specifications_with_attributeerror_in_div(self):
+        """Test AttributeError handling in div extraction (line 347)"""
+        from api.gemilang.unit_parser import SpecificationFinder
+        from bs4 import BeautifulSoup
+        import logging
+        
+        finder = SpecificationFinder()
+        html = '<div class="spec-detail">Dimensi: 10x20</div><div class="spec-info">test</div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Set logger to DEBUG level to trigger the isEnabledFor check
+        original_level = logging.getLogger('api.gemilang.unit_parser').level
+        logging.getLogger('api.gemilang.unit_parser').setLevel(logging.DEBUG)
+        
+        try:
+            # Mock one div to raise AttributeError
+            divs = soup.find_all('div')
+            if len(divs) > 0:
+                with patch.object(divs[0], 'get_text', side_effect=AttributeError("Test error")):
+                    # Should handle the error gracefully and log at DEBUG level
+                    specs = finder._extract_from_divs(soup)
+                    # Should return list (may be empty or have other divs)
+                    self.assertIsInstance(specs, list)
+        finally:
+            logging.getLogger('api.gemilang.unit_parser').setLevel(original_level)
+    
+    def test_extract_specifications_from_element_with_exception(self):
+        """Test exception handling in _extract_specifications_from_element (line 440)"""
+        import logging
+        
+        html = '<div class="item"><span>Test: 5 kg</span></div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        element = soup.find('div')
+        
+        # Set logger to DEBUG level to trigger the isEnabledFor check
+        original_level = logging.getLogger('api.gemilang.unit_parser').level
+        logging.getLogger('api.gemilang.unit_parser').setLevel(logging.DEBUG)
+        
+        try:
+            # Mock find_all to raise an exception
+            with patch.object(element, 'find_all', side_effect=Exception("Test error")):
+                specs = self.parser._extract_specifications_from_element(element)
+                # Should return empty list on exception
+                self.assertEqual(specs, [])
+        finally:
+            logging.getLogger('api.gemilang.unit_parser').setLevel(original_level)
+    
+    def test_extract_units_from_specifications_with_exception(self):
+        """Test exception handling in _extract_units_from_specifications (line 489)"""
+        import logging
+        
+        # Set logger to DEBUG level to trigger the isEnabledFor check
+        original_level = logging.getLogger('api.gemilang.unit_parser').level
+        logging.getLogger('api.gemilang.unit_parser').setLevel(logging.DEBUG)
+        
+        try:
+            # Mock extractor to raise exception
+            with patch.object(self.parser.extractor, 'extract_unit', side_effect=Exception("Test error")):
+                specifications = ['Berat: 5 kg', 'Volume: 10 liter']
+                found_units = self.parser._extract_units_from_specifications(specifications)
+                # Should return empty list when all extractions fail
+                self.assertEqual(found_units, [])
+        finally:
+            logging.getLogger('api.gemilang.unit_parser').setLevel(original_level)
+
+
 class TestRegexCacheOptimization(unittest.TestCase):
     """Test pre-compiled regex pattern optimization"""
     
