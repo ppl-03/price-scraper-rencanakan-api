@@ -211,13 +211,14 @@ def run_scheduler_now(request):
                 }
                 logger.error(f'Error running scheduler for {vendor_key}: {e}')
         
-        formdata['last_run'] = timezone.now().isoformat()
+        last_run_time = timezone.now().isoformat()
+        scheduler_config['last_run'] = last_run_time
         
         messages.success(request, 'Scheduler run completed')
         return JsonResponse({
             'success': True,
             'results': results,
-            'timestamp': formdata['last_run']
+            'timestamp': last_run_time
         })
         
     except Exception as e:

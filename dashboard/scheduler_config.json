@@ -1,14 +1,14 @@
 {
-    "enabled": false,
-    "schedule_type": "disabled",
+    "enabled": true,
+    "schedule_type": "hourly",
     "custom_interval": "1",
     "custom_unit": "minutes",
     "custom_time": "00:00",
     "custom_days": [],
     "vendors": [
-        "juragan_material"
+        "gemilang"
     ],
-    "search_keyword": "Batu",
-    "last_run": "2025-11-16T16:30:36.509068+00:00",
+    "search_keyword": "cat",
+    "last_run": "2025-01-01T12:00:00",
     "next_run": null
 }
