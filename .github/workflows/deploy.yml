@@ -12,17 +12,25 @@ jobs:
       - name: Set environment variables
         id: set-vars
         run: |
-          BRANCH="${{ github.event.workflow_run.head_branch }}"
-          if [ "$BRANCH" = "development" ]; then
-            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-development" >> $GITHUB_ENV
-            echo "SERVICE_NAME=price-scraper-rencanakan-api-dev.service" >> $GITHUB_ENV
-          elif [ "$BRANCH" = "staging" ]; then
-            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-staging" >> $GITHUB_ENV
-            echo "SERVICE_NAME=price-scraper-rencanakan-api-staging.service" >> $GITHUB_ENV
-          elif [ "$BRANCH" = "main" ]; then
-            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-production" >> $GITHUB_ENV
-            echo "SERVICE_NAME=price-scraper-rencanakan-api-prod.service" >> $GITHUB_ENV
-          fi
+          # Only allow known branch names to prevent command injection
+          case "${{ github.event.workflow_run.head_branch }}" in
+            development)
+              echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-development" >> $GITHUB_ENV
+              echo "SERVICE_NAME=price-scraper-rencanakan-api-dev.service" >> $GITHUB_ENV
+              ;;
+            staging)
+              echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-staging" >> $GITHUB_ENV
+              echo "SERVICE_NAME=price-scraper-rencanakan-api-staging.service" >> $GITHUB_ENV
+              ;;
+            main)
+              echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-production" >> $GITHUB_ENV
+              echo "SERVICE_NAME=price-scraper-rencanakan-api-prod.service" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "Invalid branch name. Exiting." >&2
+              exit 1
+              ;;
+          esac
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Deploy to Azure VM
@@ -32,7 +40,16 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            cd $DEPLOY_DIR
-            git pull origin ${{ github.event.workflow_run.head_branch }}
-            pip install -r requirements.txt
-            sudo systemctl restart $SERVICE_NAME
+            # Only allow git pull for known branches
+            case "${{ github.event.workflow_run.head_branch }}" in
+              development|staging|main)
+                cd $DEPLOY_DIR
+                git pull origin "${{ github.event.workflow_run.head_branch }}"
+                pip install -r requirements.txt
+                sudo systemctl restart $SERVICE_NAME
+                ;;
+              *)
+                echo "Invalid branch name for deployment. Exiting." >&2
+                exit 1
+                ;;
+            esac
