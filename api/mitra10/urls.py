@@ -5,4 +5,7 @@ app_name = 'mitra10'
 
 urlpatterns = [
     path('scrape/', views.scrape_products, name='scrape_products'),
+    path('scrape-popularity/', views.scrape_popularity, name='scrape_popularity'),
+    path('scrape-and-save/', views.scrape_and_save_products, name='scrape_and_save_products'),
+    path('locations/', views.scrape_locations, name='scrape_locations'),
 ]

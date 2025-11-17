@@ -1,12 +1,14 @@
-<!doctype html>
-<html lang="id">
-<head>
-  <meta charset="utf-8">
-  <title>Harga Satuan – Rencanakan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  {% load static %}
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
+{% extends 'dashboard/base_with_sidebar.html' %}
+
+{% block title %}Harga Satuan – Rencanakan{% endblock %}
+
+{% block extra_css %}
+{% load static %}
+<style>
+    /* Right-align price column */
+    .price-align-right, .c-price {
+      text-align: right !important;
+    }
     body { background:#f7f9fb; font-family: Arial, sans-serif; color:#333; }
 
     /* Top bar with only the logo + avatar */
@@ -17,6 +19,9 @@
 
     .content-wrapper{ margin-top:24px; }
     .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+
+    /* Results card minimum height for consistency */
+    #resultsCard { min-height: 600px; }
 
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
@@ -55,6 +60,101 @@
     .controls { gap:8px; }
     .controls .form-control, .controls .form-select { background:#fff; }
 
+    /* Location badge styling */
+    .location-badge { 
+      transition: all 0.2s ease;
+      border: 1px solid #dee2e6 !important;
+    }
+    .location-badge:hover {
+      background: #e3f2fd !important;
+      border-color: #2196f3 !important;
+      transform: translateY(-1px);
+    }
+
+    /* Better optgroup styling */
+    optgroup {
+      font-weight: 600;
+      color: #495057;
+      background: #f8f9fa;
+    }
+    
+    /* Custom dropdown styling */
+    .dropdown-header {
+      color: #495057;
+      font-weight: 600;
+      font-size: 0.875rem;
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      margin-bottom: 0.25rem;
+    }
+    
+    /* Vendor collapsible header styling */
+    .vendor-toggle {
+      background: #f8f9fa;
+      border: none;
+      padding: 0.5rem 1rem;
+      width: 100%;
+      text-align: left;
+      font-weight: 600;
+      color: #495057;
+      border-bottom: 1px solid #dee2e6;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    
+    .vendor-toggle:hover {
+      background: #e9ecef;
+    }
+    
+    .vendor-toggle .toggle-icon {
+      float: right;
+      transition: transform 0.2s ease;
+    }
+    
+    .vendor-toggle.collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+    
+    .vendor-locations {
+      background: #fff;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .dropdown-item.ps-4 {
+      padding-left: 2rem !important;
+      font-size: 0.9rem;
+      border: none;
+      background: #fff;
+    }
+    
+    .dropdown-item.ps-4:hover {
+      background-color: #f8f9fc;
+      color: #495057;
+    }
+    
+    .dropdown-menu {
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 0;
+    }
+    
+    /* Improved table row hover */
+    .table-hover tbody tr:hover {
+      background-color: #f8f9fc;
+    }
+
+    /* Empty state styling */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #6c757d;
+    }
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
     /* Pagination circles */
     .pagination { justify-content:center; margin-top:20px; gap:8px; }
     .page-link {
@@ -67,21 +167,12 @@
 
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
   </style>
-</head>
-<body>
-  <!-- Top bar with logo only -->
-  <header class="topbar py-3">
-    <div class="container d-flex align-items-center justify-content-between">
-      <div class="brand-wrap">
-        <img class="brand-logo" src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan logo">
-      </div>
-      <div class="d-flex align-items-center gap-3">
-        <img class="avatar" src="https://i.imgur.com/7k12rjS.png" alt="profile">
-      </div>
-    </div>
-  </header>
+{% endblock %}
 
-  <div class="container content-wrapper">
+{% block content %}
+  <!-- Main content wrapper -->
+  <div class="container-fluid px-4 py-3">
+    <!-- Removed old topbar header since navbar is now in sidebar -->
 
     <!-- Oval warning banner ABOVE the search bar (only if messages exist) -->
     {% if messages %}
@@ -97,7 +188,7 @@
     {% endif %}
 
     <!-- Backend search (hits your scrapers) -->
-    <form id="searchForm" action="{% url 'home' %}" method="get" class="mb-3" novalidate>
+    <form id="searchForm" action="{% url 'dashboard:dashboard_home' %}" method="get" class="mb-3" novalidate>
       <div class="input-group">
         <input id="qInput" type="text" name="q" class="form-control"
                placeholder="Cari produk (contoh: semen, pasir, batu...)"
@@ -110,37 +201,72 @@
     </form>
 
     <!-- Client-side DataTable-like controls -->
-    <div class="d-flex flex-wrap controls mb-3">
-      <div class="input-group" style="max-width:320px;">
-        <span class="input-group-text">Filter hasil</span>
-        <input id="filterInput" type="text" class="form-control" placeholder="ketik untuk memfilter…">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h6 class="card-title mb-3">
+          Filter & Pencarian
+        </h6>
+        
+        <!-- Row 1: Text filter, Vendor, and Category -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label for="filterInput" class="form-label small text-muted">Filter Hasil</label>
+            <input id="filterInput" type="text" class="form-control" placeholder="Ketik untuk memfilter hasil...">
+          </div>
+          <div class="col-md-4">
+            <label for="vendorSelect" class="form-label small text-muted">Vendor</label>
+            <select id="vendorSelect" class="form-select">
+              <option value="">Semua vendor</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label for="categorySelect" class="form-label small text-muted">Kategori</label>
+            <select id="categorySelect" class="form-select">
+              <option value="">Semua kategori</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Row 2: Location and Price range -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label for="locationSelect" class="form-label small text-muted">Lokasi</label>
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="locationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <span id="selectedLocationText">Semua lokasi</span>
+              </button>
+              <ul class="dropdown-menu w-100" aria-labelledby="locationDropdown" id="locationDropdownMenu">
+                <li><a class="dropdown-item" href="#" data-value="">Semua lokasi</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <!-- Dynamic content will be added here -->
+              </ul>
+            </div>
+            <!-- Hidden input to store the actual selected value -->
+            <input type="hidden" id="locationSelect" value="">
+          </div>
+          <div class="col-md-4">
+            <label for="minPrice" class="form-label small text-muted">Harga Minimum</label>
+            <input id="minPrice" type="number" class="form-control" placeholder="0">
+          </div>
+          <div class="col-md-4">
+            <label for="maxPrice" class="form-label small text-muted">Harga Maksimum</label>
+            <input id="maxPrice" type="number" class="form-control" placeholder="Tidak ada batas">
+          </div>
+        </div>
+        
+        <!-- Clear button -->
+        <div class="d-flex justify-content-end">
+          <button id="clearFilters" class="btn btn-outline-secondary btn-sm">
+            Hapus Semua Filter
+          </button>
+        </div>
       </div>
-
-      <div class="input-group" style="max-width:260px;">
-        <span class="input-group-text">Vendor</span>
-        <select id="vendorSelect" class="form-select">
-          <option value="">Semua vendor</option>
-        </select>
-      </div>
-
-      <div class="input-group" style="max-width:240px;">
-        <span class="input-group-text">Harga min</span>
-        <input id="minPrice" type="number" class="form-control" placeholder="0">
-      </div>
-
-      <div class="input-group" style="max-width:240px;">
-        <span class="input-group-text">Harga max</span>
-        <input id="maxPrice" type="number" class="form-control" placeholder="∞">
-      </div>
-
-      <button id="clearFilters" class="btn btn-outline-secondary btn-pill">Reset</button>
     </div>
 
     <!-- Results card -->
-    <div class="card">
+    <div id="resultsCard" class="card">
       <!-- Inline loading state -->
       <div id="loadingInline" class="loading-inline">
-        <!-- Use <output> instead of role="status" -->
         <output id="loadingStatus" class="loading-panel" aria-live="polite" aria-label="Mengambil harga">
           <span class="ring" aria-hidden="true"></span>
           <span>
@@ -156,9 +282,12 @@
           <thead>
             <tr>
               <th style="width:5%">No.</th>
-              <th class="th-sort" data-key="item">Nama Produk</th>
-              <th class="th-sort" data-key="price" style="width:20%">Harga</th>
-              <th class="th-sort" data-key="vendor" style="width:25%">Vendor</th>
+              <th class="th-sort" data-key="item" style="width:28%">Nama Produk</th>
+              <th class="th-sort" data-key="category" style="width:13%">Kategori</th>
+              <th class="th-sort price-align-right" data-key="price" style="width:12%">Harga</th>
+              <th style="width:7%">Unit</th>
+              <th class="th-sort" data-key="vendor" style="width:13%">Vendor</th>
+              <th class="th-sort" data-key="location" style="width:22%">Lokasi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -166,11 +295,40 @@
               <tr>
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
-                <td class="c-price">{{ r.value }}</td>
+                <td class="c-category">{{ r.category|default:"Lainnya" }}</td>
+                <td class="c-price price-align-right">{{ r.value }}</td>
+                <td class="c-unit">{{ r.unit|default:"—" }}</td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
+                <td class="c-location">
+                  {% if r.location %}
+                    <div class="d-flex align-items-center">
+                      <span class="me-2">{{ r.location }}</span>
+                      {% if r.location_count > 1 %}
+                        <button type="button" class="btn badge bg-light text-dark border location-badge" 
+                              tabindex="0"
+                              data-vendor="{{ r.source }}"
+                              data-locations="{{ r.all_locations|join:'|' }}"
+                              data-bs-toggle="tooltip"
+                              title="Click to see all {{ r.location_count }} locations"
+                              aria-label="Show all {{ r.location_count }} locations for {{ r.source }}"
+                              style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
+                          +{{ r.location_count|add:"-1" }}
+                        </button>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
               </tr>
             {% empty %}
-              <tr><td colspan="4" class="text-center text-muted py-4">Tidak ada data</td></tr>
+              <tr>
+                <td colspan="7" class="empty-state">
+                  <div class="empty-state-icon">Tidak ada data</div>
+                  <h5>Belum ada data harga</h5>
+                  <p class="mb-0">Gunakan form pencarian di atas untuk mulai mencari harga produk</p>
+                </td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -184,8 +342,9 @@
 
     <div class="footer">© 2025 rencanakan.id</div>
   </div>
+{% endblock %}
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}
   <script>
     // ---------- Price formatting: "IDR 30,400" (code, comma thousands, NO decimals) ----------
     const idf = new Intl.NumberFormat("en-US", {
@@ -222,6 +381,11 @@
         if (close !== -1) vendor = raw.slice(open + 1, close).trim();
       }
 
+      // Handle specific Mitra10 "no products" message
+      if (vendor === "Mitra10" && /package returned no products.*fallback also found none/i.test(raw)) {
+        return `<strong>Mitra10</strong> sedang tidak tersedia saat ini. Data dari vendor lain tetap ditampilkan. Silakan coba lagi nanti.`;
+      }
+
       const httpIdx = raw.toLowerCase().indexOf("http error");
       if (httpIdx !== -1) {
         const windowStr = raw.slice(httpIdx, httpIdx + 40);
@@ -240,6 +404,12 @@
       if (/parse|selector|structure|changed/i.test(raw)) {
         return `Struktur halaman <strong>${vendor ?? 'vendor'}</strong> berubah, sehingga data tidak dapat diambil. Akan kami sesuaikan secepatnya.`;
       }
+
+      // Generic "no products" fallback
+      if (/no products|tidak ada produk|found none/i.test(raw)) {
+        return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak dapat memberikan data produk. Data dari vendor lain tetap tersedia.`;
+      }
+
       return raw;
     }
 
@@ -287,12 +457,33 @@
 
     // ---------- Build data from table ----------
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
-    const data = allRows.map(tr => {
+      const data = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
+      const category = tr.querySelector(".c-category")?.textContent?.trim() || "Lainnya";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
+        const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
       const priceNum = toNumber(priceText);
-      return { item, vendor, price: priceNum };
+      const locationCell = tr.querySelector(".c-location");
+      
+      // Extract modal data from button if present (updated from span)
+      const modalButton = locationCell?.querySelector("button[data-locations]");
+      const allLocations = modalButton ? modalButton.dataset.locations?.split("|") || [] : [];
+      
+      // Extract location text (excluding button text)
+      let location = "—";
+      if (locationCell) {
+        // Clone the cell and remove the button to get clean text
+        const tempCell = locationCell.cloneNode(true);
+        const tempButton = tempCell.querySelector("button[data-locations]");
+        if (tempButton) tempButton.remove();
+        location = tempCell.textContent?.trim() || "—";
+      }
+      
+      // Normalize empty unit to dash
+      const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
+      
+      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
     });
 
     // Populate vendor dropdown (for…of)
@@ -302,6 +493,133 @@
       const opt = document.createElement("option");
       opt.value = v; opt.textContent = v;
       vendorSelect.appendChild(opt);
+    }
+    
+    // Populate category dropdown (for…of)
+    const categorySelect = document.getElementById("categorySelect");
+    const uniqueCategories = [...new Set(data.map(d => d.category).filter(Boolean))].sort();
+    for (const c of uniqueCategories) {
+      const opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      categorySelect.appendChild(opt);
+    }
+
+    // Populate location dropdown with vendor grouping and submenus
+    const locationSelect = document.getElementById("locationSelect");
+    const locationDropdownMenu = document.getElementById("locationDropdownMenu");
+    const selectedLocationText = document.getElementById("selectedLocationText");
+    const locationsByVendor = {};
+    
+    // Group locations by vendor
+    for (const d of data) {
+      if (!locationsByVendor[d.vendor]) {
+        locationsByVendor[d.vendor] = new Set();
+      }
+      
+      if (d.location && d.location !== "—") {
+        locationsByVendor[d.vendor].add(d.location);
+      }
+      if (d.allLocations && d.allLocations.length > 0) {
+        for (const loc of d.allLocations) {
+          if (loc && loc !== "—") {
+            locationsByVendor[d.vendor].add(loc);
+          }
+        }
+      }
+    }
+    
+    // Build the dropdown menu with collapsible vendor sections
+    const sortedVendors = Object.keys(locationsByVendor).sort();
+    for (const vendor of sortedVendors) {
+      if (vendor === "—") continue; // Skip unknown vendors
+      
+      const locations = [...locationsByVendor[vendor]].sort();
+      if (locations.length === 0) continue;
+      
+      // Create vendor collapsible header
+      const vendorToggle = document.createElement("li");
+      vendorToggle.innerHTML = `
+        <button class="vendor-toggle collapsed" type="button" data-vendor="${vendor}">
+          ${vendor}
+          <span class="toggle-icon">▼</span>
+        </button>
+      `;
+      locationDropdownMenu.appendChild(vendorToggle);
+      
+      // Create collapsible container for locations
+      const locationsContainer = document.createElement("li");
+      locationsContainer.className = "vendor-locations";
+      locationsContainer.style.display = "none";
+      locationsContainer.dataset.vendor = vendor;
+      
+      // Add locations to the container
+      let locationsHtml = '';
+      for (const location of locations) {
+        locationsHtml += `<a class="dropdown-item ps-4" href="#" data-value="${location}">${location}</a>`;
+      }
+      locationsContainer.innerHTML = locationsHtml;
+      
+      locationDropdownMenu.appendChild(locationsContainer);
+    }
+    
+    // Add click handlers for vendor toggles (collapsible functionality)
+    const vendorToggles = locationDropdownMenu.querySelectorAll('.vendor-toggle');
+    for (const toggle of vendorToggles) {
+      toggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const vendor = this.dataset.vendor;
+        const locationsContainer = locationDropdownMenu.querySelector(`li.vendor-locations[data-vendor="${vendor}"]`);
+        
+        // Toggle visibility
+        if (locationsContainer.style.display === "none") {
+          // Collapse all other vendors first
+          const allContainers = locationDropdownMenu.querySelectorAll('.vendor-locations');
+          const allToggles = locationDropdownMenu.querySelectorAll('.vendor-toggle');
+          
+          for (const container of allContainers) {
+            container.style.display = "none";
+          }
+          for (const toggle of allToggles) {
+            toggle.classList.add('collapsed');
+          }
+          
+          // Expand this vendor
+          locationsContainer.style.display = "block";
+          this.classList.remove('collapsed');
+        } else {
+          // Collapse this vendor
+          locationsContainer.style.display = "none";
+          this.classList.add('collapsed');
+        }
+      });
+    }
+    
+    // Add click handlers for dropdown items (location selection)
+    const dropdownItems = locationDropdownMenu.querySelectorAll('a.dropdown-item');
+    for (const item of dropdownItems) {
+      item.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const value = this.dataset.value || "";
+        const text = this.textContent;
+        
+        // Update hidden input and display text
+        locationSelect.value = value;
+        selectedLocationText.textContent = text;
+        
+        // Close the dropdown
+        const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('locationDropdown'));
+        if (dropdown) {
+          dropdown.hide();
+        }
+        
+        // Trigger filter update
+        currentPage = 1;
+        render();
+      });
     }
 
     // ---------- Filtering + Sorting + Pagination ----------
@@ -319,14 +637,24 @@
     function applyFilters() {
       const q = (filterInput.value || "").toLowerCase();
       const v = vendorSelect.value || "";
+      const c = categorySelect.value || "";
+      const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
       return data.filter(d => {
-        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q);
+        const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q) || d.category.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
+        const cm = !c || d.category === c;
+        
+        // Enhanced location matching: check both primary location and all locations
+        let lm = !l || d.location === l;
+        if (!lm && d.allLocations && d.allLocations.length > 0) {
+          lm = d.allLocations.includes(l);
+        }
+        
         const pm = (!Number.isNaN(min) && d.price >= min || Number.isNaN(min)) &&
                    (!Number.isNaN(max) && (max === 0 ? true : d.price <= max) || Number.isNaN(max));
-        return qmatch && vm && pm;
+        return qmatch && vm && cm && lm && pm;
       });
     }
 
@@ -356,17 +684,67 @@
       let idx = 0;
       for (const d of slice) {
         const tr = document.createElement("tr");
+        
+        // Build location cell content with improved design
+        let locationHtml = `<div class="d-flex align-items-center">
+                             <span class="me-2">${d.location}</span>`;
+        if (d.allLocations && d.allLocations.length > 1) {
+          const moreCount = d.allLocations.length - 1;
+          const locationsStr = d.allLocations.join('|');
+          locationHtml += ` <button type="button" class="btn badge bg-light text-dark border location-badge" 
+                             tabindex="0"
+                             data-vendor="${d.vendor}"
+                             data-locations="${locationsStr}"
+                             title="Click to see all ${d.allLocations.length} locations"
+                             aria-label="Show all ${d.allLocations.length} locations for ${d.vendor}"
+                             style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
+                             +${moreCount}
+                           </button>`;
+        }
+        locationHtml += `</div>`;
+        
         tr.innerHTML = `
           <td>${start + idx + 1}</td>
           <td class="c-item">${d.item}</td>
+          <td class="c-category">${d.category || 'Lainnya'}</td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
-          <td class="c-vendor">${d.vendor}</td>`;
+          <td class="c-unit">${d.unit || '—'}</td>
+          <td class="c-vendor">${d.vendor}</td>
+          <td class="c-location">${locationHtml}</td>`;
         tbody.appendChild(tr);
+        
+        // Add click event listener to the location badge if it exists
+        const modalBadge = tr.querySelector('button[data-locations]');
+        if (modalBadge) {
+          const handleLocationModal = function(e) {
+            e.preventDefault(); // Prevent any default behavior
+            e.stopPropagation(); // Stop event bubbling
+            
+            const vendor = this.dataset.vendor;
+            const locationsStr = this.dataset.locations;
+            const locations = locationsStr ? locationsStr.split('|') : [];
+            
+            console.log('DEBUG: Dynamic badge clicked');
+            console.log('DEBUG: Vendor:', vendor);
+            console.log('DEBUG: Locations string:', locationsStr);
+            console.log('DEBUG: Parsed locations:', locations);
+            
+            showLocationModal(vendor, locations);
+          };
+          
+          modalBadge.addEventListener('click', handleLocationModal);
+          modalBadge.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleLocationModal.call(this, e);
+            }
+          });
+        }
+        
         idx++;
       }
       if (slice.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="4" class="text-center text-muted py-4">Tidak ada data</td>`;
+        tr.innerHTML = `<td colspan="5" class="text-center text-muted py-4">Tidak ada data</td>`;
         tbody.appendChild(tr);
       }
 
@@ -399,8 +777,8 @@
       });
     }
 
-    // Filters events (for…of)
-    const filterControls = [filterInput, vendorSelect, minPrice, maxPrice];
+    // Filters events (for…of) - excluding locationSelect since it's handled separately
+    const filterControls = [filterInput, vendorSelect, categorySelect, minPrice, maxPrice];
     for (const el of filterControls) {
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
@@ -409,13 +787,176 @@
     // Clear
     clearBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      filterInput.value = ""; vendorSelect.value = "";
-      minPrice.value = ""; maxPrice.value = "";
-      currentPage = 1; render();
+      filterInput.value = ""; 
+      vendorSelect.value = ""; 
+      categorySelect.value = "";
+      locationSelect.value = "";
+      selectedLocationText.textContent = "Semua lokasi";
+      minPrice.value = ""; 
+      maxPrice.value = "";
+      currentPage = 1; 
+      render();
     });
+
+    // Add click listeners to initially loaded buttons (updated from spans)
+    function addLocationButtonListeners() {
+      const initialButtons = document.querySelectorAll('button[data-locations]');
+      for (const button of initialButtons) {
+        if (!button.dataset.listenerAdded) {
+          const handleLocationModal = function(e) {
+            e.preventDefault(); // Prevent any default behavior
+            e.stopPropagation(); // Stop event bubbling
+            
+            const vendor = this.dataset.vendor;
+            const locationsStr = this.dataset.locations;
+            const locations = locationsStr ? locationsStr.split('|') : [];
+            
+            console.log('DEBUG: Initial button clicked');
+            console.log('DEBUG: Vendor:', vendor);
+            console.log('DEBUG: Locations:', locations);
+            
+            showLocationModal(vendor, locations);
+          };
+          
+          button.addEventListener('click', handleLocationModal);
+          button.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleLocationModal.call(this, e);
+            }
+          });
+          button.dataset.listenerAdded = 'true';
+        }
+      }
+    }
 
     // Initial render
     render();
+    
+    // Add listeners to any pre-existing buttons (updated from spans)
+    addLocationButtonListeners();
+    
+    // Global cleanup function to reset modal state
+    function cleanupModalState() {
+      console.log('DEBUG: Cleaning up modal state...');
+      // Remove any modal backdrops
+      const backdrops = document.querySelectorAll('.modal-backdrop');
+      for (const backdrop of backdrops) {
+        backdrop.remove();
+      }
+      
+      // Remove modal-open class from body
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      
+      // Reset current modal
+      if (currentModal) {
+        try {
+          currentModal.dispose();
+        } catch (e) {
+          console.log('DEBUG: Error disposing modal:', e);
+        }
+        currentModal = null;
+      }
+    }
+    
+    // Add escape key handler to force cleanup if needed
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        cleanupModalState();
+      }
+    });
+    
+    // Add click handler to force cleanup when clicking outside modal
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('modal-backdrop')) {
+        cleanupModalState();
+      }
+    });
+
+    // Location modal functionality
+    let currentModal = null; // Keep track of current modal instance
+    
+    function showLocationModal(vendor, locations) {
+      console.log('DEBUG: showLocationModal called');
+      console.log('DEBUG: Vendor:', vendor);
+      console.log('DEBUG: Locations:', locations);
+      
+      const locationModal = document.getElementById('locationModal');
+      const modalTitle = locationModal.querySelector('.modal-title');
+      const modalBody = locationModal.querySelector('.modal-body');
+      
+      modalTitle.textContent = `${vendor} - Store Locations`;
+      
+      if (locations.length === 0) {
+        modalBody.innerHTML = '<p class="text-muted">No location data available.</p>';
+      } else {
+        let html = '<div class="list-group list-group-flush">';
+        for (let index = 0; index < locations.length; index++) {
+          const location = locations[index];
+          if (location.trim()) {
+            html += `<div class="list-group-item">
+              <div class="d-flex align-items-center">
+                <span class="badge bg-primary rounded-pill me-2">${index + 1}</span>
+                <span>${location}</span>
+              </div>
+            </div>`;
+          }
+        }
+        html += '</div>';
+        modalBody.innerHTML = html;
+      }
+      
+      // Dispose of any existing modal instance
+      if (currentModal) {
+        currentModal.dispose();
+        currentModal = null;
+      }
+      
+      // Create new modal instance with proper cleanup
+      currentModal = new bootstrap.Modal(locationModal, {
+        backdrop: true,
+        keyboard: true,
+        focus: true
+      });
+      
+      // Add event listener for when modal is hidden
+      locationModal.addEventListener('hidden.bs.modal', function () {
+        console.log('DEBUG: Modal hidden, disposing...');
+        if (currentModal) {
+          currentModal.dispose();
+          currentModal = null;
+        }
+        // Remove any remaining backdrops
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        for (const backdrop of backdrops) {
+          backdrop.remove();
+        }
+        // Restore body scrolling
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+      }, { once: true }); // Use once: true to automatically remove the listener
+      
+      currentModal.show();
+    }
   </script>
-</body>
-</html>
+
+  <!-- Location Modal -->
+  <div class="modal fade" id="locationModal" tabindex="-1" aria-labelledby="locationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="locationModalLabel">Store Locations</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Location list will be populated by JavaScript -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

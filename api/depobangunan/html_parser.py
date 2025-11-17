@@ -5,14 +5,16 @@ from bs4 import BeautifulSoup
 
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import DepoPriceCleaner
+from .unit_parser import DepoBangunanUnitParser
 
 logger = logging.getLogger(__name__)
 
 
 class DepoHtmlParser(IHtmlParser):
     
-    def __init__(self, price_cleaner: DepoPriceCleaner = None):
+    def __init__(self, price_cleaner: DepoPriceCleaner = None, unit_parser: DepoBangunanUnitParser = None):
         self.price_cleaner = price_cleaner or DepoPriceCleaner()
+        self.unit_parser = unit_parser or DepoBangunanUnitParser()
     
     def parse_products(self, html_content: str) -> List[Product]:
         try:
@@ -52,7 +54,13 @@ class DepoHtmlParser(IHtmlParser):
         if not self.price_cleaner.is_valid_price(price):
             return None
         
-        return Product(name=name, price=price, url=url)
+        # Extract unit from product name
+        unit = self.unit_parser.parse_unit_from_product_name(name)
+        
+        # Extract sold count if present
+        sold_count = self._extract_sold_count(item)
+        
+        return Product(name=name, price=price, url=url, unit=unit, sold_count=sold_count)
     
     def _extract_product_name(self, item) -> Optional[str]:
         # Try to find the product name in the product-item-name element
@@ -85,15 +93,15 @@ class DepoHtmlParser(IHtmlParser):
     def _extract_product_price(self, item) -> int:
         # Try different price extraction methods in order of preference
         price = self._extract_price_from_data_attribute(item)
-        if price > 0:
+        if price and price > 0:
             return price
         
         price = self._extract_price_from_special_price(item)
-        if price > 0:
+        if price and price > 0:
             return price
         
         price = self._extract_price_from_regular_price(item)
-        if price > 0:
+        if price and price > 0:
             return price
         
         return self._extract_price_from_text_search(item)
@@ -166,3 +174,30 @@ class DepoHtmlParser(IHtmlParser):
             return self.price_cleaner.clean_price(price_text)
         except (TypeError, ValueError):
             return 0
+    
+    def _extract_sold_count(self, item) -> Optional[int]:
+        """
+        Extract sold count from product item.
+        Looks for text like "Terjual 5", "terjual 10", "Terjual: 38" etc.
+        """
+        try:
+            # Search for all text in the item
+            all_text = item.get_text()
+            
+            # Try different patterns for terjual
+            # Pattern 1: "Terjual: 38" or "Terjual 38"
+            match = re.search(r'terjual[:\s]+(\d+)', all_text, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+            
+            # Pattern 2: Search in specific elements that might contain terjual
+            terjual_elements = item.find_all(string=re.compile(r'terjual', re.IGNORECASE))
+            for element in terjual_elements:
+                match = re.search(r'terjual[:\s]+(\d+)', element, re.IGNORECASE)
+                if match:
+                    return int(match.group(1))
+            
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to extract sold count: {str(e)}")
+            return None

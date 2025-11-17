@@ -23,12 +23,12 @@ class TestDepoIntegration(unittest.TestCase):
         test_url = "https://www.depobangunan.co.id/catalogsearch/result/?q=cat&product_list_order=low_to_high"
         test_html = "<html>mock html</html>"
         test_products = [
-            Product(name="Product 1", price=1000, url="/product1"),
-            Product(name="Product 2", price=2000, url="/product2")
+            Product(name="Product 1", price=1000, url="/product1", unit=None),  # No unit, will trigger detail page fetch
+            Product(name="Product 2", price=2000, url="/product2", unit=None)   # No unit, will trigger detail page fetch
         ]
         
         self.mock_url_builder.build_search_url.return_value = test_url
-        self.mock_http_client.get.return_value = test_html
+        self.mock_http_client.get.return_value = test_html  # Same HTML for all requests (main + detail pages)
         self.mock_html_parser.parse_products.return_value = test_products
         
         # Execute
@@ -42,9 +42,10 @@ class TestDepoIntegration(unittest.TestCase):
         self.assertEqual(result.url, test_url)
         self.assertIsNone(result.error_message)
         
-        # Verify method calls
+        # Verify method calls - enhanced scraper makes additional calls for detail pages
         self.mock_url_builder.build_search_url.assert_called_once_with("cat", True, 0)
-        self.mock_http_client.get.assert_called_once_with(test_url)
+        # HTTP client should be called 3 times: main page + 2 detail pages
+        self.assertEqual(self.mock_http_client.get.call_count, 3)
         self.mock_html_parser.parse_products.assert_called_once_with(test_html)
     
     def test_scrape_products_with_custom_parameters(self):

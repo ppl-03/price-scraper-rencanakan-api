@@ -13,15 +13,48 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.13"]
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: test_db
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    
     env:
       DJANGO_SETTINGS_MODULE: price_scraper_rencanakan_api.settings
-      SECRET_KEY: ${{ secrets.SECRET_KEY || 'insecure-test-key' }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY || 'insecure-test-key-for-ci-only' }}
+      USE_SQLITE_FOR_TESTS: 'false'
+      DB_ENGINE: django.db.backends.mysql
+      DB_NAME: test_db
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      MYSQL_NAME: test_db
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      KOYEB_API_TOKEN: ${{ secrets.KOYEB_API_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      TEST_IP_ALLOWED: ${{ secrets.TEST_IP_ALLOWED || '192.168.1.100' }}
+      TEST_IP_DENIED: ${{ secrets.TEST_IP_DENIED || '10.0.0.1' }}
+      TEST_IP_ATTACKER: ${{ secrets.TEST_IP_ATTACKER || '192.168.1.999' }}
+
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -29,41 +62,52 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install MySQL dev libs
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libmysqlclient-dev pkg-config
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -r requirements.txt
+          pip install coverage
 
-      - name: Apply database migrations
+      - name: Wait for MySQL
         run: |
-          python manage.py makemigrations dashboard --noinput
-          python manage.py makemigrations db_pricing --noinput
-          python manage.py makemigrations security --noinput
-          python manage.py migrate --noinput
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -u test_user -ptest_password --silent; then
+              echo "MySQL is ready!"
+              break
+            fi
+            echo "Waiting for MySQL... ($i/30)"
+            sleep 2
+          done
+
+      - name: Run migrations
+        run: |
+          python manage.py migrate --noinput --fake-initial
 
       - name: Run tests with coverage
         run: |
-          coverage run --source='.' manage.py test --verbosity 2
-          coverage xml
-          coverage report --show-missing
-          
-      - name: Upload coverage results
-        uses: actions/upload-artifact@v4
+          python -m coverage run --source='.' -m pytest api db_pricing/tests/test_connection_checker.py db_pricing/tests/test_status_api.py security
+          python -m coverage report
+          python -m coverage json
+          python -m coverage html
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: coverage-report
+          name: test-reports
           path: |
-            coverage.xml
-            .coverage
-            
-      - name: Coverage Summary
-        run: |
-          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo "Coverage details:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          coverage report --show-missing >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            test_report.html
+            htmlcov/
+            coverage.json
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
+        with:
+          file: ./coverage.json
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Update Coverage Badge
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: we-cli/coverage-badge-action@8a0b6ee05f6dd0f294089cbe7a848452a2b43eef

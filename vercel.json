@@ -1,0 +1,14 @@
+
+{
+    "builds": [{
+        "src": "price_scraper_rencanakan_api/wsgi.py",
+        "use": "@vercel/python",
+        "config": { "maxLambdaSize": "15mb", "runtime": "python3.12.3" }
+    }],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "price_scraper_rencanakan_api/wsgi.py"
+        }
+    ]
+}

@@ -1,5 +1,6 @@
 import unittest
 import os
+import re
 from unittest.mock import patch
 
 from api.config import ScraperConfig, config
@@ -9,7 +10,7 @@ class TestScraperConfig(unittest.TestCase):
     def test_default_configuration(self):
         config_obj = ScraperConfig()
         
-        self.assertEqual(config_obj.request_timeout, 30)
+        self.assertEqual(config_obj.request_timeout, 300)
         self.assertEqual(config_obj.max_retries, 3)
         self.assertEqual(config_obj.retry_delay, 1.0)
         self.assertEqual(config_obj.requests_per_minute, 60)
@@ -21,8 +22,11 @@ class TestScraperConfig(unittest.TestCase):
         self.assertEqual(config_obj.gemilang_base_url, 'https://gemilang-store.com')
         self.assertEqual(config_obj.gemilang_search_path, '/pusat/shop')
         
+        # Verify User-Agent contains expected browser components (extract version dynamically)
         self.assertIn('Mozilla', config_obj.user_agent)
-        self.assertIn('Chrome', config_obj.user_agent)
+        # Extract Chrome version from the default user agent to avoid hardcoding
+        chrome_match = re.search(r'Chrome/([\d.]+)', config_obj.user_agent)
+        self.assertIsNotNone(chrome_match, "User-Agent should contain Chrome version")
         self.assertIn('Safari', config_obj.user_agent)
 
     def test_custom_configuration(self):
@@ -58,7 +62,7 @@ class TestScraperConfig(unittest.TestCase):
     def test_from_environment_defaults(self):
         config_obj = ScraperConfig.from_environment()
         
-        self.assertEqual(config_obj.request_timeout, 30)
+        self.assertEqual(config_obj.request_timeout, 300)
         self.assertEqual(config_obj.max_retries, 3)
         self.assertEqual(config_obj.retry_delay, 1.0)
         self.assertEqual(config_obj.requests_per_minute, 60)
@@ -120,7 +124,7 @@ class TestScraperConfig(unittest.TestCase):
         
         self.assertTrue(config_obj.cache_enabled)
         self.assertTrue(config_obj.log_requests)
-        self.assertEqual(config_obj.request_timeout, 30)
+        self.assertEqual(config_obj.request_timeout, 300)
 
     @patch.dict(os.environ, {
         'SCRAPER_CACHE_ENABLED': 'false',
@@ -160,23 +164,26 @@ class TestScraperConfig(unittest.TestCase):
             gemilang_search_path='/test'
         )
         
-        expected_dict = {
-            'request_timeout': 45,
-            'max_retries': 5,
-            'retry_delay': 2.0,
-            'user_agent': 'Test Agent',
-            'requests_per_minute': 30,
-            'min_request_interval': 2.0,
-            'cache_enabled': False,
-            'cache_ttl': 600,
-            'log_level': 'DEBUG',
-            'log_requests': False,
-            'gemilang_base_url': 'https://test.com',
-            'gemilang_search_path': '/test'
-        }
-        
         result_dict = config_obj.to_dict()
-        self.assertEqual(result_dict, expected_dict)
+        
+        # Check key values that were explicitly set
+        self.assertEqual(result_dict['request_timeout'], 45)
+        self.assertEqual(result_dict['max_retries'], 5)
+        self.assertEqual(result_dict['retry_delay'], 2.0)
+        self.assertEqual(result_dict['user_agent'], 'Test Agent')
+        self.assertEqual(result_dict['requests_per_minute'], 30)
+        self.assertEqual(result_dict['min_request_interval'], 2.0)
+        self.assertFalse(result_dict['cache_enabled'])
+        self.assertEqual(result_dict['cache_ttl'], 600)
+        self.assertEqual(result_dict['log_level'], 'DEBUG')
+        self.assertFalse(result_dict['log_requests'])
+        self.assertEqual(result_dict['gemilang_base_url'], 'https://test.com')
+        self.assertEqual(result_dict['gemilang_search_path'], '/test')
+        
+        # Verify all vendor base URLs are included
+        self.assertIn('mitra10_base_url', result_dict)
+        self.assertIn('juragan_material_base_url', result_dict)
+        self.assertIn('depobangunan_base_url', result_dict)
 
     def test_to_dict_with_defaults(self):
         config_obj = ScraperConfig()
@@ -186,7 +193,9 @@ class TestScraperConfig(unittest.TestCase):
             'request_timeout', 'max_retries', 'retry_delay', 'user_agent',
             'requests_per_minute', 'min_request_interval', 'cache_enabled',
             'cache_ttl', 'log_level', 'log_requests', 'gemilang_base_url',
-            'gemilang_search_path'
+            'gemilang_search_path', 'mitra10_base_url', 'mitra10_search_path',
+            'juragan_material_base_url', 'juragan_material_search_path',
+            'depobangunan_base_url', 'depobangunan_search_path'
         }
         
         self.assertEqual(set(result_dict.keys()), expected_keys)
