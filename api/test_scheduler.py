@@ -203,19 +203,12 @@ class TestNowFunction(unittest.TestCase):
     
     def test_now_function_handles_timezone_exception(self):
         from api import scheduler
-        original_timezone = None
-        
-        if hasattr(scheduler, 'timezone'):
-            original_timezone = scheduler.timezone
-            scheduler.timezone.now = Mock(side_effect=Exception('timezone error'))
-        
         from api.scheduler import _now
-        result = _now()
         
-        self.assertIsInstance(result, datetime)
-        
-        if original_timezone:
-            scheduler.timezone = original_timezone
+        # Use patch context manager to ensure cleanup
+        with patch.object(scheduler.timezone, 'now', side_effect=Exception('timezone error')):
+            result = _now()
+            self.assertIsInstance(result, datetime)
 
 
 class TestGetCategories(unittest.TestCase):

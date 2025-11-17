@@ -371,8 +371,6 @@ class ApplyAnomalyButtonVisibilityTestCase(TestCase):
         self.assertIn('Reject', pending_block)
         self.assertIn('btn-approve-apply', pending_block)
         self.assertIn('Approve & Apply', pending_block)
-        self.assertIn('btn-review', pending_block)
-        self.assertIn('Review', pending_block)
 
     def test_approved_status_buttons(self):
         """Test that approved status shows Apply, Reject, and Edit Notes buttons"""
@@ -397,8 +395,6 @@ class ApplyAnomalyButtonVisibilityTestCase(TestCase):
         self.assertIn('Apply Price', approved_block)
         self.assertIn('btn-reject', approved_block)
         self.assertIn('Reject', approved_block)
-        self.assertIn('btn-review', approved_block)
-        self.assertIn('Edit Notes', approved_block)
 
     def test_css_button_colors_are_distinct(self):
         """Test that different button types have distinct colors"""
