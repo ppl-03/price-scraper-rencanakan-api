@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 INTERNAL_SERVER_ERROR_MSG = 'Internal server error'
+INVALID_JSON_FORMAT_MSG = 'Invalid JSON format'
 
 # API Token Configuration
 # In production, move these to environment variables or database
@@ -230,7 +231,7 @@ def validate_scraper_input_json(request):
         except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid JSON format',
+                'error': INVALID_JSON_FORMAT_MSG,
                 'code': 'INVALID_JSON'
             }, status=400)
         
@@ -299,7 +300,7 @@ def validate_scraper_input_api(request):
         except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid JSON format',
+                'error': INVALID_JSON_FORMAT_MSG,
                 'code': 'INVALID_JSON'
             }, status=400)
         
@@ -416,7 +417,7 @@ def validate_scraper_input_legacy_api(request):
         except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid JSON format',
+                'error': INVALID_JSON_FORMAT_MSG,
                 'code': 'INVALID_JSON'
             }, status=400)
         
@@ -491,7 +492,7 @@ def validate_scraping_params_endpoint(request):
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON format',
+            'error': INVALID_JSON_FORMAT_MSG,
             'code': 'INVALID_JSON'
         }, status=400)
     
@@ -633,7 +634,7 @@ def validate_vendor_input(request, vendor):
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON format',
+            'error': INVALID_JSON_FORMAT_MSG,
             'code': 'INVALID_JSON'
         }, status=400)
     except Exception as e:
