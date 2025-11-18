@@ -18,10 +18,9 @@ class TextCleaner:
         if not text:
             return ""
         cleaned = text.strip()
-        # Ensure vendor prefix is present
-        if not re.search(r'depo\s*bangunan', cleaned, re.IGNORECASE):
-            cleaned = f"DEPO BANGUNAN - {cleaned}"
-        return cleaned
+        # Remove "Depo Bangunan - " prefix if present (case-insensitive)
+        cleaned = re.sub(r'^depo\s+bangunan\s*-\s*', '', cleaned, flags=re.IGNORECASE)
+        return cleaned.strip()
     
     @staticmethod
     def clean_address(text: str) -> str:
@@ -143,7 +142,7 @@ class DepoBangunanLocationParser(ILocationParser):
         self._element_extractor = element_extractor or HtmlElementExtractor(self._text_cleaner, self._config)
         self._config = config or ParserConfiguration()
     
-    def parse_locations(self, html_content: str) -> List[Location]:
+    def parse_locations(self, html_content: Optional[str]) -> List[Location]:
         """Parse location data from HTML content"""
         if not self._is_valid_html_content(html_content):
             logger.debug("HTML content is empty or invalid")
@@ -160,7 +159,7 @@ class DepoBangunanLocationParser(ILocationParser):
             logger.error(f"Failed to parse HTML: {str(e)}")
             return []
     
-    def _is_valid_html_content(self, html_content: str) -> bool:
+    def _is_valid_html_content(self, html_content: Optional[str]) -> bool:
         """Validate HTML content is not empty"""
         return html_content is not None and html_content.strip() != ""
     
@@ -182,6 +181,10 @@ class DepoBangunanLocationParser(ILocationParser):
         for header in headers:
             try:
                 header_text = header.get_text(strip=True)
+                
+                # Skip "Gerai Depo Bangunan" as it's not a real location
+                if header_text.startswith('Gerai'):
+                    continue
                 
                 # Check if this is a store location header (case-sensitive)
                 if store_header_re.search(header_text):
