@@ -192,6 +192,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Custom User Model
 AUTH_USER_MODEL = 'auth.User'
 
+# CSRF Settings for production
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF cookie
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=not DEBUG)  # True in production (HTTPS)
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
+
 # Test Configuration
 # Test IP addresses from .env (RFC 1918 private addresses for testing only)
 TEST_IP_ALLOWED = env.str('TEST_IP_ALLOWED')
