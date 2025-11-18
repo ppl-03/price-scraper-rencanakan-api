@@ -10,26 +10,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='depobangunanproduct',
-            name='location',
-            field=models.CharField(blank=True, default='', max_length=200),
-        ),
-        migrations.AddField(
-            model_name='gemilangproduct',
-            name='location',
-            field=models.CharField(blank=True, default='', max_length=200),
-        ),
-        migrations.AddField(
-            model_name='mitra10product',
-            name='location',
-            field=models.CharField(blank=True, default='', max_length=200),
-        ),
-        migrations.AddField(
-            model_name='tokopediaproduct',
-            name='category',
-            field=models.CharField(blank=True, db_default='', default='', max_length=100),
-        ),
+        # Note: AddField operations for depobangunanproduct.location, gemilangproduct.location,
+        # mitra10product.location, and tokopediaproduct.category were removed as these columns
+        # were already added in earlier migrations (0013, 0010, 0011 respectively)
         migrations.AlterField(
             model_name='juraganmaterialproduct',
             name='location',
