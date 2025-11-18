@@ -309,8 +309,8 @@
                               data-vendor="{{ r.source }}"
                               data-locations="{{ r.all_locations|join:'|' }}"
                               data-bs-toggle="tooltip"
-                              title="Click to see all {{ r.location_count }} locations"
-                              aria-label="Show all {{ r.location_count }} locations for {{ r.source }}"
+                              title="Show all {{ r.location_count }} locations"
+                              aria-label="+{{ r.location_count|add:"-1" }} more locations"
                               style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
                           +{{ r.location_count|add:"-1" }}
                         </button>
