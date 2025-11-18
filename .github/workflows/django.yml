@@ -1,4 +1,4 @@
-name: Django Tests
+name: CI CD
 
 on:
   push:
@@ -111,3 +111,44 @@ jobs:
       - name: Update Coverage Badge
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         uses: we-cli/coverage-badge-action@8a0b6ee05f6dd0f294089cbe7a848452a2b43eef
+
+  deploy:
+    name: Deploy to Azure VM
+    runs-on: ubuntu-latest
+    needs: test
+    if: >
+      github.ref_name == 'development' ||
+      github.ref_name == 'staging' ||
+      github.ref_name == 'main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set deploy variables based on branch
+        run: |
+          if [[ "${{ github.ref_name }}" == "development" ]]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-development" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-dev.service" >> $GITHUB_ENV
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-staging" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-staging.service" >> $GITHUB_ENV
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-production" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-prod.service" >> $GITHUB_ENV
+          else
+            echo "ERROR: Attempted to deploy from an unsupported branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+      - name: Deploy
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd $DEPLOY_DIR
+            git pull origin ${{ github.ref_name }}
+            source venv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart $SERVICE_NAME
