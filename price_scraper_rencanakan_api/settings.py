@@ -11,20 +11,30 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+import environ
+import pymysql
+
+pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+env = environ.Env(
+    DEBUG=(bool, True),
+)
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
-ALLOWED_HOSTS = []
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = env.bool("DEBUG", default=True)
+
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
 
 
 # Application definition
@@ -36,10 +46,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'dashboard',
+    "db_pricing",
+    "api",
+    'security',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -72,12 +87,55 @@ WSGI_APPLICATION = 'price_scraper_rencanakan_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Database configuration with fallback to SQLite
+# Use SQLite for testing or when MySQL env vars aren't available
+if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
+    env("MYSQL_NAME", default=None) or env("DB_NAME", default=None),
+    env("MYSQL_USER", default=None) or env("DB_USER", default=None), 
+    env("MYSQL_PASSWORD", default=None) or env("DB_PASSWORD", default=None),
+    env("MYSQL_HOST", default=None) or env("DB_HOST", default=None),
+    env("MYSQL_PORT", default=None) or env("DB_PORT", default=None)
+]):
+    # SQLite configuration (for CI/tests or fallback)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    # MySQL configuration - supports both production (.env) and CI (DB_*) variables
+    db_name = env("MYSQL_NAME", default=None) or env("DB_NAME")
+    db_user = env("MYSQL_USER", default=None) or env("DB_USER")
+    db_password = env("MYSQL_PASSWORD", default=None) or env("DB_PASSWORD")
+    db_host = env("MYSQL_HOST", default=None) or env("DB_HOST")
+    db_port = env("MYSQL_PORT", default=None) or env("DB_PORT")
+    
+    # Determine test database name - don't add prefix if already present
+    test_db_name = db_name if db_name.startswith('test_') else f'test_{db_name}'
+    
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': db_name,
+            'USER': db_user,
+            'PASSWORD': db_password,
+            'HOST': db_host,
+            'PORT': db_port,
+            'OPTIONS': {
+                'ssl': {
+                    'ssl': True,
+                    'ssl_mode': 'REQUIRED',
+                },
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'charset': 'utf8mb4',
+            },
+            'TEST': {
+                'NAME': test_db_name,
+            }
+        }
+    }
+
 
 
 # Password validation
@@ -116,7 +174,32 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom User Model
+AUTH_USER_MODEL = 'auth.User'
+
+# CSRF Settings for production
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF cookie
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=not DEBUG)  # True in production (HTTPS)
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
+
+# Test Configuration
+# Test IP addresses from .env (RFC 1918 private addresses for testing only)
+TEST_IP_ALLOWED = env.str('TEST_IP_ALLOWED')
+TEST_IP_DENIED = env.str('TEST_IP_DENIED')
+TEST_IP_ATTACKER = env.str('TEST_IP_ATTACKER')

@@ -1,0 +1,35 @@
+from . import (
+    test_advanced_unit_extraction,
+    test_database_handshake,
+    test_html_parser,
+    test_http_client,
+    test_integration,
+    test_location_parser,
+    test_location_scraper,
+    test_location_urls,
+    test_optimizations,
+    test_price_cleaner,
+    test_scraper_unit_integration,
+    test_unit_parser,
+    test_url_builder,
+    test_urls,
+    test_scrape_popularity
+)
+
+__all__ = [
+    "test_advanced_unit_extraction",
+    "test_database_handshake",
+    "test_html_parser",
+    "test_http_client",
+    "test_integration",
+    "test_location_parser",
+    "test_location_scraper",
+    "test_location_urls",
+    "test_optimizations",
+    "test_price_cleaner",
+    "test_scraper_unit_integration",
+    "test_unit_parser",
+    "test_url_builder",
+    "test_urls",
+    "test_scrape_popularity",
+]
