@@ -70,7 +70,7 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
             self.mock_db.save.side_effect = side_effect
 
     def post_json(self, data):
-        resp = self.client.post(self.url, data)
+        resp = self.client.post(self.url, data, HTTP_AUTHORIZATION='dev-token-12345')
         # Return both raw response and parsed JSON for flexible assertions
         try:
             parsed = json.loads(resp.content)
@@ -190,9 +190,10 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         self.given_scraper(success=True, products=[self.sample_product_1])
         self.given_db(save_return=True)
 
-        resp, _ = self.post_json({'keyword': 'semen & cat', 'sort_by_price': 'true', 'page': '0'})
+        # Use valid special characters allowed by security validator (hyphens, underscores, periods)
+        resp, _ = self.post_json({'keyword': 'semen-cat_test.material', 'sort_by_price': 'true', 'page': '0'})
         self.assertEqual(resp.status_code, 200)
-        self.mock_scraper.scrape_products.assert_called_with(keyword='semen & cat', sort_by_price=True, page=0)
+        self.mock_scraper.scrape_products.assert_called_with(keyword='semen-cat_test.material', sort_by_price=True, page=0)
 
     def test_scrape_and_save_large_page_number(self):
         self.given_scraper(success=True, products=[self.sample_product_1])

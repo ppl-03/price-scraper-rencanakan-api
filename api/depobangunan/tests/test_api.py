@@ -241,15 +241,16 @@ class DepoBangunanAPITest(TestCase):
         
         mock_scraper.scrape_products.return_value = mock_result
         
+        # Use valid special characters (hyphens, underscores, periods allowed by security validator)
         response = self.client.get(self.scrape_url, {
-            'keyword': 'cat & dog',
+            'keyword': 'cat-dog_test.material',
             'sort_by_price': 'true',
             'page': '0'
         })
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products.assert_called_with(
-            keyword='cat & dog',
+            keyword='cat-dog_test.material',
             sort_by_price=True,
             page=0
         )
@@ -868,7 +869,7 @@ class TestDepoBangunanSecurityValidation(TestCase):
             'keyword': 'cement',
             'sort_by_price': 'true',
             'page': '0'
-        })
+        }, HTTP_AUTHORIZATION='dev-token-12345')
         
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)
