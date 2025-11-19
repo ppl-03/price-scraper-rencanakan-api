@@ -24,7 +24,7 @@ class JuraganMaterialDatabaseService:
         """
         required_keys = ("name", "price", "url", "unit", "location")
         if not all(k in item for k in required_keys):
-            logger.warning(f"Invalid item structure: missing required keys")
+            logger.warning("Invalid item structure: missing required keys")
             return False
         
         # Validate data types and constraints
