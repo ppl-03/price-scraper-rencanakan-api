@@ -1,7 +1,9 @@
 import time
 import logging
+import json
+import os
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from api.core import BaseUrlBuilder
 from api.interfaces import IHttpClient, IUrlBuilder, IHtmlParser, HttpClientError
@@ -23,7 +25,7 @@ class GovernmentWageItem:
     unit_price_idr: int
     region: str
     edition: str = "Edisi Ke - 2"
-    year: str = "2024"
+    year: str = "2025"
     sector: str = "Bidang Cipta Karya dan Perumahan"
 
 
@@ -112,10 +114,7 @@ class GovernmentWageScraper:
             if region:
                 return self._search_in_region(work_code, region)
 
-            items = self._search_in_region(work_code, self.DEFAULT_REGION)
-            filtered_items = [item for item in items if work_code.lower() in item.work_code.lower()]
-            logger.info(f"Found {len(filtered_items)} items matching work code {work_code}")
-            return filtered_items
+            return self._search_in_region(work_code, self.DEFAULT_REGION)
 
         except Exception as e:
             logger.error(f"Error searching for work code {work_code}: {e}")
@@ -123,6 +122,15 @@ class GovernmentWageScraper:
 
     def _search_in_region(self, work_code: str, region: str) -> List[GovernmentWageItem]:
         url = self.url_builder.build_search_url(work_code)
+        
+        # Set search keyword on the client
+        if hasattr(self.http_client, "search_keyword"):
+            self.http_client.search_keyword = work_code
+        if hasattr(self.http_client, "region_label"):
+            self.http_client.region_label = region
+        if hasattr(self.http_client, "auto_select_region"):
+            self.http_client.auto_select_region = True
+        
         html_content = self.http_client.get(url)
 
         if hasattr(self.html_parser, "parse_government_wage_data"):
@@ -160,3 +168,144 @@ def create_government_wage_scraper(headless: bool = True, browser_type: str = "c
     url_builder = GovernmentWageUrlBuilder()
     html_parser = GovernmentWageHtmlParser()
     return GovernmentWageScraper(http_client, url_builder, html_parser)
+
+
+# ==================== FILE CACHING FUNCTIONS ====================
+# These functions help you save/load data from local JSON files
+# so you don't have to scrape the website repeatedly!
+
+def get_cache_directory() -> str:
+    """Get or create the cache directory for storing scraped data"""
+    # Store cache files in: api/government_wage/cache/
+    cache_dir = os.path.join(os.path.dirname(__file__), 'cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
+def get_cache_filename(region: str, year: str = "2025") -> str:
+    """Generate cache filename for a region and year"""
+    # Clean region name for filename (remove spaces, special chars)
+    safe_region = region.replace(" ", "_").replace(".", "")
+    return f"hspk_{year}_{safe_region}.json"
+
+
+def save_to_local_file(items: List[GovernmentWageItem], region: str, year: str = "2025") -> str:
+    """
+    Save scraped data to a local JSON file
+    
+    Args:
+        items: List of scraped wage items
+        region: Region name (e.g., "Kab. Cilacap")
+        year: Year of the data (default: "2025")
+    
+    Returns:
+        Path to the saved file
+    """
+    try:
+        cache_dir = get_cache_directory()
+        filename = get_cache_filename(region, year)
+        filepath = os.path.join(cache_dir, filename)
+        
+        # Convert dataclass objects to dictionaries
+        data = [asdict(item) for item in items]
+        
+        # Save to JSON file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Saved {len(items)} items to {filepath}")
+        return filepath
+        
+    except Exception as e:
+        logger.error(f"Error saving to file: {e}")
+        raise
+
+
+def load_from_local_file(region: str, year: str = "2025") -> Optional[List[GovernmentWageItem]]:
+    """
+    Load data from a local JSON file (NO website scraping!)
+    
+    Args:
+        region: Region name (e.g., "Kab. Cilacap")
+        year: Year of the data (default: "2025")
+    
+    Returns:
+        List of wage items if file exists, None otherwise
+    """
+    try:
+        cache_dir = get_cache_directory()
+        filename = get_cache_filename(region, year)
+        filepath = os.path.join(cache_dir, filename)
+        
+        # Check if file exists
+        if not os.path.exists(filepath):
+            logger.info(f"Cache file not found: {filepath}")
+            return None
+        
+        # Load from JSON file
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Convert dictionaries back to dataclass objects
+        items = [GovernmentWageItem(**item_dict) for item_dict in data]
+        
+        logger.info(f"Loaded {len(items)} items from {filepath}")
+        return items
+        
+    except Exception as e:
+        logger.error(f"Error loading from file: {e}")
+        return None
+
+
+def scrape_and_cache(region: str, year: str = "2025", headless: bool = True) -> List[GovernmentWageItem]:
+    """
+    Scrape website and save to local file
+    Use this function ONCE to get fresh data from the website
+    
+    Args:
+        region: Region name (e.g., "Kab. Cilacap")
+        year: Year of the data (default: "2025")
+        headless: Run browser in headless mode
+    
+    Returns:
+        List of scraped wage items
+    """
+    logger.info(f"Scraping fresh data from website for {region} ({year})")
+    
+    scraper = create_government_wage_scraper(headless=headless)
+    with scraper:
+        items = scraper.scrape_region_data(region)
+    
+    # Save to file
+    save_to_local_file(items, region, year)
+    
+    return items
+
+
+def get_cached_or_scrape(region: str, year: str = "2025", force_refresh: bool = False) -> List[GovernmentWageItem]:
+    """
+    Smart function: Try to load from file first, scrape only if needed
+    
+    Args:
+        region: Region name (e.g., "Kab. Cilacap")
+        year: Year of the data (default: "2025")
+        force_refresh: If True, ignore cache and scrape fresh data
+    
+    Returns:
+        List of wage items
+    """
+    # If force refresh, skip cache
+    if force_refresh:
+        logger.info(f"Force refresh requested for {region}")
+        return scrape_and_cache(region, year)
+    
+    # Try to load from cache first
+    cached_items = load_from_local_file(region, year)
+    
+    if cached_items:
+        logger.info(f"Using cached data for {region} ({len(cached_items)} items)")
+        return cached_items
+    
+    # Cache miss - scrape and save
+    logger.info(f"Cache miss for {region} - scraping website")
+    return scrape_and_cache(region, year)

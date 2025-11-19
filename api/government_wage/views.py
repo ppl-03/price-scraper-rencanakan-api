@@ -1,8 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from .factory import create_government_wage_scraper
-from .simple_cache import get_cache, make_cache_key
+from .scraper import get_cached_or_scrape
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,26 +24,11 @@ def scrape_region_data(request):
             return _create_error_response('Region parameter cannot be empty')
         
         region = region.strip()
+        year = request.GET.get('year', '2025')
+        force_refresh = request.GET.get('force_refresh', 'false').lower() == 'true'
         
-        # Check cache first
-        cache = get_cache()
-        cache_key = make_cache_key("region", region)
-        cached_data = cache.get(cache_key)
-        
-        if cached_data:
-            response_data = {
-                'success': True,
-                'region': region,
-                'data': cached_data,
-                'count': len(cached_data),
-                'error_message': None,
-                'cached': True
-            }
-            return JsonResponse(response_data)
-        scraper = create_government_wage_scraper()
-        
-        with scraper:
-            items = scraper.scrape_region_data(region)
+        # Get data from cache or scrape if needed
+        items = get_cached_or_scrape(region, year, force_refresh)
         
         # Format wage data
         wage_data = [
@@ -62,19 +46,15 @@ def scrape_region_data(request):
             for item in items
         ]
         
-        # Store in cache for 15 minutes
-        cache.set(cache_key, wage_data, 900)
-        
         response_data = {
             'success': True,
             'region': region,
             'data': wage_data,
             'count': len(wage_data),
             'error_message': None,
-            'cached': False
         }
         
-        logger.info(f"Government wage scraping successful for region '{region}': {len(items)} items found")
+        logger.info(f"Government wage data retrieved for region '{region}': {len(items)} items")
         return JsonResponse(response_data)
         
     except Exception as e:
@@ -90,29 +70,17 @@ def search_by_work_code(request):
             return _create_error_response('Work code parameter is required')
         
         work_code = work_code.strip()
-        region = request.GET.get('region')  # Optional parameter
+        region = request.GET.get('region', 'Kab. Cilacap')  # Default to Cilacap
+        year = request.GET.get('year', '2025')
         
-        # Check cache first
-        cache = get_cache()
-        search_string = f"{work_code}_{region or ''}"
-        cache_key = make_cache_key("search", search_string)
-        cached_data = cache.get(cache_key)
+        # Get cached data for the region
+        items = get_cached_or_scrape(region, year, force_refresh=False)
         
-        if cached_data:
-            response_data = {
-                'success': True,
-                'work_code': work_code,
-                'region': region,
-                'data': cached_data,
-                'count': len(cached_data),
-                'error_message': None,
-                'cached': True
-            }
-            return JsonResponse(response_data)
-        scraper = create_government_wage_scraper()
-        
-        with scraper:
-            items = scraper.search_by_work_code(work_code, region)
+        # Filter by work code (case-insensitive partial match)
+        filtered_items = [
+            item for item in items 
+            if work_code.lower() in item.work_code.lower()
+        ]
         
         # Format wage data
         wage_data = [
@@ -127,11 +95,8 @@ def search_by_work_code(request):
                 'year': item.year,
                 'sector': item.sector
             }
-            for item in items
+            for item in filtered_items
         ]
-        
-        # Store in cache for 15 minutes
-        cache.set(cache_key, wage_data, 900)
         
         response_data = {
             'success': True,
@@ -140,10 +105,9 @@ def search_by_work_code(request):
             'data': wage_data,
             'count': len(wage_data),
             'error_message': None,
-            'cached': False
         }
         
-        logger.info(f"Government wage search successful for work code '{work_code}' in region '{region}': {len(items)} items found")
+        logger.info(f"Government wage search successful for work code '{work_code}' in region '{region}': {len(filtered_items)} items found")
         return JsonResponse(response_data)
         
     except Exception as e:
@@ -154,7 +118,10 @@ def search_by_work_code(request):
 @require_http_methods(["GET"])
 def get_available_regions(request):
     try:
-        scraper = create_government_wage_scraper()
+        from .scraper import GovernmentWageScraper
+        
+        # Just return the static list, no need to scrape
+        scraper = GovernmentWageScraper()
         regions = scraper.get_available_regions()
         
         response_data = {
@@ -175,7 +142,10 @@ def get_available_regions(request):
 @require_http_methods(["GET"])
 def scrape_all_regions(request):
     try:
+        from .scraper import GovernmentWageScraper, scrape_and_cache
+        
         max_regions_param = request.GET.get('max_regions')
+        year = request.GET.get('year', '2025')
         max_regions = None
         
         if max_regions_param:
@@ -186,11 +156,17 @@ def scrape_all_regions(request):
             except ValueError:
                 return _create_error_response('Max regions parameter must be a valid integer')
         
-        # Create scraper and scrape all regions
-        scraper = create_government_wage_scraper()
+        # Get list of regions
+        scraper = GovernmentWageScraper()
+        regions_to_scrape = scraper.get_available_regions()
+        if max_regions:
+            regions_to_scrape = regions_to_scrape[:max_regions]
         
-        with scraper:
-            items = scraper.scrape_all_regions(max_regions)
+        # Scrape and cache each region
+        all_items = []
+        for region in regions_to_scrape:
+            items = scrape_and_cache(region, year)
+            all_items.extend(items)
         
         # Format wage data
         wage_data = [
@@ -205,7 +181,7 @@ def scrape_all_regions(request):
                 'year': item.year,
                 'sector': item.sector
             }
-            for item in items
+            for item in all_items
         ]
         
         # Group data by region for better organization
@@ -226,7 +202,7 @@ def scrape_all_regions(request):
             'error_message': None
         }
         
-        logger.info(f"Government wage scraping successful for all regions: {len(items)} total items from {len(regions_data)} regions")
+        logger.info(f"Government wage scraping successful for all regions: {len(all_items)} total items from {len(regions_data)} regions")
         return JsonResponse(response_data)
         
     except Exception as e:
