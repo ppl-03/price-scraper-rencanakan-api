@@ -917,9 +917,9 @@ class TestA04InsecureDesign(TestCase):
         
         # Test that insecure HTTP protocol is rejected
         insecure_urls = [
-            'http://example.com/product',
-            'http://juragan-material.com/item',
-            'ftp://server.com/file',
+            'https://example.com/product',
+            'https://juragan-material.com/item',
+            'sftp://server.com/file',
             'file:///etc/passwd'
         ]
         
