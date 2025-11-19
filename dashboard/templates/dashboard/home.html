@@ -188,7 +188,7 @@
     {% endif %}
 
     <!-- Backend search (hits your scrapers) -->
-    <form id="searchForm" action="{% url 'dashboard:dashboard_home' %}" method="get" class="mb-3" novalidate>
+    <form id="searchForm" action="{% url 'dashboard:dashboard_home_db' %}" method="get" class="mb-3" novalidate>
       <div class="input-group">
         <input id="qInput" type="text" name="q" class="form-control"
                placeholder="Cari produk (contoh: semen, pasir, batu...)"

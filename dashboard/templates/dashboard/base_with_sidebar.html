@@ -201,8 +201,8 @@
             
             <ul class="sidebar-nav">
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard_home' %}active{% endif %}" 
-                       href="{% url 'dashboard:dashboard_home' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard_home_db' %}active{% endif %}" 
+                       href="{% url 'dashboard:dashboard_home_db' %}">
                         <i class="fas fa-folder"></i>
                         <span class="nav-link-text">Product Vendor</span>
                     </a>
@@ -222,8 +222,8 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'price_anomalies' %}active{% endif %}" 
-                       href="{% url 'dashboard:price_anomalies' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'curated_price_list_db' %}active{% endif %}" 
+                       href="{% url 'dashboard:curated_price_list_db' %}">
                         <i class="fas fa-chart-line"></i>
                         <span class="nav-link-text">Price Anomalies</span>
                     </a>
