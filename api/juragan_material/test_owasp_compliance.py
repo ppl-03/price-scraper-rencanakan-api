@@ -1,7 +1,6 @@
 """
 OWASP Compliance Test Suite for Juragan Material Module
 Tests compliance with A01:2021, A03:2021, A04:2021
-
 This test suite simulates real-world attack scenarios and verifies that 
 security controls are properly implemented according to OWASP guidelines.
 """
@@ -14,17 +13,14 @@ from django.test import TestCase, RequestFactory
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.conf import settings
-
 # Import security modules
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 # Load test IP addresses from Django settings (configured from .env file)
 # These are RFC 1918 private addresses for testing only
 TEST_IP_ALLOWED = settings.TEST_IP_ALLOWED
 TEST_IP_DENIED = settings.TEST_IP_DENIED
 TEST_IP_ATTACKER = settings.TEST_IP_ATTACKER
-
 from .security import (
     RateLimiter,
     AccessControlManager,
@@ -36,8 +32,6 @@ from .security import (
     enforce_resource_limits,
 )
 from .database_service import JuraganMaterialDatabaseService
-
-
 class TestA01BrokenAccessControl(TestCase):
     """
     Test suite for OWASP A01:2021 - Broken Access Control
@@ -54,6 +48,23 @@ class TestA01BrokenAccessControl(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         cache.clear()
+    
+    def _test_rate_limit_requests(self, rate_limiter, client_id, max_requests, window_seconds, expected_allowed):
+        """Helper method to test multiple rate limit requests"""
+        for i in range(expected_allowed):
+            is_allowed, error = rate_limiter.check_rate_limit(
+                client_id, max_requests=max_requests, window_seconds=window_seconds
+            )
+            self.assertTrue(is_allowed, f"Request {i+1} should be allowed")
+    
+    def _test_rate_limit_exceeded(self, rate_limiter, client_id, max_requests, window_seconds):
+        """Helper method to test rate limit exceeded scenario"""
+        is_allowed, error = rate_limiter.check_rate_limit(
+            client_id, max_requests=max_requests, window_seconds=window_seconds
+        )
+        self.assertFalse(is_allowed, "Request should be blocked")
+        self.assertIn("Rate limit exceeded", error)
+        return error
     
     def test_deny_by_default_no_token(self):
         """Test that access is denied by default without token"""
@@ -172,20 +183,11 @@ class TestA01BrokenAccessControl(TestCase):
         client_id = "test_client_123"
         
         # Should allow first 10 requests
-        for i in range(10):
-            is_allowed, error = rate_limiter.check_rate_limit(
-                client_id, max_requests=10, window_seconds=60
-            )
-            self.assertTrue(is_allowed, f"Request {i+1} should be allowed")
-        
+        self._test_rate_limit_requests(rate_limiter, client_id, 10, 60, 10)
         print("✓ First 10 requests allowed")
         
         # 11th request should be blocked
-        is_allowed, error = rate_limiter.check_rate_limit(
-            client_id, max_requests=10, window_seconds=60
-        )
-        self.assertFalse(is_allowed, "11th request should be blocked")
-        self.assertIn("Rate limit exceeded", error)
+        self._test_rate_limit_exceeded(rate_limiter, client_id, 10, 60)
         print("✓ 11th request blocked (rate limit enforced)")
     
     def test_rate_limiting_blocks_client(self):
@@ -319,8 +321,6 @@ class TestA01BrokenAccessControl(TestCase):
         is_valid, _, _ = AccessControlManager.validate_token(request)
         self.assertTrue(is_valid, "Empty whitelist should allow all IPs")
         print("✓ Empty whitelist allows all IPs")
-
-
 class TestResourceLimitEnforcement(TestCase):
     """
     Test suite for resource limit enforcement
@@ -395,8 +395,6 @@ class TestResourceLimitEnforcement(TestCase):
         data = json.loads(response.content)
         self.assertIn('Too many', data['error'])
         print("✓ Excessive parameters rejected")
-
-
 class TestA03InjectionPrevention(TestCase):
     """
     Test suite for OWASP A03:2021 - Injection
@@ -414,6 +412,21 @@ class TestA03InjectionPrevention(TestCase):
     
     def setUp(self):
         self.factory = RequestFactory()
+    
+    def _validate_whitelist_items(self, validator_method, valid_items, invalid_items, item_type):
+        """Helper method to validate whitelist items (tables, columns, etc.)"""
+        # Test valid items
+        for item in valid_items:
+            is_valid = validator_method(item)
+            self.assertTrue(is_valid, f"Valid {item_type} should be accepted: {item}")
+            print(f"✓ Valid {item_type} accepted: {item}")
+        
+        # Test invalid items
+        for item in invalid_items:
+            is_valid = validator_method(item)
+            self.assertFalse(is_valid, f"Invalid {item_type} should be rejected: {item}")
+            item_display = item[:30] + '...' if len(item) > 30 else item
+            print(f"✓ Invalid {item_type} rejected: {item_display}")
     
     def test_sql_injection_union_attack(self):
         """Test that SQL UNION attacks are blocked (Scenario #1 from OWASP)"""
@@ -738,25 +751,15 @@ class TestA03InjectionPrevention(TestCase):
         """Test that column names are validated against whitelist"""
         print("\n[A03] Test: Column name whitelist validation")
         
-        # Valid columns
         valid_columns = ['id', 'name', 'price', 'url', 'unit']
-        for col in valid_columns:
-            is_valid = DatabaseQueryValidator.validate_column_name(col)
-            self.assertTrue(is_valid, f"Valid column should be accepted: {col}")
-            print(f"✓ Valid column accepted: {col}")
+        invalid_columns = ['password', 'admin', '1; DROP TABLE', '../etc/passwd']
         
-        # Invalid columns
-        invalid_columns = [
-            'password',
-            'admin',
-            '1; DROP TABLE',
-            '../etc/passwd'
-        ]
-        
-        for col in invalid_columns:
-            is_valid = DatabaseQueryValidator.validate_column_name(col)
-            self.assertFalse(is_valid, f"Invalid column should be rejected: {col}")
-            print(f"✓ Invalid column rejected: {col}")
+        self._validate_whitelist_items(
+            DatabaseQueryValidator.validate_column_name,
+            valid_columns,
+            invalid_columns,
+            'column'
+        )
     
     def test_database_sanitization(self):
         """Test that database sanitization prevents malicious input"""
@@ -820,8 +823,6 @@ class TestA03InjectionPrevention(TestCase):
             self.assertIsNotNone(sanitized, "Sanitized value should be provided")
         
         print(f"✓ Valid keywords accepted")
-
-
 class TestA04InsecureDesign(TestCase):
     """
     Test suite for OWASP A04:2021 - Insecure Design
@@ -978,8 +979,6 @@ class TestA04InsecureDesign(TestCase):
         success = db_service.save(invalid_data)
         self.assertFalse(success, "Oversized name should be rejected")
         print("✓ Length validation enforced")
-
-
 class TestIntegratedSecurityScenarios(TestCase):
     """
     Integration tests simulating real-world attack scenarios
@@ -1103,8 +1102,6 @@ class TestIntegratedSecurityScenarios(TestCase):
             print(f"✓ {token_info['name']}: {permission} = {expected}")
         
         print("✓ Token permission matrix verified")
-
-
 def run_owasp_compliance_tests():
     """
     Run all OWASP compliance tests and generate report
@@ -1152,8 +1149,5 @@ def run_owasp_compliance_tests():
     print("=" * 80)
     
     return result
-
-
 if __name__ == '__main__':
     run_owasp_compliance_tests()
-
