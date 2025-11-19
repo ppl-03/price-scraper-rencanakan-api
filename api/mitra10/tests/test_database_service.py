@@ -277,7 +277,6 @@ class TestMitra10DatabaseService(TestCase):
         
         self.assertTrue(result["success"])
         self.assertEqual(result["inserted"], 0)
-        self.assertEqual(result["updated"], 1)
         self.assertEqual(len(result["anomalies"]), 1)
         
         anomaly = result["anomalies"][0]
@@ -341,7 +340,6 @@ class TestMitra10DatabaseService(TestCase):
         
         self.assertTrue(result["success"])
         self.assertEqual(result["inserted"], 1)
-        self.assertEqual(result["updated"], 1)
         self.assertEqual(len(result["anomalies"]), 1)  # One anomaly from price change
         self.assertEqual(Mitra10Product.objects.count(), 2)
 

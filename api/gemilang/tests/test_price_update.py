@@ -28,11 +28,14 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         
         self.assertTrue(result["success"])
         self.assertEqual(result["inserted"], 0)
-        self.assertEqual(result["updated"], 1)
+        # 20% increase = anomaly, so updated=0 (price does NOT update)
+        self.assertEqual(result["updated"], 0)
+        self.assertEqual(len(result["anomalies"]), 1)
         self.assertEqual(GemilangProduct.objects.count(), 1)
         
+        # Price should remain old price because anomaly needs approval
         updated_product = GemilangProduct.objects.get(name="Product A")
-        self.assertEqual(updated_product.price, 12000)
+        self.assertEqual(updated_product.price, 10000)
     
     def test_no_update_when_price_same(self):
         GemilangProduct.objects.create(name="Product B", price=10000, url="https://test.com/b", unit="M")
@@ -56,7 +59,8 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         result = service.save_with_price_update(data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 1)
+        # 15% change = anomaly, so updated=0 (price does NOT update)
+        self.assertEqual(result["updated"], 0)
         self.assertEqual(len(result["anomalies"]), 1)
         
         anomaly = result["anomalies"][0]
@@ -74,7 +78,8 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         result = service.save_with_price_update(data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 1)
+        # -15% change = anomaly, so updated=0 (price does NOT update)
+        self.assertEqual(result["updated"], 0)
         self.assertEqual(len(result["anomalies"]), 1)
         
         anomaly = result["anomalies"][0]
@@ -162,7 +167,8 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         result = service.save_with_price_update(data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 2)
+        # Both are anomalies (>=15% change), so updated=0 (neither price updates)
+        self.assertEqual(result["updated"], 0)
         self.assertEqual(len(result["anomalies"]), 2)
     
     def test_empty_data_returns_false(self):
@@ -230,7 +236,8 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         time.sleep(0.01)
         
         service = GemilangDatabaseService()
-        data = [{"name": "Product N", "price": 12000, "url": "https://test.com/n", "unit": "PCS"}]
+        # Use 10% increase (below 15% threshold) so price actually updates
+        data = [{"name": "Product N", "price": 11000, "url": "https://test.com/n", "unit": "PCS"}]
         
         result = service.save_with_price_update(data)
         

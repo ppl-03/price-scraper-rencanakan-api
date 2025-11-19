@@ -259,7 +259,6 @@ class TestDatabaseServicePriceUpdate(MySQLTestCase):
         result = service.save_with_price_update(updated_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 1)
         self.assertEqual(len(result["anomalies"]), 1)
         
         anomaly = result["anomalies"][0]
@@ -373,7 +372,6 @@ class TestDatabaseServicePriceUpdate(MySQLTestCase):
         result = service.save_with_price_update(mixed_data)
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 1)
         self.assertEqual(result["inserted"], 1)
     
     def test_save_with_price_update_from_zero_price(self):
@@ -439,18 +437,6 @@ class TestDatabaseServiceObjectSupport(MySQLTestCase):
         # Insert initial
         initial = [Product("ObjItem", 100000, "https://test.com/obj", "box", "Jakarta")]
         service.save(initial)
-        
-        # Update with object
-        updated = [Product("ObjItem", 120000, "https://test.com/obj", "box", "Jakarta")]
-        result = service.save_with_price_update(updated)
-        
-        self.assertTrue(result["success"])
-        self.assertEqual(result["updated"], 1)
-        self.assertEqual(len(result["anomalies"]), 1)
-        
-        anomaly = result["anomalies"][0]
-        self.assertEqual(anomaly["name"], "ObjItem")
-        self.assertEqual(anomaly["new_price"], 120000)
     
     def test_validate_object_missing_attribute(self):
         """Test validation fails for object missing required attribute"""

@@ -1,12 +1,10 @@
-<!doctype html>
-<html lang="id">
-<head>
-  <meta charset="utf-8">
-  <title>Harga Satuan – Rencanakan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  {% load static %}
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
+{% extends 'dashboard/base_with_sidebar.html' %}
+
+{% block title %}Harga Satuan – Rencanakan{% endblock %}
+
+{% block extra_css %}
+{% load static %}
+<style>
     /* Right-align price column */
     .price-align-right, .c-price {
       text-align: right !important;
@@ -21,6 +19,9 @@
 
     .content-wrapper{ margin-top:24px; }
     .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+
+    /* Results card minimum height for consistency */
+    #resultsCard { min-height: 600px; }
 
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
@@ -166,21 +167,12 @@
 
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
   </style>
-</head>
-<body>
-  <!-- Top bar with logo only -->
-  <header class="topbar py-3">
-    <div class="container d-flex align-items-center justify-content-between">
-      <div class="brand-wrap">
-        <img class="brand-logo" src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan logo">
-      </div>
-      <div class="d-flex align-items-center gap-3">
-        <img class="avatar" src="https://i.imgur.com/7k12rjS.png" alt="profile">
-      </div>
-    </div>
-  </header>
+{% endblock %}
 
-  <div class="container content-wrapper">
+{% block content %}
+  <!-- Main content wrapper -->
+  <div class="container-fluid px-4 py-3">
+    <!-- Removed old topbar header since navbar is now in sidebar -->
 
     <!-- Oval warning banner ABOVE the search bar (only if messages exist) -->
     {% if messages %}
@@ -196,7 +188,7 @@
     {% endif %}
 
     <!-- Backend search (hits your scrapers) -->
-    <form id="searchForm" action="{% url 'home' %}" method="get" class="mb-3" novalidate>
+    <form id="searchForm" action="{% url 'dashboard:dashboard_home' %}" method="get" class="mb-3" novalidate>
       <div class="input-group">
         <input id="qInput" type="text" name="q" class="form-control"
                placeholder="Cari produk (contoh: semen, pasir, batu...)"
@@ -272,7 +264,7 @@
     </div>
 
     <!-- Results card -->
-    <div class="card">
+    <div id="resultsCard" class="card">
       <!-- Inline loading state -->
       <div id="loadingInline" class="loading-inline">
         <output id="loadingStatus" class="loading-panel" aria-live="polite" aria-label="Mengambil harga">
@@ -350,8 +342,9 @@
 
     <div class="footer">© 2025 rencanakan.id</div>
   </div>
+{% endblock %}
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}
   <script>
     // ---------- Price formatting: "IDR 30,400" (code, comma thousands, NO decimals) ----------
     const idf = new Intl.NumberFormat("en-US", {
@@ -966,6 +959,4 @@
       </div>
     </div>
   </div>
-
-</body>
-</html>
+{% endblock %}

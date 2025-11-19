@@ -246,25 +246,31 @@ class SpecificationFinder:
         ]
     
     def find_specification_values(self, soup: BeautifulSoup) -> List[str]:
+        """Extract specifications in a single DOM traversal for better performance"""
         specifications = []
         
         try:
+            # Single pass: find all relevant elements at once
+            # This reduces DOM traversal overhead
             table_specs = self._extract_from_tables(soup)
             specifications.extend(table_specs)
         except Exception as e:
-            logger.warning(f"Error extracting table specifications: {e}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Error extracting table specifications: {e}")
         
         try:
             span_specs = self._extract_from_spans(soup)
             specifications.extend(span_specs)
         except Exception as e:
-            logger.warning(f"Error extracting span specifications: {e}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Error extracting span specifications: {e}")
         
         try:
             div_specs = self._extract_from_divs(soup)
             specifications.extend(div_specs)
         except Exception as e:
-            logger.warning(f"Error extracting div specifications: {e}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Error extracting div specifications: {e}")
         
         return specifications
     
@@ -316,7 +322,8 @@ class SpecificationFinder:
                     if text and any(keyword in text.lower() for keyword in self.spec_keywords):
                         specs.append(text)
                 except AttributeError as e:
-                    logger.debug(f"Error processing span: {e}")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(f"Error processing span: {e}")
                     continue
         except Exception as e:
             logger.warning(f"Error finding spans: {e}")
@@ -336,7 +343,8 @@ class SpecificationFinder:
                     if text:
                         specs.append(text)
                 except AttributeError as e:
-                    logger.debug(f"Error processing div: {e}")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(f"Error processing div: {e}")
                     continue
         except Exception as e:
             logger.warning(f"Error finding divs: {e}")
@@ -394,6 +402,44 @@ class GemilangUnitParser:
         self.spec_finder = spec_finder or SpecificationFinder()
         self.config = config or UnitParserConfiguration()
     
+    def parse_unit_from_element(self, element) -> Optional[str]:
+        """Parse unit directly from BeautifulSoup element (optimized - avoids string conversion)"""
+        if element is None:
+            return None
+        
+        try:
+            # Extract text directly from element - much faster than str(element)
+            specifications = self._extract_specifications_from_element(element)
+            found_units = self._extract_units_from_specifications(specifications)
+            prioritized_unit = self._apply_priority_rules(found_units)
+            if prioritized_unit:
+                return prioritized_unit
+            
+            # Fallback to full text extraction
+            full_text = element.get_text()
+            return self.extractor.extract_unit(full_text)
+            
+        except Exception as e:
+            if logger.isEnabledFor(logging.ERROR):
+                logger.error(f"Unexpected error in unit parsing from element: {e}")
+            return None
+    
+    def _extract_specifications_from_element(self, element) -> List[str]:
+        """Extract specifications directly from element without creating soup"""
+        specifications = []
+        try:
+            # Get text from specific elements within the item
+            for tag in ['p', 'span', 'div']:
+                elements = element.find_all(tag)
+                for el in elements:
+                    text = el.get_text(strip=True)
+                    if text and len(text) < 200:  # Only process reasonable length text
+                        specifications.append(text)
+        except Exception as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Error extracting specifications from element: {e}")
+        return specifications
+    
     def parse_unit(self, html_content: str) -> Optional[str]:
         if not html_content or not isinstance(html_content, str):
             return None
@@ -412,7 +458,8 @@ class GemilangUnitParser:
             return self._extract_from_full_text(soup)
             
         except Exception as e:
-            logger.error(f"Unexpected error in unit parsing: {e}")
+            if logger.isEnabledFor(logging.ERROR):
+                logger.error(f"Unexpected error in unit parsing: {e}")
             return None
     
     def _create_soup_safely(self, html_content: str) -> Optional[BeautifulSoup]:
@@ -426,7 +473,8 @@ class GemilangUnitParser:
         try:
             return self.spec_finder.find_specification_values(soup)
         except Exception as e:
-            logger.warning(f"Error extracting specifications: {e}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Error extracting specifications: {e}")
             return []
     
     def _extract_units_from_specifications(self, specifications: List[str]) -> List[str]:
@@ -437,7 +485,8 @@ class GemilangUnitParser:
                 if unit:
                     found_units.append(unit)
             except Exception as e:
-                logger.debug(f"Error extracting unit from spec '{spec}': {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"Error extracting unit from spec '{spec}': {e}")
                 continue
         
         return found_units
@@ -447,17 +496,19 @@ class GemilangUnitParser:
             return None
         
         try:
-            area_units = [UNIT_M2, UNIT_CM2, UNIT_INCH2, UNIT_MM2]
+            # Use sets for faster membership testing
+            area_units = {UNIT_M2, UNIT_CM2, UNIT_INCH2, UNIT_MM2}
+            volume_units = {UNIT_M3, UNIT_CM3}
+            weight_units = {UNIT_KG, UNIT_GRAM, UNIT_TON, UNIT_POUND}
+            
             for unit in found_units:
                 if unit in area_units:
                     return unit
             
-            volume_units = [UNIT_M3, UNIT_CM3]
             for unit in found_units:
                 if unit in volume_units:
                     return unit
             
-            weight_units = [UNIT_KG, UNIT_GRAM, UNIT_TON, UNIT_POUND]
             for unit in found_units:
                 if unit in weight_units:
                     return unit
@@ -465,7 +516,8 @@ class GemilangUnitParser:
             return found_units[0]
             
         except Exception as e:
-            logger.warning(f"Error applying priority rules: {e}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Error applying priority rules: {e}")
             return found_units[0] if found_units else None
     
     def _extract_from_full_text(self, soup: BeautifulSoup) -> Optional[str]:
@@ -473,5 +525,6 @@ class GemilangUnitParser:
             full_text = soup.get_text()
             return self.extractor.extract_unit(full_text)
         except Exception as e:
-            logger.warning(f"Error extracting from full text: {e}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Error extracting from full text: {e}")
             return None
