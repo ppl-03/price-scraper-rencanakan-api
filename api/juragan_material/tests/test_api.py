@@ -5,6 +5,9 @@ from django.test import TestCase, RequestFactory
 from django.http import JsonResponse
 from api.juragan_material import views
 
+# Valid API token for testing
+TEST_API_TOKEN = 'dev-token-12345'
+
 
 class TestJuraganMaterialAPI(BaseScraperAPITestCase):
     """Test cases for Juragan Material API endpoint."""
@@ -28,7 +31,11 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         )
         mock_scraper.scrape_products.return_value = mock_result
         
-        response = self.client.get('/api/juragan_material/scrape/', {'keyword': 'semen'})
+        response = self.client.get(
+            '/api/juragan_material/scrape/', 
+            {'keyword': 'semen'},
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -48,11 +55,11 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         
-        response = self.client.get(self.endpoint_url, {
-            'keyword': 'besi',
-            'sort_by_price': 'true',
-            'page': '2'
-        })
+        response = self.client.get(
+            self.endpoint_url,
+            {'keyword': 'besi', 'sort_by_price': 'true', 'page': '2'},
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products.assert_called_once_with(
@@ -68,10 +75,11 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         
-        response = self.client.get(self.endpoint_url, {
-            'keyword': 'pasir',
-            'sort_by_price': 'false'
-        })
+        response = self.client.get(
+            self.endpoint_url,
+            {'keyword': 'pasir', 'sort_by_price': 'false'},
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products.assert_called_once_with(
@@ -89,8 +97,8 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         mock_create_scraper.return_value = mock_scraper
         
         # Make two requests
-        self.client.get(self.endpoint_url, {'keyword': 'test1'})
-        self.client.get(self.endpoint_url, {'keyword': 'test2'})
+        self.client.get(self.endpoint_url, {'keyword': 'test1'}, HTTP_X_API_TOKEN=TEST_API_TOKEN)
+        self.client.get(self.endpoint_url, {'keyword': 'test2'}, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         # Scraper factory should be called twice
         self.assertEqual(mock_create_scraper.call_count, 2)
@@ -104,7 +112,7 @@ class TestJuraganMaterialAPI(BaseScraperAPITestCase):
         mock_handle_exception.return_value = JsonResponse({'error': 'Internal error'}, status=500)
         
         # Make the request that should trigger the exception
-        response = self.client.get(self.endpoint_url, {'keyword': 'test'})
+        response = self.client.get(self.endpoint_url, {'keyword': 'test'}, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         # Verify handle_scraping_exception was called
         mock_handle_exception.assert_called_once()
@@ -134,7 +142,10 @@ class TestJuraganMaterialViewsDirect(TestCase):
         mock_format.return_value = {'success': True, 'products': []}
         
         # Create request
-        request = self.factory.get('/api/juragan_material/scrape/?keyword=test')
+        request = self.factory.get(
+            '/api/juragan_material/scrape/?keyword=test',
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         
         # Call view
         response = views.scrape_products(request)
@@ -157,7 +168,10 @@ class TestJuraganMaterialViewsDirect(TestCase):
         error_response = JsonResponse({'error': 'Invalid keyword'}, status=400)
         mock_validate.return_value = (None, None, None, error_response)
         
-        request = self.factory.get('/api/juragan_material/scrape/')
+        request = self.factory.get(
+            '/api/juragan_material/scrape/',
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         response = views.scrape_products(request)
         
         self.assertEqual(response, error_response)
@@ -176,7 +190,10 @@ class TestJuraganMaterialViewsDirect(TestCase):
         error_response = JsonResponse({'error': 'Internal error'}, status=500)
         mock_handle.return_value = error_response
         
-        request = self.factory.get('/api/juragan_material/scrape/?keyword=test')
+        request = self.factory.get(
+            '/api/juragan_material/scrape/?keyword=test',
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         response = views.scrape_products(request)
         
         self.assertEqual(response, error_response)
@@ -187,7 +204,10 @@ class TestJuraganMaterialViewsDirect(TestCase):
     
     def test_scrape_products_view_requires_get(self):
         """Test that scrape_products only accepts GET requests."""
-        request = self.factory.post('/api/juragan_material/scrape/')
+        request = self.factory.post(
+            '/api/juragan_material/scrape/',
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         response = views.scrape_products(request)
         
         # Should return 405 Method Not Allowed
@@ -206,7 +226,11 @@ class TestJuraganMaterialViewsDirect(TestCase):
         mock_format.return_value = {'success': True}
         
         # Make the request
-        request = self.factory.get('/api/juragan_material/scrape/', {'keyword': 'cement', 'sort_by_price': 'false', 'page': '5'})
+        request = self.factory.get(
+            '/api/juragan_material/scrape/',
+            {'keyword': 'cement', 'sort_by_price': 'false', 'page': '5'},
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         views.scrape_products(request)
         
         # Verify scraper was called with correct parameters
@@ -259,10 +283,11 @@ class TestJuraganMaterialCategorization(TestCase):
         # Make request with save_to_db=true
         from django.test import Client
         client = Client()
-        response = client.get('/api/juragan_material/scrape/', {
-            'keyword': 'semen',
-            'save_to_db': 'true'
-        })
+        response = client.get(
+            '/api/juragan_material/scrape/',
+            {'keyword': 'semen', 'save_to_db': 'true'},
+            HTTP_X_API_TOKEN=TEST_API_TOKEN
+        )
         
         # Verify response
         self.assertEqual(response.status_code, 200)
