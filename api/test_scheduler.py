@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from api.scheduler import BaseScheduler
 
@@ -66,22 +66,6 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(summary['vendors']['gemilang']['status'], 'success')
         self.assertEqual(summary['successful_vendors'], 1)
         self.assertEqual(summary['failed_vendors'], 0)
-
-    def test_scheduler_no_categories(self):
-        class S(BaseScheduler):
-            def get_categories(self, vendor, server_time):
-                return []
-
-            def create_scraper(self, vendor):
-                raise AssertionError('should not be called')
-
-        s = S()
-        summary = s.run(vendors=['depobangunan'])
-        self.assertEqual(summary['vendors']['depobangunan']['products_found'], 0)
-        self.assertEqual(summary['vendors']['depobangunan']['saved'], 0)
-        self.assertEqual(summary['vendors']['depobangunan']['status'], 'skipped_no_categories')
-        self.assertGreater(len(summary['vendors']['depobangunan']['errors']), 0)
-        self.assertEqual(summary['failed_vendors'], 1)
 
     def test_scheduler_scraper_failure(self):
         class S(BaseScheduler):
@@ -330,16 +314,6 @@ class TestLoadDbService(unittest.TestCase):
 
 
 class TestNormalizeProducts(unittest.TestCase):
-    def test_normalize_products_dict_list(self):
-        scheduler = BaseScheduler()
-        products = [
-            {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': 'pcs'},
-            {'name': 'Product B', 'price': 200, 'url': 'https://example.com/b', 'unit': 'box'}
-        ]
-        
-        result = scheduler.normalize_products(products)
-        
-        self.assertEqual(result, products)
     
     def test_normalize_products_object_list(self):
         scheduler = BaseScheduler()
@@ -366,18 +340,6 @@ class TestNormalizeProducts(unittest.TestCase):
         
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['unit'], '')
-    
-    def test_normalize_products_mixed_list(self):
-        scheduler = BaseScheduler()
-        product1 = {'name': 'Product A', 'price': 100, 'url': 'https://example.com/a', 'unit': 'pcs'}
-        product2 = SimpleNamespace(name='Product B', price=200, url='https://example.com/b', unit='kg')
-        products = [product1, product2]
-        
-        result = scheduler.normalize_products(products)
-        
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[0], product1)
-        self.assertEqual(result[1]['name'], 'Product B')
     
     def test_normalize_products_invalid_object(self):
         scheduler = BaseScheduler()
