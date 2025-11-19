@@ -575,11 +575,15 @@ class TestDepoBangunanLocationAPI(TestCase):
 class TestDepoBangunanSaveProductsHelper(TestCase):
     """Test the _save_products helper function and its categorization logic."""
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
     @patch('db_pricing.models.DepoBangunanProduct')
     @patch('api.depobangunan.views.AutoCategorizationService')
-    def test_save_products_with_price_update_and_categorization(self, mock_cat_service_cls, mock_model):
+    def test_save_products_with_price_update_and_categorization(self, mock_cat_service_cls, mock_model, mock_security_validate):
         """Test that _save_products triggers categorization for new products."""
         from api.depobangunan.views import _save_products
+        
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
         
         # Mock database service
         mock_db_service = MagicMock()
@@ -619,11 +623,15 @@ class TestDepoBangunanSaveProductsHelper(TestCase):
         # Verify categorization was called
         mock_cat_service.categorize_products.assert_called_once()
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
     @patch('db_pricing.models.DepoBangunanProduct')
     @patch('api.depobangunan.views.AutoCategorizationService')
-    def test_save_products_categorization_exception_handling(self, mock_cat_service_cls, mock_model):
+    def test_save_products_categorization_exception_handling(self, mock_cat_service_cls, mock_model, mock_security_validate):
         """Test that categorization failures don't break the save operation."""
         from api.depobangunan.views import _save_products
+        
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
         
         # Mock database service
         mock_db_service = MagicMock()
@@ -652,9 +660,13 @@ class TestDepoBangunanSaveProductsHelper(TestCase):
         self.assertTrue(response_data['success'])
         self.assertEqual(response_data['categorized'], 0)
     
-    def test_save_products_without_price_update(self):
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
+    def test_save_products_without_price_update(self, mock_security_validate):
         """Test saving products without price update (no categorization)."""
         from api.depobangunan.views import _save_products
+        
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
         
         mock_db_service = MagicMock()
         mock_db_service.save.return_value = True
@@ -688,13 +700,17 @@ class TestDepoBangunanSaveProductsHelper(TestCase):
 class TestDepoBangunanSaveProductsToDatabaseHelper(TestCase):
     """Test the _save_products_to_database helper function."""
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
     @patch('db_pricing.models.DepoBangunanProduct')
     @patch('api.depobangunan.views.AutoCategorizationService')
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
-    def test_save_products_to_database_success(self, mock_db_service_cls, mock_cat_service_cls, mock_model):
+    def test_save_products_to_database_success(self, mock_db_service_cls, mock_cat_service_cls, mock_model, mock_security_validate):
         """Test successful save and categorization."""
         from api.depobangunan.views import _save_products_to_database
         from api.interfaces import Product
+        
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
         
         # Create mock products
         products = [
@@ -740,11 +756,15 @@ class TestDepoBangunanSaveProductsToDatabaseHelper(TestCase):
         self.assertFalse(result['success'])
         self.assertEqual(result['categorized'], 0)
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
-    def test_save_products_to_database_db_exception(self, mock_db_service_cls):
+    def test_save_products_to_database_db_exception(self, mock_db_service_cls, mock_security_validate):
         """Test handling of database exception."""
         from api.depobangunan.views import _save_products_to_database
         from api.interfaces import Product
+        
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
         
         products = [Product(name='Product 1', price=1000, url='/p1', unit='pcs', location='Jakarta')]
         
