@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponseNotAllowed
-from django.views.decorators.http import require_POST, require_GET, require_http_methods
+from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.csrf import csrf_protect
 from django.contrib import messages
 from django.urls import reverse
@@ -31,9 +31,10 @@ from api.juragan_material.url_builder import JuraganMaterialUrlBuilder
 from api.mitra10.factory import create_mitra10_scraper, create_mitra10_location_scraper
 from api.mitra10.url_builder import Mitra10UrlBuilder
 
-from api.tokopedia.factory import create_tokopedia_scraper
-from api.tokopedia.url_builder import TokopediaUrlBuilder
-from api.tokopedia.scraper import TOKOPEDIA_LOCATION_IDS
+from api.tokopedia.url_builder_ulasan import TokopediaUrlBuilderUlasan
+from api.tokopedia.http_client import TokopediaHttpClient
+from api.tokopedia.html_parser import TokopediaHtmlParser
+from api.tokopedia.scraper import TokopediaPriceScraper
 from api.tokopedia.location_scraper import TokopediaLocationScraper
 from api.tokopedia.unit_parser import TokopediaUnitParser
 
@@ -1293,8 +1294,7 @@ def _tokopedia_fallback(keyword: str, sort_by_price: bool = True, page: int = 0)
 
 
 def _try_simple_tokopedia_url(keyword: str, sort_by_price: bool = True, page: int = 0):
-    """Try simple Tokopedia URL without complex parameters."""
-    url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price, page)
+    url = _build_url_defensively(TokopediaUrlBuilderUlasan(), keyword, sort_by_price, page)
     html = _human_get(url)
     prods = _parse_tokopedia_html(html)
     return prods, url, len(html)
@@ -1566,29 +1566,51 @@ def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, pag
             return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
 
 
+def _scrape_batch_with_limit(scraper, keyword: str, sort_by_price: bool, limit: int) -> list:
+    products = scraper.scrape_batch([keyword])
+    
+    if len(products) >= limit:
+        return products
+    
+    if not hasattr(scraper, 'scrape_products'):
+        return products
+    
+    return _extend_products_to_limit(scraper, keyword, sort_by_price, limit, products)
+
+
+def _extend_products_to_limit(scraper, keyword: str, sort_by_price: bool, limit: int, products: list) -> list:
+    try:
+        extra_res = scraper.scrape_products(
+            keyword=keyword, 
+            sort_by_price=sort_by_price, 
+            page=1, 
+            limit=limit - len(products)
+        )
+        if getattr(extra_res, 'success', False) and getattr(extra_res, 'products', None):
+            products.extend(extra_res.products)
+    except TypeError:
+        pass  # scrape_products doesn't support limit parameter
+    
+    return products
+
+
+def _use_scrape_batch_method(scraper, keyword: str, sort_by_price: bool, limit: int | None):
+    from api.interfaces import ScrapingResult
+    
+    if limit:
+        products = _scrape_batch_with_limit(scraper, keyword, sort_by_price, limit)
+    else:
+        products = scraper.scrape_batch([keyword])
+    
+    return ScrapingResult(products=products, success=True, url="")
+
+
 def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page: int, limit: int | None = None):
-    """Handle scraping for BatchPlaywrightClient-based scrapers."""
-    from api.playwright_client import BatchPlaywrightClient
     from api.interfaces import ScrapingResult
 
     try:
-        # Try to use scrape_batch method if available (like Mitra10)
         if hasattr(scraper, 'scrape_batch'):
-            # If limit is provided and scrape_batch supports batching, attempt to collect up to limit
-            if limit and hasattr(scraper, 'scrape_batch'):
-                # scrape_batch takes a list of keywords; for a single keyword we may need paging inside the scraper
-                products = scraper.scrape_batch([keyword])
-                # If scrape_batch returned fewer than limit, and the scraper supports paginate via scrape_products, attempt to fetch more
-                if len(products) < limit and hasattr(scraper, 'scrape_products'):
-                    try:
-                        extra_res = scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=1, limit=limit - len(products))
-                        if getattr(extra_res, 'success', False) and getattr(extra_res, 'products', None):
-                            products.extend(extra_res.products)
-                    except TypeError:
-                        pass
-            else:
-                products = scraper.scrape_batch([keyword])
-            return ScrapingResult(products=products, success=True, url="")
+            return _use_scrape_batch_method(scraper, keyword, sort_by_price, limit)
         else:
             return _handle_playwright_scraper_fallback(scraper, keyword, sort_by_price, page)
     except Exception as e:
@@ -1835,6 +1857,14 @@ def _get_mitra10_fallback_locations() -> list[dict]:
 
 
 # ---------------- helper functions for home view ----------------
+def _create_tokopedia_ulasan_scraper():
+    """Create a Tokopedia scraper configured to sort by ulasan (popularity/reviews)."""
+    http_client = TokopediaHttpClient()
+    url_builder = TokopediaUrlBuilderUlasan()
+    html_parser = TokopediaHtmlParser()
+    return TokopediaPriceScraper(http_client, url_builder, html_parser), url_builder
+
+
 def _scrape_all_vendors(request, keyword: str) -> list[dict]:
     """Scrape prices from all vendors."""
     prices = []
@@ -1842,8 +1872,7 @@ def _scrape_all_vendors(request, keyword: str) -> list[dict]:
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback)
-    # Request 20 items from Tokopedia (default was showing 5)
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback, limit=20)
+    prices += _run_vendor_to_prices(request, keyword, _create_tokopedia_ulasan_scraper, TOKOPEDIA_SOURCE, _tokopedia_fallback, limit=20)
     return prices
 
 
@@ -2034,7 +2063,7 @@ def trigger_scrape(request):
         "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback),
         "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback),
         "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback),
-        "tokopedia": _run_vendor_to_count(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback),
+        "tokopedia": _run_vendor_to_count(request, keyword, _create_tokopedia_ulasan_scraper, TOKOPEDIA_SOURCE, _tokopedia_fallback),
     }
     messages.success(
         request,

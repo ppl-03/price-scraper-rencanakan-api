@@ -16,6 +16,8 @@ class GemilangUrlBuilder(BaseUrlBuilder):
             'page': page
         }
         
+        # Only add sort parameter if sort_by_price is True
+        # Gemilang does not have popularity filter or rating options
         if sort_by_price:
             params['sort'] = 'price_asc'
         

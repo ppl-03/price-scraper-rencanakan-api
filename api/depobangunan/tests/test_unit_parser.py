@@ -223,12 +223,12 @@ class TestDepoBangunanUnitParser(unittest.TestCase):
     def test_parse_unit_from_detail_page_with_empty_html(self):
         """Test parsing unit from empty HTML content."""
         result = self.parser.parse_unit_from_detail_page("")
-        self.assertIsNone(result)
+        self.assertEqual(result, 'PCS')
     
     def test_parse_unit_from_detail_page_with_none_html(self):
         """Test parsing unit from None HTML content."""
         result = self.parser.parse_unit_from_detail_page(None)
-        self.assertIsNone(result)
+        self.assertEqual(result, 'PCS')
 
 
 class TestDepoBangunanUnitParserIntegration(unittest.TestCase):
@@ -288,6 +288,116 @@ class TestDepoBangunanUnitParserIntegration(unittest.TestCase):
         # Should find 'Ukuran' keyword and then detect 2kg
         res = parser.parse_unit_from_detail_page(html)
         self.assertEqual(res, 'KG')
+
+
+class TestUnitParserPCSDefault(unittest.TestCase):
+    """Tests for unit parser PCS default behavior when unit is None or X"""
+    
+    def setUp(self):
+        self.parser = DepoBangunanUnitParser()
+    
+    def test_parse_unit_from_name_returns_pcs_for_none(self):
+        """Test that None unit defaults to PCS"""
+        with patch.object(self.parser.extractor, 'extract_unit_from_name', return_value=None):
+            result = self.parser.parse_unit_from_product_name('Some Product Name')
+            self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_from_name_returns_pcs_for_uppercase_x(self):
+        """Test that 'X' unit defaults to PCS"""
+        with patch.object(self.parser.extractor, 'extract_unit_from_name', return_value='X'):
+            result = self.parser.parse_unit_from_product_name('Product X Name')
+            self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_from_name_valid_unit_kg(self):
+        """Test that valid KG unit is returned as-is"""
+        with patch.object(self.parser.extractor, 'extract_unit_from_name', return_value='KG'):
+            result = self.parser.parse_unit_from_product_name('Semen 50 KG')
+            self.assertEqual(result, 'KG')
+    
+    def test_parse_unit_from_name_valid_unit_liter(self):
+        """Test that valid L unit is returned as-is"""
+        with patch.object(self.parser.extractor, 'extract_unit_from_name', return_value='L'):
+            result = self.parser.parse_unit_from_product_name('Cat 5 Liter')
+            self.assertEqual(result, 'L')
+    
+    def test_parse_unit_from_detail_page_returns_pcs_on_no_content(self):
+        """Test that detail page parser returns PCS when content is None"""
+        result = self.parser.parse_unit_from_detail_page(None)
+        self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_from_detail_page_returns_pcs_on_empty_content(self):
+        """Test that detail page parser returns PCS for empty string"""
+        result = self.parser.parse_unit_from_detail_page('')
+        self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_from_detail_page_returns_pcs_when_not_found(self):
+        """Test that detail page parser returns PCS when unit not found"""
+        html = '<html><body><div>No unit info here</div></body></html>'
+        result = self.parser.parse_unit_from_detail_page(html)
+        self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_from_detail_page_valid_unit_from_table(self):
+        """Test parsing valid unit from detail page table"""
+        html = '''
+        <html>
+            <body>
+                <table class="data table additional-attributes">
+                    <tbody>
+                        <tr>
+                            <th>Ukuran</th>
+                            <td>5KG</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </body>
+        </html>
+        '''
+        result = self.parser.parse_unit_from_detail_page(html)
+        self.assertEqual(result, 'KG')
+    
+    def test_parse_unit_empty_string_defaults_to_pcs(self):
+        """Test parsing empty product name defaults to PCS"""
+        with patch.object(self.parser.extractor, 'extract_unit_from_name', return_value=None):
+            result = self.parser.parse_unit_from_product_name('')
+            self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_whitespace_only_defaults_to_pcs(self):
+        """Test parsing whitespace-only product name defaults to PCS"""
+        with patch.object(self.parser.extractor, 'extract_unit_from_name', return_value=None):
+            result = self.parser.parse_unit_from_product_name('   ')
+            self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_from_name_special_characters_with_valid_unit(self):
+        """Test parsing product name with special characters but valid unit"""
+        with patch.object(self.parser.extractor, 'extract_unit_from_name', return_value='KG'):
+            result = self.parser.parse_unit_from_product_name('Semen @ 50 KG #1')
+            self.assertEqual(result, 'KG')
+    
+    def test_parse_unit_from_detail_page_malformed_html_returns_pcs(self):
+        """Test handling malformed HTML returns PCS"""
+        malformed_html_cases = [
+            '<html><body><table class="data table additional-attributes"',  # Unclosed tags
+            '<><><>',  # Invalid tags
+            'Just plain text without tags',
+        ]
+        
+        for html in malformed_html_cases:
+            with self.subTest(html=html[:30]):
+                result = self.parser.parse_unit_from_detail_page(html)
+                self.assertEqual(result, 'PCS')
+    
+    def test_parse_unit_from_product_name_no_match_defaults_to_pcs(self):
+        """Test that products without recognizable units default to PCS"""
+        test_cases = [
+            "RANDOM PRODUCT NAME",
+            "SOME CONSTRUCTION MATERIAL",
+            "BUILDING SUPPLIES WITHOUT UNIT",
+        ]
+        
+        for product_name in test_cases:
+            with self.subTest(product_name=product_name):
+                result = self.parser.parse_unit_from_product_name(product_name)
+                self.assertEqual(result, 'PCS')
 
 
 if __name__ == '__main__':

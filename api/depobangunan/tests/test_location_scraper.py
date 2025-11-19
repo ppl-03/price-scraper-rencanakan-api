@@ -224,3 +224,25 @@ class TestDepoBangunanLocationScraper(TestCase):
 
         expected_url = "https://www.depobangunan.co.id/gerai-depo-bangunan"
         self.mock_http_client.get.assert_called_once_with(expected_url, timeout=60)
+
+
+class TestLocationScraperEdgeCases(TestCase):
+    
+    def test_scrape_locations_with_none_response(self):
+        """Test scrape_locations when HTTP client returns None"""
+        from api.depobangunan.location_scraper import DepoBangunanLocationScraper
+        from unittest.mock import MagicMock
+        
+        mock_client = MagicMock()
+        mock_client.get.return_value = None
+        
+        mock_url_builder = MagicMock()
+        mock_url_builder.build_location_url.return_value = "https://test.com"
+        
+        mock_parser = MagicMock()
+        
+        scraper = DepoBangunanLocationScraper(mock_client, mock_url_builder, mock_parser)
+        result = scraper.scrape_locations()
+        
+        self.assertFalse(result.success)
+        self.assertIn("empty", result.error_message.lower())

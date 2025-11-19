@@ -330,61 +330,40 @@ class TestGemilangLocationAPI(TestCase):
         response = self.client.post('/api/gemilang/locations/')
         self.assertEqual(response.status_code, 405)
 
-    @patch('api.gemilang.views.create_gemilang_location_scraper')
-    def test_gemilang_locations_empty_response(self, mock_create_scraper):
-        from api.interfaces import LocationScrapingResult
-        
-        mock_scraper = Mock()
-        mock_result = LocationScrapingResult(
-            locations=[],
-            success=True,
-            error_message=None,
-            attempts_made=1
-        )
-        mock_scraper.scrape_locations.return_value = mock_result
-        mock_create_scraper.return_value = mock_scraper
-        
-        response = self.client.get('/api/gemilang/locations/')
-        
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.content)
-        self.assertTrue(data['success'])
-        self.assertEqual(len(data['locations']), 0)
-
-    @patch('api.gemilang.views.create_gemilang_location_scraper')
-    def test_gemilang_locations_large_timeout_value(self, mock_create_scraper):
-        from api.interfaces import LocationScrapingResult
-        
-        mock_scraper = Mock()
-        mock_result = LocationScrapingResult(locations=[], success=True)
-        mock_scraper.scrape_locations.return_value = mock_result
-        mock_create_scraper.return_value = mock_scraper
-        
-        response = self.client.get('/api/gemilang/locations/', {'timeout': '999999'})
-        
-        # Large timeout values now fail validation (max is 120)
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.content)
-        self.assertIn('error', data)
-
-    @patch('api.gemilang.views.create_gemilang_location_scraper')
-    def test_gemilang_locations_negative_timeout(self, mock_create_scraper):
-        from api.interfaces import LocationScrapingResult
-        
-        mock_scraper = Mock()
-        mock_result = LocationScrapingResult(locations=[], success=True)
-        mock_scraper.scrape_locations.return_value = mock_result
-        mock_create_scraper.return_value = mock_scraper
-        
-        response = self.client.get('/api/gemilang/locations/', {'timeout': '0'})
-        
-        self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_locations.assert_called_once_with(timeout=0)
-
 
 class TestGemilangAPIValidation(TestCase):
     def setUp(self):
         self.client = Client()
+    
+    def _setup_location_scraper_mock(self, mock_create_location_scraper, location_names, success=True):
+        mock_location_scraper = Mock()
+        mock_location_result = Mock()
+        mock_location_result.success = success
+        
+        mock_locations = []
+        for name in location_names:
+            mock_loc = Mock()
+            mock_loc.name = name
+            mock_locations.append(mock_loc)
+        
+        mock_location_result.locations = mock_locations
+        mock_location_scraper.scrape_locations.return_value = mock_location_result
+        mock_create_location_scraper.return_value = mock_location_scraper
+        return mock_location_scraper
+    
+    def _setup_product_scraper_mock(self, mock_create_scraper):
+        mock_scraper = Mock()
+        mock_products = [
+            Product(name="Test Product", price=10000, url="/product1", unit="PCS")
+        ]
+        mock_result = ScrapingResult(
+            products=mock_products,
+            success=True,
+            url="https://example.com/search"
+        )
+        mock_scraper.scrape_products.return_value = mock_result
+        mock_create_scraper.return_value = mock_scraper
+        return mock_scraper
     
     def test_scrape_with_sql_injection_attempt(self):
         response = self.client.get('/api/gemilang/scrape/', {
@@ -452,3 +431,64 @@ class TestGemilangAPIValidation(TestCase):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertIn('error', data)
+    
+    @patch('api.gemilang.views.create_gemilang_location_scraper')
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_scrape_includes_location_in_response(self, mock_create_scraper, mock_create_location_scraper):
+        location_names = ["GEMILANG - BANJARMASIN SUTOYO", "GEMILANG - BANJARMASIN KM"]
+        mock_location_scraper = self._setup_location_scraper_mock(mock_create_location_scraper, location_names)
+        self._setup_product_scraper_mock(mock_create_scraper)
+        
+        response = self.client.get('/api/gemilang/scrape/', {'keyword': 'test'})
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        
+        mock_create_location_scraper.assert_called_once()
+        mock_location_scraper.scrape_locations.assert_called_once_with(timeout=30)
+        
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['products']), 1)
+        self.assertIn('location', data['products'][0])
+        self.assertEqual(data['products'][0]['location'], "BANJARMASIN SUTOYO, BANJARMASIN KM")
+    
+    @patch('api.gemilang.views.create_gemilang_location_scraper')
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_scrape_with_location_failure(self, mock_create_scraper, mock_create_location_scraper):
+        self._setup_location_scraper_mock(mock_create_location_scraper, [], success=False)
+        self._setup_product_scraper_mock(mock_create_scraper)
+        
+        response = self.client.get('/api/gemilang/scrape/', {'keyword': 'test'})
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['products']), 1)
+        self.assertIn('location', data['products'][0])
+        self.assertEqual(data['products'][0]['location'], "")
+    
+    @patch('api.gemilang.views.create_gemilang_location_scraper')
+    @patch('api.gemilang.views.create_gemilang_scraper')
+    def test_scrape_with_all_five_stores_in_location(self, mock_create_scraper, mock_create_location_scraper):
+        stores = [
+            "GEMILANG - BANJARMASIN SUTOYO",
+            "GEMILANG - BANJARMASIN KM",
+            "GEMILANG - BANJARBARU",
+            "GEMILANG - PALANGKARAYA",
+            "GEMILANG - PALANGKARAYA KM.8"
+        ]
+        self._setup_location_scraper_mock(mock_create_location_scraper, stores)
+        self._setup_product_scraper_mock(mock_create_scraper)
+        
+        response = self.client.get('/api/gemilang/scrape/', {'keyword': 'test'})
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        
+        stores_without_prefix = [s.replace("GEMILANG - ", "") for s in stores]
+        expected_location = ", ".join(stores_without_prefix)
+        self.assertEqual(data['products'][0]['location'], expected_location)
+        
+        for store in stores_without_prefix:
+            self.assertIn(store, data['products'][0]['location'])

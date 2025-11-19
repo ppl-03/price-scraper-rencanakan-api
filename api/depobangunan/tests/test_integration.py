@@ -43,7 +43,7 @@ class TestDepoIntegration(unittest.TestCase):
         self.assertIsNone(result.error_message)
         
         # Verify method calls - enhanced scraper makes additional calls for detail pages
-        self.mock_url_builder.build_search_url.assert_called_once_with("cat", False, 0)
+        self.mock_url_builder.build_search_url.assert_called_once_with("cat", True, 0)
         # HTTP client should be called 3 times: main page + 2 detail pages
         self.assertEqual(self.mock_http_client.get.call_count, 3)
         self.mock_html_parser.parse_products.assert_called_once_with(test_html)

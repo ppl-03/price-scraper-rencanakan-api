@@ -6,9 +6,8 @@ from types import SimpleNamespace
 
 class TestTokopediaScheduler(unittest.TestCase):
     
-    def _setup_mock_scraper(self, scheduler, categories, products, success=True, db_save_result=(True, None)):
+    def _setup_mock_scraper(self, scheduler, products, success=True, db_save_result=(True, None)):
         """Helper method to setup common mock objects for scraper tests"""
-        patch.object(scheduler, 'get_categories', return_value=categories).start()
         mock_scraper = patch.object(scheduler, 'create_scraper').start()
         mock_result = SimpleNamespace(success=success, products=products)
         mock_scraper.return_value.scrape_products.return_value = mock_result
@@ -44,49 +43,50 @@ class TestTokopediaScheduler(unittest.TestCase):
         categories = scheduler.get_categories('tokopedia', server_time)
         self.assertIsInstance(categories, list)
 
-    def test_run_without_arguments(self):
-        """Test running scheduler without arguments defaults to tokopedia"""
+    def test_run_with_search_keyword(self):
+        """Test running scheduler with search keyword"""
         from api.tokopedia.scheduler import TokopediaScheduler
         scheduler = TokopediaScheduler()
         
         products = [SimpleNamespace(name='Product', price='100', url='https://test.com', unit='pcs')]
-        self._setup_mock_scraper(scheduler, ['test'], products)
+        self._setup_mock_scraper(scheduler, products)
         
-        result = scheduler.run()
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='semen')
         self.assertIn('tokopedia', result['vendors'])
+        self.assertEqual(result['vendors']['tokopedia']['scrape_attempts'], 1)
 
     def test_run_with_custom_vendors(self):
         """Test running scheduler with custom vendor list"""
         from api.tokopedia.scheduler import TokopediaScheduler
         scheduler = TokopediaScheduler()
         
-        self._setup_mock_scraper(scheduler, ['test'], [], db_save_result=None)
+        self._setup_mock_scraper(scheduler, [], db_save_result=None)
         
-        result = scheduler.run(vendors=['tokopedia'])
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='besi')
         self.assertEqual(result['total_vendors'], 1)
         self.assertIn('tokopedia', result['vendors'])
 
-    def test_run_single_page(self):
-        """Test scraping single page per keyword"""
+    def test_run_single_scrape_attempt(self):
+        """Test that scheduler makes only one scrape attempt per vendor with keyword"""
         from api.tokopedia.scheduler import TokopediaScheduler
         scheduler = TokopediaScheduler()
         
         products = [SimpleNamespace(name='P1', price='50', url='https://url', unit='box')]
-        self._setup_mock_scraper(scheduler, ['category1'], products)
+        self._setup_mock_scraper(scheduler, products)
         
-        result = scheduler.run(vendors=['tokopedia'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='paku')
         vendor_data = result['vendors']['tokopedia']
         self.assertEqual(vendor_data['scrape_attempts'], 1)
 
-    def test_run_multiple_pages(self):
-        """Test scraping multiple pages per keyword"""
+    def test_run_scraper_creation_fails(self):
+        """Test handling when scraper creation fails"""
         from api.tokopedia.scheduler import TokopediaScheduler
         scheduler = TokopediaScheduler()
         
-        self._setup_mock_scraper(scheduler, ['cat1'], [], db_save_result=None)
-        
-        result = scheduler.run(vendors=['tokopedia'], pages_per_keyword=3)
-        self.assertEqual(result['vendors']['tokopedia']['scrape_attempts'], 3)
+        with patch.object(scheduler, 'create_scraper', side_effect=Exception('Scraper error')):
+            result = scheduler.run(vendors=['tokopedia'], search_keyword='test')
+            self.assertEqual(result['vendors']['tokopedia']['status'], 'failed_scraper_creation')
+            self.assertEqual(result['failed_vendors'], 1)
 
     def test_run_products_saved(self):
         """Test that scraped products are saved correctly"""
@@ -97,30 +97,31 @@ class TestTokopediaScheduler(unittest.TestCase):
             SimpleNamespace(name='P1', price='10', url='https://1', unit='pcs'),
             SimpleNamespace(name='P2', price='20', url='https://2', unit='box')
         ]
-        self._setup_mock_scraper(scheduler, ['test'], products)
+        self._setup_mock_scraper(scheduler, products)
         
-        result = scheduler.run(vendors=['tokopedia'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='cat')
         self.assertEqual(result['vendors']['tokopedia']['saved'], 2)
+        self.assertEqual(result['vendors']['tokopedia']['products_found'], 2)
 
     def test_run_with_scrape_failure(self):
         """Test handling of scrape failures (negative case)"""
         from api.tokopedia.scheduler import TokopediaScheduler
         scheduler = TokopediaScheduler()
         
-        self._setup_mock_scraper(scheduler, ['test'], [], success=False, db_save_result=None)
+        self._setup_mock_scraper(scheduler, [], success=False, db_save_result=None)
         
-        result = scheduler.run(vendors=['tokopedia'])
-        self.assertEqual(result['vendors']['tokopedia']['saved'], 0)
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='test')
+        self.assertEqual(result['vendors']['tokopedia']['scrape_failures'], 1)
 
     def test_run_with_empty_products(self):
         """Test handling when no products are found (edge case)"""
         from api.tokopedia.scheduler import TokopediaScheduler
         scheduler = TokopediaScheduler()
         
-        self._setup_mock_scraper(scheduler, ['test'], [], db_save_result=None)
+        self._setup_mock_scraper(scheduler, [], db_save_result=None)
         
-        result = scheduler.run(vendors=['tokopedia'])
-        self.assertEqual(result['vendors']['tokopedia']['saved'], 0)
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='test')
+        self.assertEqual(result['vendors']['tokopedia']['status'], 'no_products_found')
 
     def test_run_with_price_update_enabled(self):
         """Test running scheduler with price update enabled"""
@@ -128,9 +129,9 @@ class TestTokopediaScheduler(unittest.TestCase):
         scheduler = TokopediaScheduler()
         
         products = [SimpleNamespace(name='P1', price='100', url='https://test', unit='pcs')]
-        self._setup_mock_scraper(scheduler, ['test'], products)
+        self._setup_mock_scraper(scheduler, products)
         
-        result = scheduler.run(vendors=['tokopedia'], use_price_update=True)
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='test', use_price_update=True)
         self.assertIn('tokopedia', result['vendors'])
 
     def test_run_with_max_products_limit(self):
@@ -142,10 +143,10 @@ class TestTokopediaScheduler(unittest.TestCase):
             SimpleNamespace(name=f'P{i}', price=f'{i*10}', url=f'https://{i}', unit='pcs')
             for i in range(10)
         ]
-        self._setup_mock_scraper(scheduler, ['test'], products)
+        self._setup_mock_scraper(scheduler, products)
         
-        result = scheduler.run(vendors=['tokopedia'], max_products_per_keyword=5)
-        self.assertIn('tokopedia', result['vendors'])
+        result = scheduler.run(vendors=['tokopedia'], search_keyword='test', max_products_per_keyword=5)
+        self.assertEqual(result['vendors']['tokopedia']['saved'], 5)
 
     def test_run_converts_vendors_to_list(self):
         """Test that vendors tuple is converted to list (edge case)"""

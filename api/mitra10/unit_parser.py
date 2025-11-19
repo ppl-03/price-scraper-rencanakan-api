@@ -166,12 +166,6 @@ class UnitConstants:
         ]
 
 
-class UnitExtractionStrategy(Protocol):
-    
-    def extract_unit(self, text: str) -> Optional[str]:
-        ...
-
-
 class TextProcessingHelper:
     """Helper class for common text processing operations"""
     
@@ -525,11 +519,6 @@ class Mitra10UnitParserConfiguration:
 
 
 class Mitra10UnitParser(ErrorHandlingMixin):
-    """
-    Unit parser specifically designed for Mitra10 products.
-    Handles construction materials, hardware, electrical, and plumbing items.
-    """
-    
     def __init__(self, 
                  extractor: Mitra10UnitExtractor = None,
                  spec_finder: Mitra10SpecificationFinder = None,
@@ -539,20 +528,12 @@ class Mitra10UnitParser(ErrorHandlingMixin):
         self.config = config or Mitra10UnitParserConfiguration()
     
     def parse_unit(self, html_content: str) -> Optional[str]:
-        """
-        Parse unit from Mitra10 product HTML content.
-        
-        Args:
-            html_content: HTML content from Mitra10 product page
-            
-        Returns:
-            Optional[str]: Detected unit or None if not found
-        """
         clean_content = TextProcessingHelper.validate_and_clean_text(html_content, max_length=50000)
         if not clean_content:
-            return None
+            return 'PCS'
         
-        return self.safe_execute(self._parse_unit_from_html, "Mitra10 unit parsing", html_content)
+        unit = self.safe_execute(self._parse_unit_from_html, "Mitra10 unit parsing", html_content)
+        return unit if unit else 'PCS'
     
     def _parse_unit_from_html(self, html_content: str) -> Optional[str]:
         soup = self._create_soup_safely(html_content)

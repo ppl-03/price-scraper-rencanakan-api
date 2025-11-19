@@ -27,6 +27,45 @@ class TestMitra10PriceScraper(TestCase):
         self.assertEqual(scraper.http_client, self.mock_http_client)
         self.assertEqual(scraper.url_builder, self.mock_url_builder)
         self.assertEqual(scraper.html_parser, self.mock_html_parser)
+
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scrape_products_success(self, mock_batch_client_class):
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+
+        test_keyword = "semen"
+        test_url = "https://test.com/search?q=semen&sort=true&page=0"
+        test_html = "<html>list</html>"
+        test_products = [Product(name="A", price=1000, url="/a")]
+
+        self.mock_url_builder.build_search_url.return_value = test_url
+        mock_batch_client.get.return_value = test_html
+        self.mock_html_parser.parse_products.return_value = test_products
+
+        result = self.scraper.scrape_products(test_keyword, sort_by_price=True, page=0)
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.url, test_url)
+        self.assertEqual(len(result.products), 1)
+        mock_batch_client.get.assert_called_once_with(test_url, timeout=60)
+        self.mock_html_parser.parse_products.assert_called_once_with(test_html)
+
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scrape_products_failure(self, mock_batch_client_class):
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+
+        test_keyword = "semen"
+        test_url = "https://test.com/search?q=semen&sort=true&page=0"
+
+        self.mock_url_builder.build_search_url.return_value = test_url
+        mock_batch_client.get.side_effect = Exception("network boom")
+
+        result = self.scraper.scrape_products(test_keyword, sort_by_price=True, page=0)
+
+        self.assertFalse(result.success)
+        self.assertIn("Scraping failed", result.error_message)
+        self.assertEqual(result.url, test_url)
     
     @patch('api.mitra10.scraper.BatchPlaywrightClient')
     def test_scrape_batch_success_single_keyword(self, mock_batch_client_class):
@@ -351,3 +390,142 @@ class TestMitra10PriceScraper(TestCase):
         call_args = mock_print.call_args[0][0]
         self.assertIn("Error scraping test_keyword", call_args)
         self.assertIn("Parser error", call_args)
+
+
+class TestMitra10PriceScraperPopularity(TestCase):
+    """Tests for scrape_by_popularity functionality"""
+    
+    def setUp(self):
+        self.mock_http_client = Mock(spec=IHttpClient)
+        self.mock_url_builder = Mock(spec=IUrlBuilder)
+        self.mock_html_parser = Mock(spec=IHtmlParser)
+        
+        self.scraper = Mitra10PriceScraper(
+            http_client=self.mock_http_client,
+            url_builder=self.mock_url_builder,
+            html_parser=self.mock_html_parser
+        )
+    
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scrape_by_popularity_success(self, mock_batch_client_class):
+        """Test successful scrape_by_popularity with default top_n=5"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_keyword = "palu"
+        test_url = "https://test.com/search?q=palu"
+        test_html = "<html>test content</html>"
+        
+        # Create products with sold_count
+        test_products = [
+            Product(name="Popular Product 1", price=150000, url="https://test.com/p1", sold_count=1000),
+            Product(name="Popular Product 2", price=120000, url="https://test.com/p2", sold_count=800),
+            Product(name="Popular Product 3", price=100000, url="https://test.com/p3", sold_count=600),
+            Product(name="Popular Product 4", price=90000, url="https://test.com/p4", sold_count=400),
+            Product(name="Popular Product 5", price=80000, url="https://test.com/p5", sold_count=200),
+            Product(name="Popular Product 6", price=70000, url="https://test.com/p6", sold_count=100),
+        ]
+        
+        self.mock_url_builder.build_search_url.return_value = test_url
+        mock_batch_client.get.return_value = test_html
+        self.mock_html_parser.parse_products.return_value = test_products
+        
+        result = self.scraper.scrape_by_popularity(keyword=test_keyword, top_n=5, page=0)
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 5)
+        self.assertEqual(result.products[0].name, "Popular Product 1")
+        self.assertEqual(result.products[0].sold_count, 1000)
+        self.assertEqual(result.url, test_url)
+        
+        # Verify sort_by_price=False was passed
+        self.mock_url_builder.build_search_url.assert_called_once_with(test_keyword, sort_by_price=False, page=0)
+        mock_batch_client.get.assert_called_once_with(test_url, timeout=60)
+    
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scrape_by_popularity_custom_top_n(self, mock_batch_client_class):
+        """Test scrape_by_popularity with custom top_n value"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_keyword = "semen"
+        test_html = "<html>test</html>"
+        
+        test_products = [
+            Product(name=f"Product {i}", price=10000*i, url=f"https://test.com/p{i}", sold_count=1000-i*100)
+            for i in range(1, 11)
+        ]
+        
+        self.mock_url_builder.build_search_url.return_value = "https://test.com/search"
+        mock_batch_client.get.return_value = test_html
+        self.mock_html_parser.parse_products.return_value = test_products
+        
+        result = self.scraper.scrape_by_popularity(keyword=test_keyword, top_n=3, page=0)
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 3)
+        self.assertEqual(result.products[0].sold_count, 900)
+        self.assertEqual(result.products[1].sold_count, 800)
+        self.assertEqual(result.products[2].sold_count, 700)
+    
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scrape_by_popularity_filters_null_sold_count(self, mock_batch_client_class):
+        """Test that products with null sold_count are filtered out"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_products = [
+            Product(name="Product 1", price=10000, url="https://test.com/p1", sold_count=500),
+            Product(name="Product 2", price=20000, url="https://test.com/p2", sold_count=None),
+            Product(name="Product 3", price=30000, url="https://test.com/p3", sold_count=300),
+            Product(name="Product 4", price=40000, url="https://test.com/p4", sold_count=0),
+        ]
+        
+        self.mock_url_builder.build_search_url.return_value = "https://test.com/search"
+        mock_batch_client.get.return_value = "<html>test</html>"
+        self.mock_html_parser.parse_products.return_value = test_products
+        
+        result = self.scraper.scrape_by_popularity(keyword="test", top_n=5, page=0)
+        
+        self.assertTrue(result.success)
+        # Should only include products with sold_count > 0
+        self.assertEqual(len(result.products), 2)
+        self.assertEqual(result.products[0].sold_count, 500)
+        self.assertEqual(result.products[1].sold_count, 300)
+    
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scrape_by_popularity_failure(self, mock_batch_client_class):
+        """Test scrape_by_popularity error handling"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_keyword = "test"
+        mock_batch_client.get.side_effect = Exception("Network error")
+        self.mock_url_builder.build_search_url.return_value = "https://test.com/search"
+        
+        result = self.scraper.scrape_by_popularity(keyword=test_keyword, top_n=5, page=0)
+        
+        self.assertFalse(result.success)
+        self.assertEqual(len(result.products), 0)
+        self.assertIn("Network error", result.error_message)
+        self.assertEqual(result.url, "https://test.com/search")
+    
+    @patch('api.mitra10.scraper.BatchPlaywrightClient')
+    def test_scrape_by_popularity_no_products_with_sales(self, mock_batch_client_class):
+        """Test when no products have valid sold_count"""
+        mock_batch_client = MagicMock()
+        mock_batch_client_class.return_value.__enter__.return_value = mock_batch_client
+        
+        test_products = [
+            Product(name="Product 1", price=10000, url="https://test.com/p1", sold_count=None),
+            Product(name="Product 2", price=20000, url="https://test.com/p2", sold_count=0),
+        ]
+        
+        self.mock_url_builder.build_search_url.return_value = "https://test.com/search"
+        mock_batch_client.get.return_value = "<html>test</html>"
+        self.mock_html_parser.parse_products.return_value = test_products
+        
+        result = self.scraper.scrape_by_popularity(keyword="test", top_n=5, page=0)
+        
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 0)

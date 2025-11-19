@@ -32,8 +32,10 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
     def test_update_existing_product_price_changed(self):
         self._create_product("Product A", 10000, "https://test.com/a", "KG")
         data = [{"name": "Product A", "price": 12000, "url": "https://test.com/a", "unit": "KG"}]
-        self._save_and_assert(data, updated=1, anomalies=1)
-        assert Mitra10Product.objects.get(name="Product A").price == 12000
+        # 20% increase = anomaly detected, price should NOT update (updated=0)
+        self._save_and_assert(data, updated=0, anomalies=1)
+        # Price should remain old price because anomaly needs approval
+        assert Mitra10Product.objects.get(name="Product A").price == 10000
 
     def test_no_update_when_price_same(self):
         self._create_product("Product B", 10000, "https://test.com/b", "M")
@@ -51,7 +53,8 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         for name, old_price, new_price, change in scenarios:
             self._create_product(name, old_price, f"https://test.com/{name.lower()}", "PCS")
             data = [{"name": name, "price": new_price, "url": f"https://test.com/{name.lower()}", "unit": "PCS"}]
-            result = self._save_and_assert(data, updated=1, anomalies=1)
+            # Anomalies detected (>=15% change), so updated=0 (price does NOT update)
+            result = self._save_and_assert(data, updated=0, anomalies=1)
             assert result["anomalies"][0]["change_percent"] == change
 
     def test_no_anomaly_under_15_percent(self):
@@ -70,20 +73,22 @@ class TestSaveWithPriceUpdate(MySQLTestCase):
         self._create_product("Existing 2", 20000, "https://test.com/ex2", "KG")
 
         mixed_data = [
-            {"name": "Existing 1", "price": 11000, "url": "https://test.com/ex1", "unit": "PCS"},
-            {"name": "Existing 2", "price": 20000, "url": "https://test.com/ex2", "unit": "KG"},
-            {"name": "New Product", "price": 15000, "url": "https://test.com/new", "unit": "M"},
+            {"name": "Existing 1", "price": 11000, "url": "https://test.com/ex1", "unit": "PCS"},  # 10% increase, auto-updates
+            {"name": "Existing 2", "price": 20000, "url": "https://test.com/ex2", "unit": "KG"},  # No change
+            {"name": "New Product", "price": 15000, "url": "https://test.com/new", "unit": "M"},  # New insert
         ]
         self._save_and_assert(mixed_data, inserted=1, updated=1)
         assert Mitra10Product.objects.count() == 3
 
+        # Both products have >=15% price changes, triggering anomalies
         anomalies_data = [
             {"name": "Product I", "price": 11500, "url": "https://test.com/i", "unit": "PCS"},
             {"name": "Product J", "price": 17000, "url": "https://test.com/j", "unit": "KG"},
         ]
         self._create_product("Product I", 10000, "https://test.com/i", "PCS")
         self._create_product("Product J", 20000, "https://test.com/j", "KG")
-        self._save_and_assert(anomalies_data, updated=2, anomalies=2)
+        # Both are anomalies (>=15% change), so updated=0 (neither price updates)
+        self._save_and_assert(anomalies_data, updated=0, anomalies=2)
 
     def test_edge_cases(self):
         invalid_data = [{"name": "Invalid", "price": -100, "url": "https://test.com", "unit": "PCS"}]

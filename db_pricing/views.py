@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.core.paginator import Paginator
 from django.db.models import Q
 from db_pricing.utils import check_database_connection, check_gemilang_table_exists
@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 # Error message constants
 ERROR_INTERNAL_SERVER = 'Internal server error'
+ERROR_ANOMALY_NOT_FOUND = 'Anomaly not found'
+ERROR_INVALID_JSON = 'Invalid JSON'
 
 
 @require_http_methods(["GET"])
@@ -43,6 +45,7 @@ def check_database_status(request):
 
 # ==================== PRICE ANOMALY VIEWS ====================
 
+@ensure_csrf_cookie
 @require_http_methods(["GET"])
 def list_price_anomalies(request):
     """
@@ -163,7 +166,7 @@ def get_price_anomaly(request, anomaly_id):
     except PriceAnomaly.DoesNotExist:
         return JsonResponse({
             'success': False,
-            'error': 'Anomaly not found'
+            'error': ERROR_ANOMALY_NOT_FOUND
         }, status=404)
     except Exception as e:
         logger.error(f"Error getting anomaly {anomaly_id}: {str(e)}")
@@ -215,13 +218,13 @@ def review_price_anomaly(request, anomaly_id):
         else:
             return JsonResponse({
                 'success': False,
-                'error': 'Anomaly not found'
+                'error': ERROR_ANOMALY_NOT_FOUND
             }, status=404)
             
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON'
+            'error': ERROR_INVALID_JSON
         }, status=400)
     except Exception as e:
         logger.error(f"Error reviewing anomaly {anomaly_id}: {str(e)}")
@@ -267,6 +270,194 @@ def get_anomaly_statistics(request):
         
     except Exception as e:
         logger.error(f"Error getting anomaly statistics: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': ERROR_INTERNAL_SERVER
+        }, status=500)
+
+
+@require_http_methods(["POST"])
+def apply_price_anomaly(request, anomaly_id):
+    """
+    Apply an approved price anomaly to the product database
+    
+    This endpoint updates the actual product price in the vendor's product table
+    based on the approved anomaly data.
+    """
+    try:
+        # Apply the approved price
+        result = PriceAnomalyService.apply_approved_price(anomaly_id)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': result['message'],
+                'data': {
+                    'anomaly_id': anomaly_id,
+                    'updated': result['updated']
+                }
+            })
+        else:
+            status_code = 400 if 'not found' not in result['message'].lower() else 404
+            return JsonResponse({
+                'success': False,
+                'error': result['message']
+            }, status=status_code)
+            
+    except Exception as e:
+        logger.error(f"Error applying anomaly {anomaly_id}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': ERROR_INTERNAL_SERVER
+        }, status=500)
+
+
+@require_http_methods(["POST"])
+def reject_price_anomaly(request, anomaly_id):
+    """
+    Reject a price anomaly
+    
+    Body parameters:
+    - notes: Rejection reason (optional)
+    """
+    try:
+        # Parse request body
+        data = json.loads(request.body) if request.body else {}
+        notes = data.get('notes', '')
+        
+        # Reject the anomaly
+        result = PriceAnomalyService.reject_anomaly(anomaly_id, notes)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': result['message'],
+                'data': {
+                    'anomaly_id': anomaly_id
+                }
+            })
+        else:
+            status_code = 404 if 'not found' in result['message'].lower() else 400
+            return JsonResponse({
+                'success': False,
+                'error': result['message']
+            }, status=status_code)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': ERROR_INVALID_JSON
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error rejecting anomaly {anomaly_id}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': ERROR_INTERNAL_SERVER
+        }, status=500)
+
+
+@require_http_methods(["POST"])
+def batch_apply_anomalies(request):
+    """
+    Apply multiple approved anomalies at once
+    
+    Body parameters:
+    - anomaly_ids: Array of anomaly IDs to apply
+    """
+    try:
+        # Parse request body
+        data = json.loads(request.body)
+        anomaly_ids = data.get('anomaly_ids', [])
+        
+        if not anomaly_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'anomaly_ids array is required'
+            }, status=400)
+        
+        if not isinstance(anomaly_ids, list):
+            return JsonResponse({
+                'success': False,
+                'error': 'anomaly_ids must be an array'
+            }, status=400)
+        
+        # Apply all anomalies
+        result = PriceAnomalyService.batch_apply_approved(anomaly_ids)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Applied {result["applied_count"]} anomalies, {result["failed_count"]} failed',
+            'data': {
+                'applied_count': result['applied_count'],
+                'failed_count': result['failed_count'],
+                'results': result['results']
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': ERROR_INVALID_JSON
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error in batch apply: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': ERROR_INTERNAL_SERVER
+        }, status=500)
+
+
+@require_http_methods(["POST"])
+def approve_and_apply_anomaly(request, anomaly_id):
+    """
+    Approve and immediately apply a price anomaly in one step
+    
+    Body parameters:
+    - notes: Optional approval notes
+    """
+    try:
+        # Parse request body
+        data = json.loads(request.body) if request.body else {}
+        notes = data.get('notes', '')
+        
+        # First, mark as approved
+        success = PriceAnomalyService.mark_as_reviewed(anomaly_id, 'approved', notes)
+        
+        if not success:
+            return JsonResponse({
+                'success': False,
+                'error': ERROR_ANOMALY_NOT_FOUND
+            }, status=404)
+        
+        # Then apply the price
+        result = PriceAnomalyService.apply_approved_price(anomaly_id)
+        
+        if result['success']:
+            anomaly = PriceAnomaly.objects.get(id=anomaly_id)
+            return JsonResponse({
+                'success': True,
+                'message': 'Anomaly approved and price applied successfully',
+                'data': {
+                    'id': anomaly.id,
+                    'status': anomaly.status,
+                    'updated_count': result['updated'],
+                    'reviewed_at': anomaly.reviewed_at.isoformat() if anomaly.reviewed_at else None,
+                    'notes': anomaly.notes,
+                }
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'Approved but failed to apply: {result["message"]}'
+            }, status=400)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': ERROR_INVALID_JSON
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error approving and applying anomaly {anomaly_id}: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': ERROR_INTERNAL_SERVER

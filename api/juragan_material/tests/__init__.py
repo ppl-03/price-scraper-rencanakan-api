@@ -12,6 +12,20 @@ from .test_optimizations import (
     TestJuraganMaterialPriceRegexCache,
     TestJuraganMaterialPerformanceOptimizations
 )
+from .test_popularity_sorting import (
+    TestScrapeAndSaveWithSortType,
+    TestScrapePopularityEndpoint,
+    TestHelperFunctions,
+    TestJuraganMaterialScraperPopularity,
+    TestScrapeAndSaveErrorHandling,
+    TestScrapePopularityErrorHandling
+)
+from .test_database_service import (
+    TestJuraganMaterialDatabaseService,
+    TestDatabaseServiceCoverage,
+    TestDatabaseServicePriceUpdate,
+    TestDatabaseServiceObjectSupport
+)
 
 __all__ = [
     'TestJuraganMaterialPriceCleaner',
@@ -25,5 +39,15 @@ __all__ = [
     'TestJuraganMaterialHtmlParserOptimizations',
     'TestJuraganMaterialRegexCache',
     'TestJuraganMaterialPriceRegexCache',
-    'TestJuraganMaterialPerformanceOptimizations'
+    'TestJuraganMaterialPerformanceOptimizations',
+    'TestScrapeAndSaveWithSortType',
+    'TestScrapePopularityEndpoint',
+    'TestHelperFunctions',
+    'TestJuraganMaterialScraperPopularity',
+    'TestScrapeAndSaveErrorHandling',
+    'TestScrapePopularityErrorHandling',
+    'TestJuraganMaterialDatabaseService',
+    'TestDatabaseServiceCoverage',
+    'TestDatabaseServicePriceUpdate',
+    'TestDatabaseServiceObjectSupport'
 ]

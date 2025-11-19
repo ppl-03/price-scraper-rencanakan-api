@@ -1,0 +1,14 @@
+{
+    "enabled": true,
+    "schedule_type": "hourly",
+    "custom_interval": "1",
+    "custom_unit": "minutes",
+    "custom_time": "00:00",
+    "custom_days": [],
+    "vendors": [
+        "gemilang"
+    ],
+    "search_keyword": "cat",
+    "last_run": "2025-11-18T07:42:22.063690+00:00",
+    "next_run": null
+}

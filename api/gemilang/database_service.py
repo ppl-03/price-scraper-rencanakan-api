@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class GemilangDatabaseService:
     ALLOWED_TABLES = ['gemilang_products']
     ALLOWED_COLUMNS = {
-        'id', 'name', 'price', 'url', 'unit', 'created_at', 'updated_at'
+        'id', 'name', 'price', 'url', 'unit', 'location', 'category', 'created_at', 'updated_at'
     }
     
     def __init__(self):
@@ -111,6 +111,9 @@ class GemilangDatabaseService:
         return True, ""
     
     def _sanitize_string(self, value: str) -> str:
+        """Sanitize string value, handling None values."""
+        if value is None:
+            return ""
         value = value.replace('\x00', '')
         value = value[:1000]
         return value
@@ -126,11 +129,11 @@ class GemilangDatabaseService:
             
             sql = """
                 INSERT INTO gemilang_products
-                    (name, price, url, unit, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (name, price, url, unit, location, category, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             
-            self._validate_column_names(['name', 'price', 'url', 'unit', 'created_at', 'updated_at'])
+            self._validate_column_names(['name', 'price', 'url', 'unit', 'location', 'category', 'created_at', 'updated_at'])
             
             params_list = [
                 (
@@ -138,11 +141,17 @@ class GemilangDatabaseService:
                     int(item["price"]),
                     self._sanitize_string(item["url"]),
                     self._sanitize_string(item["unit"]),
+                    self._sanitize_string(item.get("location", "")),
+                    self._sanitize_string(item.get("category", "")),
                     now,
                     now
                 )
                 for item in data
             ]
+            
+            if params_list:
+                sample_location = params_list[0][4]
+                logger.info(f"Saving {len(data)} products. Sample location value: '{sample_location}' (length: {len(sample_location)})")
             
             with transaction.atomic():
                 with connection.cursor() as cursor:
@@ -152,8 +161,9 @@ class GemilangDatabaseService:
             return True, ""
             
         except Exception as e:
-            logger.error(f"Database save failed: {type(e).__name__}")
-            return False, "Database operation failed"
+            logger.error(f"Database save failed: {type(e).__name__}: {str(e)}")
+            logger.exception("Full traceback:")
+            return False, f"Database operation failed: {str(e)}"
     
     def _check_anomaly(
         self, 
@@ -207,7 +217,11 @@ class GemilangDatabaseService:
             inserted_count = 0
             anomalies = []
             
-            self._validate_column_names(['id', 'name', 'price', 'url', 'unit', 'created_at', 'updated_at'])
+            self._validate_column_names(['id', 'name', 'price', 'url', 'unit', 'location', 'category', 'created_at', 'updated_at'])
+            
+            if data:
+                sample_location = data[0].get("location", "")
+                logger.info(f"save_with_price_update: Processing {len(data)} products. Sample location: '{sample_location}' (length: {len(sample_location)})")
             
             with transaction.atomic():
                 with connection.cursor() as cursor:
@@ -215,6 +229,8 @@ class GemilangDatabaseService:
                         name = self._sanitize_string(item["name"])
                         url = self._sanitize_string(item["url"])
                         unit = self._sanitize_string(item["unit"])
+                        location = self._sanitize_string(item.get("location", ""))
+                        category = self._sanitize_string(item.get("category", ""))
                         price = int(item["price"])
                         
                         select_sql = """
@@ -231,28 +247,39 @@ class GemilangDatabaseService:
                             if existing_price != price:
                                 anomaly = self._check_anomaly(item, existing_price, price)
                                 if anomaly:
+                                    # Price change detected - save anomaly for admin approval
                                     anomalies.append(anomaly)
                                     logger.warning(
                                         f"Price anomaly detected for {name}: "
-                                        f"{existing_price} -> {price}"
+                                        f"{existing_price} -> {price}. Pending admin approval."
                                     )
-                                
-                                update_sql = """
-                                    UPDATE gemilang_products 
-                                    SET price = %s, updated_at = %s 
+                                    # Do NOT update price - wait for admin approval
+                                else:
+                                    # Small price change (< 15%) - update automatically
+                                    update_sql = """
+                                        UPDATE gemilang_products 
+                                        SET price = %s, location = %s, updated_at = %s 
                                     WHERE id = %s
                                 """
-                                cursor.execute(update_sql, (price, now, existing_id))
+                                    cursor.execute(update_sql, (price, location, now, existing_id))
+                                    updated_count += 1
+                            else:
+                                update_sql = """
+                                    UPDATE gemilang_products 
+                                    SET location = %s, updated_at = %s 
+                                        WHERE id = %s
+                                    """
+                                cursor.execute(update_sql, (location, now, existing_id))
                                 updated_count += 1
                         else:
                             insert_sql = """
                                 INSERT INTO gemilang_products 
-                                (name, price, url, unit, created_at, updated_at) 
-                                VALUES (%s, %s, %s, %s, %s, %s)
+                                (name, price, url, unit, location, category, created_at, updated_at) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             """
                             cursor.execute(
                                 insert_sql,
-                                (name, price, url, unit, now, now)
+                                (name, price, url, unit, location, category, now, now)
                             )
                             inserted_count += 1
             

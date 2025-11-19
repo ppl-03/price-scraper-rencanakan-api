@@ -9,6 +9,7 @@ from .depobangunan.factory import create_depo_scraper
 from .gemilang.factory import create_gemilang_scraper
 from .juragan_material.factory import create_juraganmaterial_scraper
 from .mitra10.factory import create_mitra10_scraper
+from .tokopedia.factory import create_tokopedia_scraper
 
 from .validation import (
     InputValidator, 
@@ -78,6 +79,7 @@ def get_scraper_factory(vendor: str) -> IPriceScraper:
         'gemilang': create_gemilang_scraper,
         'juragan_material': create_juraganmaterial_scraper,
         'mitra10': create_mitra10_scraper,
+        'tokopedia':create_tokopedia_scraper
     }
     
     if vendor not in scrapers:

@@ -113,14 +113,14 @@ class AutoSaveProductsTests(TestCase):
         )
         
         products = [
-            MockProduct('Cat Tembok', 125000, 'https://mitra10.com/cat', 'kaleng')
+            MockProduct('Cat Tembok', 100000, 'https://mitra10.com/cat', 'kaleng')
         ]
         
         result = _save_products_to_database(products, 'Mitra10')
         
         self.assertTrue(result)
         product = Mitra10Product.objects.first()
-        self.assertEqual(product.price, 125000)
+        self.assertEqual(product.price, 100000)
     
     def test_multiple_products_saved_in_batch(self):
         products = [

@@ -18,6 +18,9 @@ class Mitra10UrlBuilder(BaseUrlBuilder):
         if sort_by_price:
             # Provide the raw JSON string - urlencode() will handle the encoding
             params['sort'] = '{"key":"price","value":"ASC"}'
+        else:
+            # Sort by relevance/popularity in descending order (most relevant first)
+            params['sort'] = '{"key":"relevance","value":"DESC"}'
         
         # Add page parameter (Mitra10 uses 1-based pagination)
         params['page'] = page + 1
