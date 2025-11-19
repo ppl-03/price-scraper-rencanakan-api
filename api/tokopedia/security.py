@@ -8,6 +8,7 @@ Architecture:
 - Modular security components
 """
 import logging
+import os
 import re
 import time
 from functools import wraps
@@ -44,7 +45,12 @@ SECURITY_CONFIG = {
         'max_name_length': 500
     },
     'ssrf_protection': {
-        'blocked_hosts': ['localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254'],
+        'blocked_hosts': [
+            'localhost', 
+            '127.0.0.1', 
+            '0.0.0.0', 
+            os.getenv('AWS_METADATA_IP', '169.254.169.254')
+        ],
         'required_protocol': 'https://'
     }
 }
