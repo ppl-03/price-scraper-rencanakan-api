@@ -910,11 +910,13 @@ class TestA04InsecureDesign(TestCase):
         print("\n[A04] Test: SSRF prevention")
         
         # SSRF attack vectors targeting internal infrastructure
+        # Note: These are RFC 1918 private IP addresses used ONLY for security testing
+        # They simulate SSRF attack patterns and are not used for actual network access
         internal_targets = [
             ('https://localhost/juragan_material_admin', 'localhost admin'),
             ('https://127.0.0.1:8000/internal', 'loopback interface'),
             ('https://0.0.0.0/config', 'all interfaces'),
-            ('https://192.168.1.1/router', 'private network')
+            ('https://192.168.1.1/router', 'RFC 1918 private network')  # Test-only IP
         ]
         
         for ssrf_url, attack_type in internal_targets:
