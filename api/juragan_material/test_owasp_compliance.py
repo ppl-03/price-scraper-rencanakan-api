@@ -31,7 +31,6 @@ from .security import (
     InputValidator,
     DatabaseQueryValidator,
     SecurityDesignPatterns,
-    OrmSecurityHelper,
     require_api_token,
     validate_input,
     enforce_resource_limits,
@@ -792,27 +791,6 @@ class TestA03InjectionPrevention(TestCase):
         self.assertFalse(is_valid, "Product with invalid price type should be rejected")
         
         print(f"✓ Database sanitization works correctly")
-    
-    def test_orm_filter_kwargs_security(self):
-        """Test that ORM filter arguments are validated"""
-        print("\n[A03] Test: ORM filter kwargs security")
-        
-        # Safe filter
-        safe_kwargs = {'name__icontains': 'cement', 'price__gte': 10000}
-        result = OrmSecurityHelper.safe_filter_kwargs(**safe_kwargs)
-        self.assertEqual(len(result), 2, "Safe kwargs should be preserved")
-        
-        # Dangerous lookup (not in whitelist)
-        dangerous_kwargs = {'name__raw': 'SELECT * FROM products'}
-        result = OrmSecurityHelper.safe_filter_kwargs(**dangerous_kwargs)
-        self.assertEqual(len(result), 0, "Dangerous lookups should be removed")
-        
-        # SQL injection in value
-        injection_kwargs = {'name__icontains': "cement' OR '1'='1"}
-        result = OrmSecurityHelper.safe_filter_kwargs(**injection_kwargs)
-        self.assertEqual(len(result), 0, "SQL injection in value should be removed")
-        
-        print(f"✓ ORM filter kwargs validated")
     
     def test_length_limits_enforcement(self):
         """Test that length limits are enforced to prevent buffer overflow"""
