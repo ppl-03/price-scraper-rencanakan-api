@@ -478,7 +478,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "DROP TABLE attack should be rejected")
-        print(f"✓ DROP TABLE attack blocked")
+        print("✓ DROP TABLE attack blocked")
     
     def test_sql_injection_insert_attack(self):
         """Test that INSERT attacks are blocked"""
@@ -488,7 +488,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "INSERT attack should be rejected")
-        print(f"✓ INSERT attack blocked")
+        print("✓ INSERT attack blocked")
     
     def test_sql_injection_delete_attack(self):
         """Test that DELETE attacks are blocked"""
@@ -498,7 +498,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "DELETE attack should be rejected")
-        print(f"✓ DELETE attack blocked")
+        print("✓ DELETE attack blocked")
     
     def test_sql_injection_update_attack(self):
         """Test that UPDATE attacks are blocked"""
@@ -508,7 +508,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "UPDATE attack should be rejected")
-        print(f"✓ UPDATE attack blocked")
+        print("✓ UPDATE attack blocked")
     
     def test_sql_injection_comment_based(self):
         """Test that comment-based SQL injection is blocked"""
@@ -524,7 +524,7 @@ class TestA03InjectionPrevention(TestCase):
             is_valid, _, _ = InputValidator.validate_keyword(keyword)
             self.assertFalse(is_valid, f"Comment-based attack should be rejected: {keyword}")
         
-        print(f"✓ Comment-based attacks blocked")
+        print("✓ Comment-based attacks blocked")
     
     def test_sql_injection_benchmark_attack(self):
         """Test that BENCHMARK attacks are blocked"""
@@ -534,7 +534,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "BENCHMARK attack should be rejected")
-        print(f"✓ BENCHMARK attack blocked")
+        print("✓ BENCHMARK attack blocked")
     
     def test_sql_injection_detection_patterns(self):
         """Test SQL injection pattern detection for Juragan Material specific patterns"""
@@ -579,7 +579,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command injection with pipe should be rejected")
-        print(f"✓ Pipe command injection blocked")
+        print("✓ Pipe command injection blocked")
     
     def test_command_injection_semicolon(self):
         """Test that command injection with semicolon is blocked"""
@@ -589,7 +589,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command injection with semicolon should be rejected")
-        print(f"✓ Semicolon command injection blocked")
+        print("✓ Semicolon command injection blocked")
     
     def test_command_injection_backticks(self):
         """Test that command injection with backticks is blocked"""
@@ -599,7 +599,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command injection with backticks should be rejected")
-        print(f"✓ Backtick command injection blocked")
+        print("✓ Backtick command injection blocked")
     
     def test_command_injection_substitution(self):
         """Test that command substitution is blocked"""
@@ -609,7 +609,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command substitution should be rejected")
-        print(f"✓ Command substitution blocked")
+        print("✓ Command substitution blocked")
     
     def test_path_traversal_attack(self):
         """Test that path traversal attacks are blocked"""
@@ -625,7 +625,7 @@ class TestA03InjectionPrevention(TestCase):
             is_valid, _, _ = InputValidator.validate_keyword(keyword)
             self.assertFalse(is_valid, f"Path traversal should be rejected: {keyword}")
         
-        print(f"✓ Path traversal attacks blocked")
+        print("✓ Path traversal attacks blocked")
     
     def test_xss_sanitization(self):
         """Test that XSS payloads are sanitized"""
@@ -637,7 +637,7 @@ class TestA03InjectionPrevention(TestCase):
         # Should be rejected due to invalid characters
         self.assertFalse(is_valid, "XSS payload should be rejected")
         
-        print(f"✓ XSS payload sanitized")
+        print("✓ XSS payload sanitized")
     
     def test_integer_validation_positive(self):
         """Test that valid integer parameters are accepted"""
@@ -648,7 +648,7 @@ class TestA03InjectionPrevention(TestCase):
         self.assertTrue(is_valid, "Valid integer should be accepted")
         self.assertEqual(value, 5)
         self.assertIsNone(error_msg)
-        print(f"✓ Valid integer accepted")
+        print("✓ Valid integer accepted")
     
     def test_integer_validation_out_of_range(self):
         """Test that out-of-range integers are rejected"""
@@ -658,7 +658,7 @@ class TestA03InjectionPrevention(TestCase):
         
         self.assertFalse(is_valid, "Out of range integer should be rejected")
         self.assertIsNotNone(error_msg)
-        print(f"✓ Out of range integer rejected")
+        print("✓ Out of range integer rejected")
     
     def test_integer_validation_sql_injection(self):
         """Test that SQL injection in integer param is rejected"""
@@ -667,7 +667,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_integer_param("1 OR 1=1", "page", 0, 100)
         
         self.assertFalse(is_valid, "SQL injection in integer should be rejected")
-        print(f"✓ SQL injection in integer parameter rejected")
+        print("✓ SQL injection in integer parameter rejected")
     
     def test_boolean_validation_positive(self):
         """Test that valid boolean parameters are accepted"""
@@ -684,7 +684,7 @@ class TestA03InjectionPrevention(TestCase):
             is_valid, result, _ = InputValidator.validate_boolean_param(val, "flag")
             self.assertTrue(is_valid and result is False, f"Valid false value should be accepted: {val}")
         
-        print(f"✓ Valid boolean values accepted")
+        print("✓ Valid boolean values accepted")
     
     def test_boolean_validation_injection(self):
         """Test that injection in boolean param is rejected"""
@@ -693,7 +693,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_boolean_param("true' OR '1'='1", "flag")
         
         self.assertFalse(is_valid, "SQL injection in boolean should be rejected")
-        print(f"✓ SQL injection in boolean parameter rejected")
+        print("✓ SQL injection in boolean parameter rejected")
     
     def test_sort_type_whitelist(self):
         """Test that sort_type uses whitelist validation"""
@@ -710,7 +710,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, result, _ = InputValidator.validate_sort_type("cheapest' OR '1'='1")
         self.assertFalse(is_valid, "Invalid sort type should be rejected")
         
-        print(f"✓ Sort type whitelist enforced")
+        print("✓ Sort type whitelist enforced")
     
     def test_log_injection_prevention(self):
         """Test that log injection is prevented"""
@@ -722,7 +722,7 @@ class TestA03InjectionPrevention(TestCase):
         
         self.assertNotIn("\n", sanitized, "Newlines should be removed from logs")
         self.assertNotIn("\r", sanitized, "Carriage returns should be removed from logs")
-        print(f"✓ Log injection prevented")
+        print("✓ Log injection prevented")
     
     def test_parameterized_queries_in_database_service(self):
         """Test that database service uses parameterized queries"""
@@ -814,7 +814,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid = db_service._validate_data(malicious_product)
         self.assertFalse(is_valid, "Product with invalid price type should be rejected")
         
-        print(f"✓ Database sanitization works correctly")
+        print("✓ Database sanitization works correctly")
     
     def test_length_limits_enforcement(self):
         """Test that length limits are enforced to prevent buffer overflow"""
@@ -825,7 +825,7 @@ class TestA03InjectionPrevention(TestCase):
         is_valid, _, _ = InputValidator.validate_keyword(long_keyword, max_length=100)
         self.assertFalse(is_valid, "Oversized keyword should be rejected")
         
-        print(f"✓ Length limits enforced")
+        print("✓ Length limits enforced")
     
     def test_valid_search_keyword_accepted(self):
         """Test that valid search keywords are accepted"""
@@ -843,7 +843,7 @@ class TestA03InjectionPrevention(TestCase):
             self.assertTrue(is_valid, f"Valid keyword should be accepted: {keyword}")
             self.assertIsNotNone(sanitized, "Sanitized value should be provided")
         
-        print(f"✓ Valid keywords accepted")
+        print("✓ Valid keywords accepted")
 class TestA04InsecureDesign(TestCase):
     """
     Test suite for OWASP A04:2021 - Insecure Design
