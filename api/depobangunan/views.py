@@ -3,6 +3,7 @@ from django.views.decorators.http import require_http_methods
 from .factory import create_depo_scraper, create_depo_location_scraper
 from .database_service import DepoBangunanDatabaseService
 from db_pricing.auto_categorization_service import AutoCategorizationService
+from .security import SecurityDesignPatterns
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,13 @@ def _save_products_to_database(products):
     try:
         # Convert products to dict format if needed
         products_data = _convert_products_to_dict(products)
+        
+        # Validate business logic for each product
+        for product_data in products_data:
+            is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product_data)
+            if not is_valid:
+                logger.warning(f"Product validation failed: {error_msg}")
+                return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0, 'error': error_msg}
         
         # Save to database with price update
         db_service = DepoBangunanDatabaseService()
@@ -118,6 +126,13 @@ def _convert_products(products, location_value):
 
 
 def _save_products(db_service, products_data, use_price_update, result_url):
+    # Validate business logic for each product
+    for product_data in products_data:
+        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product_data)
+        if not is_valid:
+            logger.warning(f"Product validation failed: {error_msg}")
+            return None, _create_error_response(f"Validation error: {error_msg}", 400)
+    
     if use_price_update:
         save_result = db_service.save_with_price_update(products_data)
         if not save_result.get('success'):
@@ -283,6 +298,11 @@ def _convert_products_to_dict_with_sold_count(products):
 @require_http_methods(["GET"])
 def scrape_products(request):
     try:
+        # Enforce resource limits
+        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        if not is_valid:
+            return _create_error_response(error_msg)
+        
         # Validate and parse parameters
         keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
         if error:
@@ -359,6 +379,11 @@ def scrape_products(request):
 def depobangunan_locations_view(request):
     """View function for fetching Depo Bangunan store locations"""
     try:
+        # Enforce resource limits
+        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        if not is_valid:
+            return _create_error_response(error_msg)
+        
         timeout_param = request.GET.get('timeout', '30')
         try:
             timeout = int(timeout_param)
@@ -430,6 +455,11 @@ def scrape_and_save_products(request):
 def scrape_popularity(request):
     """Scrape products sorted by popularity and return top N best sellers."""
     try:
+        # Enforce resource limits
+        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        if not is_valid:
+            return _create_error_response(error_msg)
+        
         # Validate and parse parameters
         keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
         if error:
