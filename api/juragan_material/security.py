@@ -383,8 +383,8 @@ class SecurityDesignPatterns:
     @staticmethod
     def _validate_url_field(url: str) -> Tuple[bool, str]:
         """Validate URL field with SSRF protection."""
-        if not url.startswith('https://') and not url.startswith('http://'):
-            return False, "URL must use HTTP/HTTPS protocol"
+        if not url.startswith('https://'):
+            return False, "URL must use HTTPS protocol"
         if 'localhost' in url or '127.0.0.1' in url or '0.0.0.0' in url:
             logger.critical(f"SSRF attempt detected: {url}")
             return False, "Invalid URL"
