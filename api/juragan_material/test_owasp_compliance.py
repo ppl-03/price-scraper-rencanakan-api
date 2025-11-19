@@ -195,25 +195,25 @@ class TestA01BrokenAccessControl(TestCase):
         print("\n[A01] Test: Client blocking on rate limit violation")
         
         rate_limiter = RateLimiter()
-        client_id = "attacker_ip_456"
+        client_id = "juragan_attacker_789"
+        max_requests = 10
+        window_seconds = 60
         
-        # Exceed rate limit to trigger block
-        for _ in range(11):
+        # Trigger rate limit violations using helper method
+        for _ in range(max_requests + 1):
             rate_limiter.check_rate_limit(
-                client_id, max_requests=10, window_seconds=60, block_on_violation=True
+                client_id, max_requests=max_requests, window_seconds=window_seconds, 
+                block_on_violation=True
             )
         
-        # Verify client is blocked
-        is_blocked = rate_limiter.is_blocked(client_id)
-        self.assertTrue(is_blocked, "Client should be blocked after violation")
+        # Verify client blocking
+        self.assertTrue(rate_limiter.is_blocked(client_id), 
+                       "Client should be blocked after exceeding rate limit")
         print("✓ Client blocked after rate limit violation")
         
-        # Verify blocked client cannot make requests
-        is_allowed, error = rate_limiter.check_rate_limit(
-            client_id, max_requests=10, window_seconds=60
-        )
-        self.assertFalse(is_allowed, "Blocked client should not be allowed")
-        self.assertIn("Blocked for", error)
+        # Attempt another request - should still be blocked
+        error = self._test_rate_limit_exceeded(rate_limiter, client_id, max_requests, window_seconds)
+        self.assertIn("Blocked for", error, "Error should indicate blocking duration")
         print("✓ Blocked client cannot make requests")
     
     def test_rate_limiting_window_cleanup(self):
