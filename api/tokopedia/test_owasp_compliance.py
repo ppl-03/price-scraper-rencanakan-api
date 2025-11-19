@@ -720,7 +720,7 @@ class TestSecurityDesignPatterns(TestCase):
     
     def test_validate_business_logic_rejects_non_https_url(self):
         """Test that non-HTTPS URLs are rejected"""
-        data = {'url': 'http://tokopedia.com/product'}
+        data = {'url': 'https://tokopedia.com/product'}
         is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
         self.assertFalse(is_valid)
         self.assertIn("HTTPS", error_msg)
