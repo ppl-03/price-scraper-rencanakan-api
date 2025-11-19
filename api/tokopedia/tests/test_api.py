@@ -396,16 +396,16 @@ class TokopediaAPITest(BaseTokopediaAPITest):
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_limit_exceeds_maximum(self, mock_create_scraper):
-        """Test that limit values exceeding 1000 are rejected for security"""
+        """Test that limit values exceeding 100 are rejected for security"""
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self._get(self.scrape_url, {'q': 'semen', 'limit': '5000'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'limit': '200'})
         
         self.assertEqual(response.status_code, 400)
         response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('must not exceed 1000', response_data['error_message'])
+        self.assertIn('error', response_data)
+        self.assertIn('exceeds maximum', response_data['error'])
         mock_scraper.scrape_products.assert_not_called()
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -424,14 +424,14 @@ class TokopediaAPITest(BaseTokopediaAPITest):
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_limit_at_maximum_allowed(self, mock_create_scraper):
-        """Test that limit at exactly 1000 is accepted"""
+        """Test that limit at exactly 100 is accepted"""
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self._get(self.scrape_url, {'q': 'semen', 'limit': '1000'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'limit': '100'})
         
         self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_products.assert_called_with(keyword='semen', sort_by_price=True, page=0, limit=1000)
+        mock_scraper.scrape_products.assert_called_with(keyword='semen', sort_by_price=True, page=0, limit=100)
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_factory_exception_handling(self, mock_create_scraper):
@@ -913,20 +913,20 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_filters_limit_exceeds_maximum(self, mock_create_scraper):
-        """Test that limit values exceeding 1000 are rejected for security in filters endpoint"""
+        """Test that limit values exceeding 100 are rejected for security in filters endpoint"""
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
         response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
-            'limit': '2000'  # Exceeds max of 1000
+            'limit': '200'  # Exceeds max of 100
         })
         
         # Should reject excessive limits with 400 Bad Request
         self.assertEqual(response.status_code, 400)
         response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('must not exceed 1000', response_data['error_message'])
+        self.assertIn('error', response_data)
+        self.assertIn('exceeds maximum', response_data['error'])
         mock_scraper.scrape_products_with_filters.assert_not_called()
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
