@@ -2,6 +2,10 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .factory import create_juraganmaterial_scraper
 from .database_service import JuraganMaterialDatabaseService
+from .security import (
+    require_api_token,
+    enforce_resource_limits,
+)
 from api.views_utils import validate_scraping_request, format_scraping_response, handle_scraping_exception
 from db_pricing.auto_categorization_service import AutoCategorizationService
 import logging
@@ -144,6 +148,8 @@ def _convert_products_to_dict(products):
 
 
 @require_http_methods(["GET"])
+@require_api_token(required_permission='read')
+@enforce_resource_limits
 def scrape_products(request):
     try:
         # Validate request parameters
@@ -165,6 +171,8 @@ def scrape_products(request):
 
 
 @require_http_methods(["GET"])
+@require_api_token(required_permission='write')
+@enforce_resource_limits
 def scrape_and_save_products(request):
     """
     Scrape and save products to database.
@@ -251,6 +259,8 @@ def scrape_and_save_products(request):
 
 
 @require_http_methods(["GET"])
+@require_api_token(required_permission='read')
+@enforce_resource_limits
 def scrape_popularity(request):
     """
     Scrape products sorted by popularity (relevance) and return top 5 most relevant products.
