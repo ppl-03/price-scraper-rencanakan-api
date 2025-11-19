@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 class GovernmentWagePlaywrightClient(IHttpClient):
     # CSS selectors
     REGION_SELECT_SELECTOR = "select.form-control"
+    SEARCH_INPUT_SELECTOR = ".dataTables_filter input"
     
     def __init__(
         self,
@@ -17,11 +18,13 @@ class GovernmentWagePlaywrightClient(IHttpClient):
         browser_type: str = "chromium",
         region_label: Optional[str] = "Kab. Cilacap",
         auto_select_region: bool = True,
+        search_keyword: Optional[str] = None,
     ):
         self.headless = headless
         self.browser_type = browser_type
         self.region_label = region_label
         self.auto_select_region = auto_select_region
+        self.search_keyword = search_keyword
 
         self.playwright = None
         self.browser: Optional[Browser] = None
@@ -92,6 +95,17 @@ class GovernmentWagePlaywrightClient(IHttpClient):
                         await self.page.locator(f"{self.REGION_SELECT_SELECTOR} option", has_text=self.region_label).click()
                 except Exception:
                     pass
+
+            # 2.5) Apply search filter if keyword is provided
+            if self.search_keyword:
+                try:
+                    await self.page.wait_for_selector(self.SEARCH_INPUT_SELECTOR, timeout=10000)
+                    await self.page.fill(self.SEARCH_INPUT_SELECTOR, self.search_keyword)
+                    # Wait for DataTables to filter results
+                    await asyncio.sleep(2)
+                    logger.info(f"Applied search filter: '{self.search_keyword}'")
+                except Exception as e:
+                    logger.warning(f"Could not apply search filter: {e}")
 
             # 3) Wait for DataTables rows to render
             await self.page.wait_for_selector("table.dataTable tbody tr", timeout=60000)
