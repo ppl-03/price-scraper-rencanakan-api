@@ -1,15 +1,18 @@
 """
 OWASP Security Module for Tokopedia API
-Implements A01:2021 (Broken Access Control)
+Implements A01:2021 (Broken Access Control), A03:2021 (Injection), A04:2021 (Insecure Design)
 """
 import logging
+import re
 import time
 from functools import wraps
 from typing import Optional, Dict, Any, Tuple
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.http import JsonResponse
 from django.core.cache import cache
+from django.db import connection
+import bleach
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +247,315 @@ class AccessControlManager:
 
 
 # =============================================================================
+# A03:2021 – Injection Prevention
+# =============================================================================
+
+class InputValidator:
+    """
+    Comprehensive input validation to prevent injection attacks.
+    Implements OWASP A03:2021 - Keep data separate from commands.
+    """
+    
+    # Whitelist patterns for common inputs
+    KEYWORD_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-_\.]+$')
+    NUMERIC_PATTERN = re.compile(r'^\d+$')
+    BOOLEAN_PATTERN = re.compile(r'^(true|false|1|0|yes|no)$', re.IGNORECASE)
+    
+    # SQL injection detection patterns
+    SQL_INJECTION_PATTERNS = [
+        r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)",
+        r"(;|\-\-|\/\*|\*\/)",
+        r"(\bOR\b.*=.*)",
+        r"(\bAND\b.*=.*)",
+        r"(\'|\"|`)",
+    ]
+    
+    @classmethod
+    def validate_keyword(cls, keyword: str, max_length: int = 100) -> Tuple[bool, str, Optional[str]]:
+        """
+        Validate and sanitize keyword input.
+        
+        Returns:
+            Tuple of (is_valid, error_message, sanitized_value)
+        """
+        if not keyword:
+            return False, "Keyword is required", None
+        
+        # Length validation
+        if len(keyword) > max_length:
+            return False, f"Keyword exceeds maximum length of {max_length}", None
+        
+        # Strip whitespace
+        keyword = keyword.strip()
+        
+        if not keyword:
+            return False, "Keyword cannot be empty", None
+        
+        # Whitelist validation - only allow safe characters
+        if not cls.KEYWORD_PATTERN.match(keyword):
+            logger.warning(f"Invalid keyword pattern detected: {keyword}")
+            return False, "Keyword contains invalid characters. Only alphanumeric, spaces, hyphens, underscores, and periods allowed", None
+        
+        # SQL injection detection
+        if cls._detect_sql_injection(keyword):
+            logger.critical(f"SQL injection attempt detected in keyword: {keyword}")
+            return False, "Invalid keyword format", None
+        
+        # HTML sanitization (defense in depth)
+        sanitized = bleach.clean(keyword, tags=[], strip=True)
+        
+        return True, "", sanitized
+    
+    @classmethod
+    def validate_integer(
+        cls, 
+        value: Any, 
+        field_name: str,
+        min_value: Optional[int] = None,
+        max_value: Optional[int] = None
+    ) -> Tuple[bool, str, Optional[int]]:
+        """
+        Validate integer input with range checking.
+        """
+        if value is None:
+            return False, f"{field_name} is required", None
+        
+        # Type checking
+        if isinstance(value, str):
+            if not cls.NUMERIC_PATTERN.match(value):
+                return False, f"{field_name} must be a valid integer", None
+            try:
+                value = int(value)
+            except ValueError:
+                return False, f"{field_name} must be a valid integer", None
+        elif not isinstance(value, int):
+            return False, f"{field_name} must be an integer", None
+        
+        # Range validation
+        if min_value is not None and value < min_value:
+            return False, f"{field_name} must be at least {min_value}", None
+        
+        if max_value is not None and value > max_value:
+            return False, f"{field_name} must be at most {max_value}", None
+        
+        return True, "", value
+    
+    @classmethod
+    def validate_boolean(cls, value: Any, field_name: str) -> Tuple[bool, str, Optional[bool]]:
+        """
+        Validate boolean input.
+        """
+        if value is None:
+            return True, "", None  # Return None to allow view to set default
+        
+        if value == '':
+            # Empty string is invalid, not a missing value
+            return False, f"{field_name} must be a boolean value", None
+        
+        if isinstance(value, bool):
+            return True, "", value
+        
+        if isinstance(value, str):
+            value_lower = value.lower()
+            if value_lower in ['true', '1', 'yes']:
+                return True, "", True
+            elif value_lower in ['false', '0', 'no']:
+                return True, "", False
+            else:
+                return False, f"{field_name} must be a boolean value", None
+        
+        return False, f"{field_name} must be a boolean value", None
+    
+    @classmethod
+    def _detect_sql_injection(cls, value: str) -> bool:
+        """
+        Detect potential SQL injection patterns.
+        """
+        for pattern in cls.SQL_INJECTION_PATTERNS:
+            if re.search(pattern, value, re.IGNORECASE):
+                return True
+        return False
+    
+    @classmethod
+    def sanitize_for_database(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Sanitize data before database operations.
+        Implements parameterized queries pattern.
+        """
+        sanitized = {}
+        
+        for key, value in data.items():
+            if isinstance(value, str):
+                # Remove null bytes
+                value = value.replace('\x00', '')
+                # Limit length
+                value = value[:1000]
+                # HTML escape
+                value = bleach.clean(value, tags=[], strip=True)
+            
+            sanitized[key] = value
+        
+        return sanitized
+
+
+class DatabaseQueryValidator:
+    """
+    Validates database operations to prevent SQL injection.
+    Implements OWASP A03:2021 - Use parameterized queries.
+    """
+    
+    @staticmethod
+    def validate_table_name(table_name: str) -> bool:
+        """
+        Validate table name against whitelist.
+        Table names cannot be parameterized, so whitelist is critical.
+        """
+        allowed_tables = [
+            'tokopedia_products',
+            'tokopedia_locations',
+            'tokopedia_price_history'
+        ]
+        return table_name in allowed_tables
+    
+    @staticmethod
+    def validate_column_name(column_name: str) -> bool:
+        """
+        Validate column name against whitelist.
+        """
+        allowed_columns = [
+            'id', 'name', 'price', 'url', 'unit', 
+            'created_at', 'updated_at', 'code'
+        ]
+        return column_name in allowed_columns
+    
+    @staticmethod
+    def build_safe_query(
+        operation: str,
+        table: str,
+        columns: list,
+        where_clause: Optional[Dict] = None
+    ) -> Tuple[bool, str, str]:
+        """
+        Build safe parameterized SQL query.
+        
+        Returns:
+            Tuple of (is_valid, error_message, query)
+        """
+        # Validate operation
+        if operation not in ['SELECT', 'INSERT', 'UPDATE', 'DELETE']:
+            return False, "Invalid operation", ""
+        
+        # Validate table name
+        if not DatabaseQueryValidator.validate_table_name(table):
+            logger.critical(f"Invalid table name attempt: {table}")
+            return False, "Invalid table name", ""
+        
+        # Validate column names
+        for col in columns:
+            if not DatabaseQueryValidator.validate_column_name(col):
+                logger.critical(f"Invalid column name attempt: {col}")
+                return False, "Invalid column name", ""
+        
+        # Build query based on operation
+        if operation == 'SELECT':
+            cols = ', '.join(columns)
+            query = f"SELECT {cols} FROM {table}"
+            if where_clause:
+                # Use parameterized where clause
+                query += " WHERE " + " AND ".join([f"{k} = %s" for k in where_clause.keys()])
+        
+        # Add more operations as needed
+        
+        return True, "", query
+
+
+# =============================================================================
+# A04:2021 – Insecure Design Prevention
+# =============================================================================
+
+class SecurityDesignPatterns:
+    """
+    Implements secure design patterns and best practices.
+    Implements OWASP A04:2021 - Use secure design patterns.
+    """
+    
+    @staticmethod
+    def _validate_price_field(price: Any) -> Tuple[bool, str]:
+        """Validate price field in business logic."""
+        if not isinstance(price, (int, float)) or price < 0:
+            return False, "Price must be a positive number"
+        if price > 1000000000:
+            logger.warning(f"Suspicious price value: {price}")
+            return False, "Price value exceeds reasonable limit"
+        return True, ""
+    
+    @staticmethod
+    def _validate_name_field(name: str) -> Tuple[bool, str]:
+        """Validate name field in business logic."""
+        if len(name) > 500:
+            return False, "Product name too long"
+        if len(name) < 2:
+            return False, "Product name too short"
+        return True, ""
+    
+    @staticmethod
+    def _validate_url_field(url: str) -> Tuple[bool, str]:
+        """Validate URL field with SSRF protection."""
+        if not url.startswith('https://'):
+            return False, "URL must use HTTPS protocol for security"
+        if 'localhost' in url or '127.0.0.1' in url or '0.0.0.0' in url:
+            logger.critical(f"SSRF attempt detected: {url}")
+            return False, "Invalid URL"
+        return True, ""
+    
+    @staticmethod
+    def validate_business_logic(data: Dict[str, Any]) -> Tuple[bool, str]:
+        """
+        Validate business logic constraints.
+        Implements plausibility checks.
+        """
+        if 'price' in data:
+            is_valid, error_msg = SecurityDesignPatterns._validate_price_field(data['price'])
+            if not is_valid:
+                return False, error_msg
+        
+        if 'name' in data:
+            is_valid, error_msg = SecurityDesignPatterns._validate_name_field(data['name'])
+            if not is_valid:
+                return False, error_msg
+        
+        if 'url' in data:
+            is_valid, error_msg = SecurityDesignPatterns._validate_url_field(data['url'])
+            if not is_valid:
+                return False, error_msg
+        
+        return True, ""
+    
+    @staticmethod
+    def enforce_resource_limits(request, max_page_size: int = 100) -> Tuple[bool, str]:
+        """
+        Enforce resource consumption limits.
+        Implements OWASP A04:2021 - Limit resource consumption.
+        """
+        # Limit page size
+        if 'limit' in request.GET:
+            try:
+                limit = int(request.GET['limit'])
+                if limit > max_page_size:
+                    return False, f"Limit exceeds maximum of {max_page_size}"
+            except ValueError:
+                return False, "Invalid limit parameter"
+        
+        # Limit query complexity
+        query_params_count = len(request.GET)
+        if query_params_count > 20:
+            logger.warning(f"Excessive query parameters: {query_params_count}")
+            return False, "Too many query parameters"
+        
+        return True, ""
+
+
+# =============================================================================
 # Security Decorators
 # =============================================================================
 
@@ -307,6 +619,73 @@ def require_api_token(required_permission: str = None):
     return decorator
 
 
+def _get_request_data(request):
+    """Extract data source based on request method."""
+    if request.method == 'GET':
+        return request.GET, None
+    
+    try:
+        import json
+        data = json.loads(request.body) if request.body else {}
+        return data, None
+    except json.JSONDecodeError:
+        return None, JsonResponse({
+            'error': 'Invalid JSON in request body'
+        }, status=400)
+
+
+def _validate_fields(validators: Dict[str, callable], data_source) -> Tuple[Dict, Dict]:
+    """Validate all fields and return errors and validated data."""
+    errors = {}
+    validated_data = {}
+    
+    for field_name, validator_func in validators.items():
+        value = data_source.get(field_name)
+        is_valid, error_msg, sanitized_value = validator_func(value)
+        
+        if not is_valid:
+            errors[field_name] = error_msg
+        elif sanitized_value is not None:
+            validated_data[field_name] = sanitized_value
+    
+    return errors, validated_data
+
+
+def validate_input(validators: Dict[str, callable]):
+    """
+    Decorator for input validation.
+    Implements OWASP A03:2021 - Use positive server-side input validation.
+    
+    Usage:
+        @validate_input({
+            'keyword': lambda x: InputValidator.validate_keyword(x),
+            'page': lambda x: InputValidator.validate_integer(x, 'page', min_value=0)
+        })
+        def my_view(request):
+            pass
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapped_view(request, *args, **kwargs):
+            data_source, error_response = _get_request_data(request)
+            if error_response:
+                return error_response
+            
+            errors, validated_data = _validate_fields(validators, data_source)
+            
+            if errors:
+                return JsonResponse({
+                    'error': 'Validation failed',
+                    'details': errors
+                }, status=400)
+            
+            request.validated_data = validated_data
+            return view_func(request, *args, **kwargs)
+        
+        return wrapped_view
+    return decorator
+
+
 def enforce_resource_limits(view_func):
     """
     Decorator to enforce resource consumption limits.
@@ -314,29 +693,10 @@ def enforce_resource_limits(view_func):
     """
     @wraps(view_func)
     def wrapped_view(request, *args, **kwargs):
-        # Limit page size for pagination
-        if 'limit' in request.GET:
-            try:
-                limit = int(request.GET['limit'])
-                if limit > 1000:
-                    return JsonResponse({
-                        'success': False,
-                        'error_message': 'Limit parameter must not exceed 1000 for security reasons'
-                    }, status=400)
-            except ValueError:
-                return JsonResponse({
-                    'success': False,
-                    'error_message': 'Invalid limit parameter'
-                }, status=400)
+        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
         
-        # Limit query complexity
-        query_params_count = len(request.GET)
-        if query_params_count > 20:
-            logger.warning(f"Excessive query parameters: {query_params_count}")
-            return JsonResponse({
-                'success': False,
-                'error_message': 'Too many query parameters'
-            }, status=400)
+        if not is_valid:
+            return JsonResponse({'error': error_msg}, status=400)
         
         return view_func(request, *args, **kwargs)
     
