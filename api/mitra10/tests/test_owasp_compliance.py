@@ -580,6 +580,8 @@ class TestSecurityDecorators(TestCase):
 
 
 class TestEdgeCases(unittest.TestCase):
+    TEST_IP_1 = '192.168.1.100'  
+    TEST_IP_2 = '192.168.1.101'  
     
     def setUp(self):
         self.rate_limiter = RateLimiter()
@@ -590,7 +592,7 @@ class TestEdgeCases(unittest.TestCase):
         self.factory = RequestFactory()
     
     def test_blocked_ip_expiration(self):
-        ip = '192.168.1.100'
+        ip = self.TEST_IP_1
         self.rate_limiter.block_client(ip, duration_seconds=1)
         self.assertTrue(self.rate_limiter.is_blocked(ip))
         
@@ -598,7 +600,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertFalse(self.rate_limiter.is_blocked(ip))
     
     def test_rate_limit_without_blocking(self):
-        ip = '192.168.1.101'
+        ip = self.TEST_IP_2
         for i in range(15):
             result, error = self.rate_limiter.check_rate_limit(ip, max_requests=10, window_seconds=60, block_on_violation=False)
             if i < 10:
