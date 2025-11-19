@@ -22,13 +22,13 @@ TEST_IP_ALLOWED = settings.TEST_IP_ALLOWED
 TEST_IP_DENIED = settings.TEST_IP_DENIED
 TEST_IP_ATTACKER = settings.TEST_IP_ATTACKER
 
-# SSRF Test Constants - RFC 1918 Private IP Addresses for Security Testing ONLY
+# SSRF Test Constants - Documentation IP Addresses for Security Testing ONLY
 # These IPs simulate attack vectors and are NOT used for actual network connections
 # They represent common internal network targets that SSRF attacks attempt to access
 SSRF_TEST_LOCALHOST = 'localhost'
-SSRF_TEST_LOOPBACK = '127.0.0.1'
-SSRF_TEST_ALL_INTERFACES = '0.0.0.0'
-SSRF_TEST_PRIVATE_NETWORK = '192.168.1.1'  # RFC 1918 private address - test fixture only
+SSRF_TEST_LOOPBACK = '127.0.0.1'  # Loopback address exception (127.0.0.0/8)
+SSRF_TEST_ALL_INTERFACES = '0.0.0.0'  # Non-routable address exception
+SSRF_TEST_DOC_NETWORK = '192.0.2.1'  # RFC 5737 TEST-NET-1 (reserved for documentation)
 
 from .security import (
     RateLimiter,
@@ -919,13 +919,13 @@ class TestA04InsecureDesign(TestCase):
         print("\n[A04] Test: SSRF prevention")
         
         # SSRF attack vectors targeting internal infrastructure
-        # Using test constants defined at module level - these are RFC 1918 addresses
+        # Using test constants defined at module level - RFC 5737 documentation addresses
         # used ONLY for security testing to simulate SSRF attack patterns
         internal_targets = [
             (f'https://{SSRF_TEST_LOCALHOST}/juragan_material_admin', 'localhost admin'),
             (f'https://{SSRF_TEST_LOOPBACK}:8000/internal', 'loopback interface'),
             (f'https://{SSRF_TEST_ALL_INTERFACES}/config', 'all interfaces'),
-            (f'https://{SSRF_TEST_PRIVATE_NETWORK}/router', 'RFC 1918 private network')
+            (f'https://{SSRF_TEST_DOC_NETWORK}/router', 'RFC 5737 documentation network')
         ]
         
         for ssrf_url, attack_type in internal_targets:
