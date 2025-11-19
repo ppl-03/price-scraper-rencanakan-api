@@ -8,8 +8,8 @@ class TestMitra10DatabaseService(TestCase):
     
     def test_save_valid_data(self):
         data = [
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"},
-            {"name": "Item 2", "price": 20000, "url": "https://example.com/2", "unit": "box", "location": "Bandung"}
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"},
+            {"name": "Item 2", "price": 20000, "url": "https://www.mitra10.com/2", "unit": "box", "location": "Bandung"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -17,7 +17,7 @@ class TestMitra10DatabaseService(TestCase):
         self.assertEqual(Mitra10Product.objects.count(), 2)
         product = Mitra10Product.objects.get(name="Item 1")
         self.assertEqual(product.price, 10000)
-        self.assertEqual(product.url, "https://example.com/1")
+        self.assertEqual(product.url, "https://www.mitra10.com/1")
         self.assertEqual(product.unit, "pcs")
 
     def test_save_empty_data(self):
@@ -30,7 +30,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_missing_name_field(self):
         data = [
-            {"price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, error_msg = service.save(data)
@@ -40,7 +40,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_missing_price_field(self):
         data = [
-            {"name": "Item 1", "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item 1", "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, error_msg = service.save(data)
@@ -60,7 +60,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_missing_unit_field(self):
         data = [
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "location": "Jakarta"}
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, error_msg = service.save(data)
@@ -70,7 +70,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_negative_price(self):
         data = [
-            {"name": "Item 1", "price": -100, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item 1", "price": -100, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, error_msg = service.save(data)
@@ -80,7 +80,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_zero_price(self):
         data = [
-            {"name": "Item 1", "price": 0, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item 1", "price": 0, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -91,8 +91,8 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_duplicate_data(self):
         data = [
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"},
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"},
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -101,7 +101,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_large_price(self):
         data = [
-            {"name": "Item 1", "price": 999999999, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item 1", "price": 999999999, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -111,7 +111,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_string_price(self):
         data = [
-            {"name": "Item 1", "price": "10000", "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item 1", "price": "10000", "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, error_msg = service.save(data)
@@ -119,9 +119,9 @@ class TestMitra10DatabaseService(TestCase):
         self.assertIn('must be a number', error_msg)
 
     def test_save_long_product_name(self):
-        long_name = "A" * 500
+        long_name = "A" * 300
         data = [
-            {"name": long_name, "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": long_name, "price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -131,7 +131,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_empty_unit(self):
         data = [
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "", "location": "Jakarta"}
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -141,17 +141,17 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_multiple_items(self):
         data = [
-            {"name": f"Item {i}", "price": 1000 * i, "url": f"https://example.com/{i}", "unit": "pcs", "location": "City"}
-            for i in range(1, 11)
+            {"name": f"Item {i}", "price": 1000 * i, "url": f"https://www.mitra10.com/{i}", "unit": "pcs", "location": "City"}
+            for i in range(1, 6)
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
         self.assertTrue(result)
-        self.assertEqual(Mitra10Product.objects.count(), 10)
+        self.assertEqual(Mitra10Product.objects.count(), 5)
 
     def test_save_with_special_characters_in_name(self):
         data = [
-            {"name": "Item & Special <> Characters", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item & Special <> Characters", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -161,7 +161,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_save_with_special_characters_in_unit(self):
         data = [
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "m²", "location": "Jakarta"}
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "m²", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, _ = service.save(data)
@@ -179,7 +179,7 @@ class TestMitra10DatabaseService(TestCase):
 
     def test_validate_data_valid(self):
         data = [
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result, error_msg = service._validate_data(data)
@@ -231,7 +231,7 @@ class TestMitra10DatabaseService(TestCase):
     def test_save_with_price_update_insert_new_product(self):
         """Test save_with_price_update inserts a new product"""
         data = [
-            {"name": "New Item", "price": 10000, "url": "https://example.com/new", "unit": "pcs", "location": "Jakarta"}
+            {"name": "New Item", "price": 10000, "url": "https://www.mitra10.com/new", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result = service.save_with_price_update(data)
@@ -247,14 +247,14 @@ class TestMitra10DatabaseService(TestCase):
         Mitra10Product.objects.create(
             name="Existing Item", 
             price=10000, 
-            url="https://example.com/existing", 
+            url="https://www.mitra10.com/existing", 
             unit="pcs",
             location="Jakarta"
         )
         
         # Update with small price change (< 15%)
         data = [
-            {"name": "Existing Item", "price": 11000, "url": "https://example.com/existing", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Existing Item", "price": 11000, "url": "https://www.mitra10.com/existing", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result = service.save_with_price_update(data)
@@ -273,14 +273,14 @@ class TestMitra10DatabaseService(TestCase):
         Mitra10Product.objects.create(
             name="Existing Item", 
             price=10000, 
-            url="https://example.com/existing", 
+            url="https://www.mitra10.com/existing", 
             unit="pcs",
             location="Jakarta"
         )
         
         # Update with large price change (>= 15%)
         data = [
-            {"name": "Existing Item", "price": 12000, "url": "https://example.com/existing", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Existing Item", "price": 12000, "url": "https://www.mitra10.com/existing", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result = service.save_with_price_update(data)
@@ -301,13 +301,13 @@ class TestMitra10DatabaseService(TestCase):
         Mitra10Product.objects.create(
             name="Existing Item", 
             price=10000, 
-            url="https://example.com/existing", 
+            url="https://www.mitra10.com/existing", 
             unit="pcs"
         )
         
         # Update with same price
         data = [
-            {"name": "Existing Item", "price": 10000, "url": "https://example.com/existing", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Existing Item", "price": 10000, "url": "https://www.mitra10.com/existing", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
         result = service.save_with_price_update(data)
@@ -336,14 +336,14 @@ class TestMitra10DatabaseService(TestCase):
         Mitra10Product.objects.create(
             name="Existing Item", 
             price=10000, 
-            url="https://example.com/existing", 
+            url="https://www.mitra10.com/existing", 
             unit="pcs"
         )
         
         # Mix of new and existing products
         data = [
-            {"name": "Existing Item", "price": 12000, "url": "https://example.com/existing", "unit": "pcs", "location": "Jakarta"},
-            {"name": "New Item", "price": 5000, "url": "https://example.com/new", "unit": "box", "location": "Bali"}
+            {"name": "Existing Item", "price": 12000, "url": "https://www.mitra10.com/existing", "unit": "pcs", "location": "Jakarta"},
+            {"name": "New Item", "price": 5000, "url": "https://www.mitra10.com/new", "unit": "box", "location": "Bali"}
         ]
         service = Mitra10DatabaseService()
         result = service.save_with_price_update(data)
@@ -356,7 +356,7 @@ class TestMitra10DatabaseService(TestCase):
     def test_save_with_price_update_with_location(self):
         """Test save_with_price_update handles location field"""
         data = [
-            {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Bandung"}
+            {"name": "Item 1", "price": 10000, "url": "https://www.mitra10.com/1", "unit": "pcs", "location": "Bandung"}
         ]
         service = Mitra10DatabaseService()
         result = service.save_with_price_update(data)

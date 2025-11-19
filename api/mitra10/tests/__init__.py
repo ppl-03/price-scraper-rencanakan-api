@@ -31,6 +31,16 @@ from .test_unit_parser import (
 from .test_database_service import TestMitra10DatabaseService
 from .test_table_validator import TestMitra10TableValidator
 from .test_price_update import TestSaveWithPriceUpdate
+from .test_owasp_compliance import (
+    TestRateLimiter,
+    TestAccessControlManager,
+    TestInputValidator,
+    TestDatabaseQueryValidator,
+    TestSecurityDesignPatterns,
+    TestSecurityDecorators,
+    TestEdgeCases,
+    TestDecoratorIntegration,
+)
 
 __all__ = [
     "TestMitra10PriceCleaner",
@@ -66,4 +76,12 @@ __all__ = [
     "TestMitra10DatabaseService",
     "TestMitra10TableValidator",
     "TestSaveWithPriceUpdate",
+    "TestRateLimiter",
+    "TestAccessControlManager",
+    "TestInputValidator",
+    "TestDatabaseQueryValidator",
+    "TestSecurityDesignPatterns",
+    "TestSecurityDecorators",
+    "TestEdgeCases",
+    "TestDecoratorIntegration",
 ]
