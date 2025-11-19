@@ -8,10 +8,9 @@ import time
 from functools import wraps
 from typing import Optional, Dict, Any, Tuple
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from django.http import JsonResponse
 from django.core.cache import cache
-from django.db import connection
 import bleach
 
 logger = logging.getLogger(__name__)
@@ -196,6 +195,14 @@ class AccessControlManager:
         return has_permission
     
     @classmethod
+    def _sanitize_log_value(cls, value: str, max_length: int = 200) -> str:
+        """Sanitize a value for safe logging."""
+        if not value:
+            return 'unknown'
+        truncated = str(value)[:max_length]
+        return ''.join(c if c.isprintable() else '' for c in truncated)
+    
+    @classmethod
     def log_access_attempt(cls, request, success: bool, reason: str = ''):
         """
         Log access control events for monitoring and alerting.
@@ -203,14 +210,9 @@ class AccessControlManager:
         """
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
         # Sanitize all user-controlled data to prevent log injection
-        user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')[:200]
-        user_agent = ''.join(c if c.isprintable() else '' for c in user_agent)
-        path = request.path[:200]
-        path = ''.join(c if c.isprintable() else '' for c in path)
+        path = cls._sanitize_log_value(request.path)
         method = request.method
-        # Sanitize reason field (user-controlled)
-        safe_reason = str(reason)[:100] if reason else 'unknown'
-        safe_reason = ''.join(c if c.isprintable() else '' for c in safe_reason)
+        safe_reason = cls._sanitize_log_value(reason, max_length=100)
         
         # Log with sanitized values - don't log raw user input
         timestamp = datetime.now().isoformat()
@@ -307,6 +309,32 @@ class InputValidator:
         return True, "", sanitized
     
     @classmethod
+    def _convert_to_integer(cls, value: Any, field_name: str) -> Tuple[bool, str, Optional[int]]:
+        """Convert value to integer with validation."""
+        if isinstance(value, int):
+            return True, "", value
+        
+        if isinstance(value, str):
+            if not cls.NUMERIC_PATTERN.match(value):
+                return False, f"{field_name} must be a valid integer", None
+            try:
+                return True, "", int(value)
+            except ValueError:
+                return False, f"{field_name} must be a valid integer", None
+        
+        return False, f"{field_name} must be an integer", None
+    
+    @classmethod
+    def _validate_range(cls, value: int, field_name: str, min_value: Optional[int], 
+                        max_value: Optional[int]) -> Tuple[bool, str]:
+        """Validate value is within specified range."""
+        if min_value is not None and value < min_value:
+            return False, f"{field_name} must be at least {min_value}"
+        if max_value is not None and value > max_value:
+            return False, f"{field_name} must be at most {max_value}"
+        return True, ""
+    
+    @classmethod
     def validate_integer(
         cls, 
         value: Any, 
@@ -320,49 +348,44 @@ class InputValidator:
         if value is None:
             return False, f"{field_name} is required", None
         
-        # Type checking
-        if isinstance(value, str):
-            if not cls.NUMERIC_PATTERN.match(value):
-                return False, f"{field_name} must be a valid integer", None
-            try:
-                value = int(value)
-            except ValueError:
-                return False, f"{field_name} must be a valid integer", None
-        elif not isinstance(value, int):
-            return False, f"{field_name} must be an integer", None
+        # Type checking and conversion
+        is_valid, error_msg, converted_value = cls._convert_to_integer(value, field_name)
+        if not is_valid:
+            return False, error_msg, None
         
         # Range validation
-        if min_value is not None and value < min_value:
-            return False, f"{field_name} must be at least {min_value}", None
+        is_valid, error_msg = cls._validate_range(converted_value, field_name, min_value, max_value)
+        if not is_valid:
+            return False, error_msg, None
         
-        if max_value is not None and value > max_value:
-            return False, f"{field_name} must be at most {max_value}", None
-        
-        return True, "", value
+        return True, "", converted_value
+    
+    # Boolean value mappings
+    TRUTHY_VALUES = {'true', '1', 'yes'}
+    FALSY_VALUES = {'false', '0', 'no'}
     
     @classmethod
     def validate_boolean(cls, value: Any, field_name: str) -> Tuple[bool, str, Optional[bool]]:
         """
         Validate boolean input.
         """
+        # Handle None and empty string
         if value is None:
             return True, "", None  # Return None to allow view to set default
-        
         if value == '':
-            # Empty string is invalid, not a missing value
             return False, f"{field_name} must be a boolean value", None
         
+        # Native boolean
         if isinstance(value, bool):
             return True, "", value
         
+        # String conversion
         if isinstance(value, str):
             value_lower = value.lower()
-            if value_lower in ['true', '1', 'yes']:
+            if value_lower in cls.TRUTHY_VALUES:
                 return True, "", True
-            elif value_lower in ['false', '0', 'no']:
+            if value_lower in cls.FALSY_VALUES:
                 return True, "", False
-            else:
-                return False, f"{field_name} must be a boolean value", None
         
         return False, f"{field_name} must be a boolean value", None
     
@@ -404,29 +427,46 @@ class DatabaseQueryValidator:
     Implements OWASP A03:2021 - Use parameterized queries.
     """
     
+    # Whitelist constants
+    ALLOWED_TABLES = {
+        'tokopedia_products',
+        'tokopedia_locations',
+        'tokopedia_price_history'
+    }
+    
+    ALLOWED_COLUMNS = {
+        'id', 'name', 'price', 'url', 'unit', 
+        'created_at', 'updated_at', 'code'
+    }
+    
+    @staticmethod
+    def _validate_against_whitelist(value: str, whitelist: set, item_type: str) -> bool:
+        """Generic whitelist validator."""
+        if value not in whitelist:
+            logger.critical(f"Invalid {item_type} attempt: {value}")
+            return False
+        return True
+    
     @staticmethod
     def validate_table_name(table_name: str) -> bool:
         """
         Validate table name against whitelist.
         Table names cannot be parameterized, so whitelist is critical.
         """
-        allowed_tables = [
-            'tokopedia_products',
-            'tokopedia_locations',
-            'tokopedia_price_history'
-        ]
-        return table_name in allowed_tables
+        return DatabaseQueryValidator._validate_against_whitelist(
+            table_name, DatabaseQueryValidator.ALLOWED_TABLES, "table name"
+        )
     
     @staticmethod
     def validate_column_name(column_name: str) -> bool:
         """
         Validate column name against whitelist.
         """
-        allowed_columns = [
-            'id', 'name', 'price', 'url', 'unit', 
-            'created_at', 'updated_at', 'code'
-        ]
-        return column_name in allowed_columns
+        return DatabaseQueryValidator._validate_against_whitelist(
+            column_name, DatabaseQueryValidator.ALLOWED_COLUMNS, "column name"
+        )
+    
+    ALLOWED_OPERATIONS = {'SELECT', 'INSERT', 'UPDATE', 'DELETE'}
     
     @staticmethod
     def build_safe_query(
@@ -442,18 +482,16 @@ class DatabaseQueryValidator:
             Tuple of (is_valid, error_message, query)
         """
         # Validate operation
-        if operation not in ['SELECT', 'INSERT', 'UPDATE', 'DELETE']:
+        if operation not in DatabaseQueryValidator.ALLOWED_OPERATIONS:
             return False, "Invalid operation", ""
         
         # Validate table name
         if not DatabaseQueryValidator.validate_table_name(table):
-            logger.critical(f"Invalid table name attempt: {table}")
             return False, "Invalid table name", ""
         
-        # Validate column names
+        # Validate all column names
         for col in columns:
             if not DatabaseQueryValidator.validate_column_name(col):
-                logger.critical(f"Invalid column name attempt: {col}")
                 return False, "Invalid column name", ""
         
         # Build query based on operation
@@ -480,30 +518,47 @@ class SecurityDesignPatterns:
     """
     
     @staticmethod
+    def _validate_numeric_range(value: Any, field_name: str, min_val: float, max_val: float, 
+                                log_suspicious: bool = False) -> Tuple[bool, str]:
+        """Generic numeric range validator."""
+        if not isinstance(value, (int, float)) or value < min_val:
+            return False, f"{field_name} must be positive (at least {min_val})"
+        if value > max_val:
+            if log_suspicious:
+                logger.warning(f"Suspicious {field_name} value: {value}")
+            return False, f"{field_name} exceeds maximum limit of {max_val}"
+        return True, ""
+    
+    @staticmethod
+    def _validate_string_length(value: str, field_name: str, min_len: int, max_len: int) -> Tuple[bool, str]:
+        """Generic string length validator."""
+        if len(value) > max_len:
+            return False, f"{field_name} too long (max: {max_len})"
+        if len(value) < min_len:
+            return False, f"{field_name} too short (min: {min_len})"
+        return True, ""
+    
+    @staticmethod
     def _validate_price_field(price: Any) -> Tuple[bool, str]:
         """Validate price field in business logic."""
-        if not isinstance(price, (int, float)) or price < 0:
-            return False, "Price must be a positive number"
-        if price > 1000000000:
-            logger.warning(f"Suspicious price value: {price}")
-            return False, "Price value exceeds reasonable limit"
-        return True, ""
+        return SecurityDesignPatterns._validate_numeric_range(
+            price, "Price", 0, 1000000000, log_suspicious=True
+        )
     
     @staticmethod
     def _validate_name_field(name: str) -> Tuple[bool, str]:
         """Validate name field in business logic."""
-        if len(name) > 500:
-            return False, "Product name too long"
-        if len(name) < 2:
-            return False, "Product name too short"
-        return True, ""
+        return SecurityDesignPatterns._validate_string_length(name, "Product name", 2, 500)
     
     @staticmethod
     def _validate_url_field(url: str) -> Tuple[bool, str]:
         """Validate URL field with SSRF protection."""
         if not url.startswith('https://'):
             return False, "URL must use HTTPS protocol for security"
-        if 'localhost' in url or '127.0.0.1' in url or '0.0.0.0' in url:
+        
+        # Check for SSRF attempts
+        dangerous_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254']
+        if any(host in url.lower() for host in dangerous_hosts):
             logger.critical(f"SSRF attempt detected: {url}")
             return False, "Invalid URL"
         return True, ""
@@ -514,20 +569,19 @@ class SecurityDesignPatterns:
         Validate business logic constraints.
         Implements plausibility checks.
         """
-        if 'price' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_price_field(data['price'])
-            if not is_valid:
-                return False, error_msg
+        # Define field validators mapping
+        field_validators = {
+            'price': SecurityDesignPatterns._validate_price_field,
+            'name': SecurityDesignPatterns._validate_name_field,
+            'url': SecurityDesignPatterns._validate_url_field
+        }
         
-        if 'name' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_name_field(data['name'])
-            if not is_valid:
-                return False, error_msg
-        
-        if 'url' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_url_field(data['url'])
-            if not is_valid:
-                return False, error_msg
+        # Validate each field present in data
+        for field, validator in field_validators.items():
+            if field in data:
+                is_valid, error_msg = validator(data[field])
+                if not is_valid:
+                    return False, error_msg
         
         return True, ""
     

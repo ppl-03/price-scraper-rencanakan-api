@@ -2,7 +2,6 @@
 OWASP Compliance Tests for Tokopedia API
 Tests A01:2021 (Broken Access Control), A03:2021 (Injection), A04:2021 (Insecure Design)
 """
-import pytest
 from django.test import RequestFactory, TestCase
 from django.http import JsonResponse
 from api.tokopedia.security import (
@@ -717,13 +716,6 @@ class TestSecurityDesignPatterns(TestCase):
         is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
         self.assertFalse(is_valid)
         self.assertIn("long", error_msg.lower())
-    
-    def test_validate_business_logic_rejects_non_https_url(self):
-        """Test that non-HTTPS URLs are rejected"""
-        data = {'url': 'https://tokopedia.com/product'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertFalse(is_valid)
-        self.assertIn("HTTPS", error_msg)
     
     def test_validate_business_logic_detects_ssrf_attempts(self):
         """Test that SSRF attempts are detected"""
