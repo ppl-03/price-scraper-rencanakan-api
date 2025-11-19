@@ -528,27 +528,39 @@ class TestA03InjectionPrevention(TestCase):
         print(f"✓ BENCHMARK attack blocked")
     
     def test_sql_injection_detection_patterns(self):
-        """Test SQL injection pattern detection"""
+        """Test SQL injection pattern detection for Juragan Material specific patterns"""
         print("\n[A03] Test: SQL injection pattern detection")
         
-        test_cases = [
-            ("SELECT * FROM users", True),
-            ("DROP TABLE products", True),
-            ("1 OR 1=1", True),
-            ("normal search term", False),
-            ("cement mixer", False)
+        # Test malicious SQL patterns specific to construction materials queries
+        malicious_patterns = [
+            "SELECT * FROM juragan_material_products",
+            "DROP TABLE juragan_material_products",
+            "1 OR 1=1",
+            "UNION SELECT password FROM admin"
         ]
         
-        for test_input, should_detect in test_cases:
-            detected = InputValidator._detect_sql_injection(test_input)
-            self.assertEqual(
-                detected, should_detect,
-                f"Pattern detection failed for: {test_input}"
+        # Test safe construction material search terms
+        safe_patterns = [
+            "semen portland",
+            "bata ringan AAC",
+            "cat tembok weathershield"
+        ]
+        
+        # Validate malicious patterns are detected
+        for pattern in malicious_patterns:
+            self.assertTrue(
+                InputValidator._detect_sql_injection(pattern),
+                f"Failed to detect SQL injection: {pattern}"
             )
-            if should_detect:
-                print(f"✓ SQL pattern detected: {test_input[:30]}...")
-            else:
-                print(f"✓ Safe input allowed: {test_input}")
+            print(f"✓ Malicious pattern blocked: {pattern[:35]}...")
+        
+        # Validate safe patterns are allowed
+        for pattern in safe_patterns:
+            self.assertFalse(
+                InputValidator._detect_sql_injection(pattern),
+                f"False positive for safe input: {pattern}"
+            )
+            print(f"✓ Safe search term allowed: {pattern}")
     
     def test_command_injection_pipe(self):
         """Test that command injection with pipe is blocked"""
@@ -835,64 +847,82 @@ class TestA04InsecureDesign(TestCase):
     5. Secure design patterns
     """
     
+    def _validate_business_logic(self, data, should_pass, error_keyword=None):
+        """Helper method to validate business logic rules"""
+        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        if should_pass:
+            self.assertTrue(is_valid, f"Valid data rejected: {data}")
+        else:
+            self.assertFalse(is_valid, f"Invalid data accepted: {data}")
+            if error_keyword:
+                self.assertIn(error_keyword, error_msg, 
+                            f"Expected '{error_keyword}' in error message")
+        return is_valid, error_msg
+    
     def test_business_logic_price_validation(self):
-        """Test that business logic validates prices"""
+        """Test that business logic validates construction material prices"""
         print("\n[A04] Test: Business logic - Price validation")
         
-        # Valid price
-        data = {'price': 50000, 'name': 'Product', 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertTrue(is_valid, "Valid price should be accepted")
-        print("✓ Valid price accepted: 50000")
+        # Test typical construction material price (e.g., cement per sack)
+        self._validate_business_logic(
+            {'price': 75000, 'name': 'Semen Portland 50kg', 'url': 'https://example.com'},
+            should_pass=True
+        )
+        print("✓ Valid construction material price accepted: Rp 75,000")
         
-        # Negative price (business rule violation)
-        data = {'price': -1000, 'name': 'Product', 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertFalse(is_valid, "Negative price should be rejected")
-        self.assertIn('positive', error_msg)
-        print("✓ Negative price rejected")
+        # Test negative price - business rule violation
+        self._validate_business_logic(
+            {'price': -5000, 'name': 'Bata Ringan', 'url': 'https://example.com'},
+            should_pass=False,
+            error_keyword='positive'
+        )
+        print("✓ Negative price rejected (business rule)")
         
-        # Unreasonably high price (plausibility check)
-        data = {'price': 2000000000, 'name': 'Product', 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertFalse(is_valid, "Unreasonably high price should be rejected")
-        print("✓ Unreasonably high price rejected (plausibility check)")
+        # Test unrealistic high price - plausibility check for building materials
+        self._validate_business_logic(
+            {'price': 1500000000, 'name': 'Cat Tembok', 'url': 'https://example.com'},
+            should_pass=False
+        )
+        print("✓ Implausible price rejected (Rp 1.5B for paint)")
     
     def test_business_logic_name_validation(self):
-        """Test that business logic validates product names"""
+        """Test that business logic validates construction product names"""
         print("\n[A04] Test: Business logic - Name validation")
         
-        # Name too short
-        data = {'name': 'A', 'price': 1000, 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertFalse(is_valid)
-        self.assertIn('too short', error_msg)
-        print("✓ Too short name rejected")
+        # Test minimum length validation
+        self._validate_business_logic(
+            {'name': 'X', 'price': 25000, 'url': 'https://example.com'},
+            should_pass=False,
+            error_keyword='too short'
+        )
+        print("✓ Single character name rejected")
         
-        # Name too long
-        data = {'name': 'A' * 501, 'price': 1000, 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertFalse(is_valid)
-        self.assertIn('too long', error_msg)
-        print("✓ Too long name rejected")
+        # Test maximum length validation
+        self._validate_business_logic(
+            {'name': 'Semen Portland Tipe I ' * 50, 'price': 80000, 'url': 'https://example.com'},
+            should_pass=False,
+            error_keyword='too long'
+        )
+        print("✓ Excessively long product name rejected")
     
     def test_ssrf_prevention(self):
-        """Test that SSRF attacks are prevented"""
+        """Test that SSRF attacks are prevented for Juragan Material endpoints"""
         print("\n[A04] Test: SSRF prevention")
         
-        # Test URLs intentionally use HTTPS for SSRF attack simulation
-        # These are test patterns to verify security controls block internal access
-        ssrf_attempts = [
-            'https://localhost/admin',  # Internal host test
-            'https://127.0.0.1/secret',  # Loopback test
-            'https://0.0.0.0/internal'   # All interfaces test
+        # SSRF attack vectors targeting internal infrastructure
+        internal_targets = [
+            ('https://localhost/juragan_material_admin', 'localhost admin'),
+            ('https://127.0.0.1:8000/internal', 'loopback interface'),
+            ('https://0.0.0.0/config', 'all interfaces'),
+            ('https://192.168.1.1/router', 'private network')
         ]
         
-        for ssrf_url in ssrf_attempts:
-            data = {'name': 'Product', 'price': 1000, 'url': ssrf_url}
-            is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
-            self.assertFalse(is_valid, f"SSRF should be prevented: {ssrf_url}")
-            print(f"✓ SSRF prevented: {ssrf_url}")
+        for ssrf_url, attack_type in internal_targets:
+            self._validate_business_logic(
+                {'name': 'Semen Gresik', 'price': 65000, 'url': ssrf_url},
+                should_pass=False
+            )
+            print(f"✓ SSRF blocked: {attack_type}")
         
         # Test that insecure HTTP protocol is rejected
         insecure_urls = [
@@ -915,40 +945,50 @@ class TestA04InsecureDesign(TestCase):
         self.assertTrue(is_valid, "Valid HTTPS URL should be accepted")
         print("✓ Valid HTTPS URL accepted")
     
+    def _test_resource_limit(self, params, should_pass, description):
+        """Helper to test resource limits with specific parameters"""
+        request = RequestFactory().get('/api/juragan_material/search', params)
+        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        
+        if should_pass:
+            self.assertTrue(is_valid, f"Valid request rejected: {description}")
+        else:
+            self.assertFalse(is_valid, f"Invalid request accepted: {description}")
+        
+        return is_valid, error_msg
+    
     def test_resource_limit_page_size(self):
-        """Test that resource limits are enforced"""
+        """Test resource limits for construction material search pagination"""
         print("\n[A04] Test: Resource limit - Page size")
         
-        request = RequestFactory().get('/api/test', {'limit': '50'})
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
-        self.assertTrue(is_valid, "Reasonable limit should be accepted")
-        print("✓ Reasonable limit accepted: 50")
+        # Reasonable page size for browsing construction products
+        self._test_resource_limit({'limit': '25'}, True, 'standard pagination')
+        print("✓ Standard page size accepted: 25 items")
         
-        # Excessive limit
-        request = RequestFactory().get('/api/test', {'limit': '10000'})
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
-        self.assertFalse(is_valid, "Excessive limit should be rejected")
-        self.assertIn('exceeds maximum', error_msg)
-        print("✓ Excessive limit rejected: 10000")
+        # Attempt excessive page size (DoS vector)
+        _, error = self._test_resource_limit({'limit': '5000'}, False, 'excessive limit')
+        self.assertIn('exceeds maximum', error)
+        print("✓ Excessive page size blocked: 5000 items")
     
     def test_resource_limit_query_complexity(self):
-        """Test that query complexity is limited"""
+        """Test query complexity limits for product search"""
         print("\n[A04] Test: Resource limit - Query complexity")
         
-        # Normal query
-        params = {f'param{i}': f'value{i}' for i in range(10)}
-        request = RequestFactory().get('/api/test', params)
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
-        self.assertTrue(is_valid, "Normal query should be accepted")
-        print("✓ Normal query accepted: 10 parameters")
+        # Normal product search with multiple filters
+        normal_params = {
+            'keyword': 'semen',
+            'min_price': '50000',
+            'max_price': '100000',
+            'location': 'Jakarta'
+        }
+        self._test_resource_limit(normal_params, True, 'normal search filters')
+        print(f"✓ Normal search accepted: {len(normal_params)} parameters")
         
-        # Excessive parameters (DoS attempt)
-        params = {f'param{i}': f'value{i}' for i in range(25)}
-        request = RequestFactory().get('/api/test', params)
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
-        self.assertFalse(is_valid, "Excessive parameters should be rejected")
-        self.assertIn('Too many', error_msg)
-        print("✓ Excessive parameters rejected: 25 parameters")
+        # Attack with parameter pollution
+        attack_params = {f'filter_{i}': f'attack_{i}' for i in range(30)}
+        _, error = self._test_resource_limit(attack_params, False, 'parameter pollution')
+        self.assertIn('Too many', error)
+        print(f"✓ Parameter pollution blocked: {len(attack_params)} parameters")
     
     def test_database_validation_comprehensive(self):
         """Test comprehensive database input validation"""
@@ -1126,18 +1166,17 @@ def run_owasp_compliance_tests():
     suite.addTests(loader.loadTestsFromTestCase(TestA04InsecureDesign))
     suite.addTests(loader.loadTestsFromTestCase(TestIntegratedSecurityScenarios))
     
-    # Run tests
+    # Execute test suite
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
     
-    # Print summary
+    # Display results summary
     print("\n" + "=" * 80)
-    print("TEST SUMMARY")
+    print("JURAGAN MATERIAL - SECURITY TEST RESULTS")
     print("=" * 80)
-    print(f"Tests run: {result.testsRun}")
-    print(f"Successes: {result.testsRun - len(result.failures) - len(result.errors)}")
-    print(f"Failures: {len(result.failures)}")
-    print(f"Errors: {len(result.errors)}")
+    total_passed = result.testsRun - len(result.failures) - len(result.errors)
+    print(f"Total Tests: {result.testsRun}")
+    print(f"Passed: {total_passed} | Failed: {len(result.failures)} | Errors: {len(result.errors)}")
     
     if result.wasSuccessful():
         print("\n✓ ALL OWASP COMPLIANCE TESTS PASSED")
