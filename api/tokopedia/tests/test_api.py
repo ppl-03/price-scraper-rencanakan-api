@@ -85,6 +85,89 @@ class TokopediaAPITest(BaseTokopediaAPITest):
     
     # ========== Tests for scrape_products endpoint ==========
     
+    class TokopediaDatabaseAndUlasanTests(TestCase):
+        """Tests to increase coverage for database saving and ulasan endpoint paths."""
+
+        def test_save_products_to_database_with_categorization(self):
+            from api.tokopedia import views as tok_views
+            # Patch the DB service to return inserted items
+            with patch('api.tokopedia.views.TokopediaDatabaseService') as mock_db_service_cls, \
+                 patch('db_pricing.models.TokopediaProduct') as mock_product_model, \
+                 patch('api.tokopedia.views.AutoCategorizationService') as mock_cat_cls:
+
+                mock_db_service = mock_db_service_cls.return_value
+                mock_db_service.save_with_price_update.return_value = {
+                    'success': True,
+                    'inserted': 2,
+                    'updated': 0,
+                    'anomalies': []
+                }
+
+                # Prepare a mock queryset that supports slicing and values_list
+                mock_uncat = MagicMock()
+                mock_uncat.__getitem__.return_value = mock_uncat
+                mock_uncat.values_list.return_value = [11, 12]
+
+                mock_product_model.objects.filter.return_value.order_by.return_value = mock_uncat
+
+                mock_cat = mock_cat_cls.return_value
+                mock_cat.categorize_products.return_value = {'categorized': 1}
+
+                # Call the function with a non-empty products list
+                result = tok_views._save_products_to_database([{'name': 'p', 'price': 1}])
+
+                # Assertions
+                self.assertIn('categorized', result)
+                self.assertEqual(result['categorized'], 1)
+                mock_db_service.save_with_price_update.assert_called_once()
+                mock_cat.categorize_products.assert_called_once()
+
+        def test_save_products_to_database_handles_exception(self):
+            from api.tokopedia import views as tok_views
+            with patch('api.tokopedia.views.TokopediaDatabaseService') as mock_db_service_cls:
+                mock_db_service = mock_db_service_cls.return_value
+                mock_db_service.save_with_price_update.side_effect = Exception('DB fail')
+
+                result = tok_views._save_products_to_database([{'name': 'p'}])
+
+                # Should return failure structure
+                self.assertFalse(result.get('success'))
+                self.assertEqual(result.get('categorized'), 0)
+
+        def test_scrape_products_ulasan_success_and_exception(self):
+            from api.tokopedia import views as tok_views
+            from django.test import RequestFactory
+            import json
+
+            factory = RequestFactory()
+            req = factory.get('/?q=semen')
+
+            # Success path: patch TokopediaPriceScraper to return a successful result
+            with patch('api.tokopedia.views.TokopediaPriceScraper') as mock_scraper_cls:
+                mock_scraper = mock_scraper_cls.return_value
+                mock_result = MagicMock()
+                mock_result.success = True
+                mock_result.products = []
+                mock_result.url = 'https://tokopedia/search?q=semen&ob=5'
+                mock_result.error_message = None
+                mock_scraper.scrape_products_with_filters.return_value = mock_result
+
+                response = tok_views.scrape_products_ulasan(req)
+                data = json.loads(response.content)
+                self.assertTrue(data['success'])
+                self.assertEqual(data['url'], 'https://tokopedia/search?q=semen&ob=5')
+
+            # Exception path: make scraper raise
+            req2 = factory.get('/?q=semen')
+            with patch('api.tokopedia.views.TokopediaPriceScraper') as mock_scraper_cls:
+                mock_scraper = mock_scraper_cls.return_value
+                mock_scraper.scrape_products_with_filters.side_effect = Exception('boom')
+
+                response = tok_views.scrape_products_ulasan(req2)
+                data = json.loads(response.content)
+                self.assertFalse(data['success'])
+                self.assertIn('Tokopedia scraper (ulasan) error', data['error_message'])
+    
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_successful_scrape_with_products(self, mock_create_scraper):
         # Create mock products

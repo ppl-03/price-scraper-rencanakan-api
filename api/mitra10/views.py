@@ -2,6 +2,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .factory import create_mitra10_scraper, create_mitra10_location_scraper
 from .database_service import Mitra10DatabaseService
+from db_pricing.models import Mitra10Product
+from db_pricing.auto_categorization_service import AutoCategorizationService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -300,6 +302,24 @@ def scrape_and_save_products(request):
         except Exception as e:
             logger.error(f"Database error: {str(e)}")
             return _create_error_response(f'Database error: {str(e)}', status_code=500)
+        
+        # Auto-categorize newly inserted products
+        categorized_count = 0
+        if save_result.get('success') and save_result.get('inserted', 0) > 0:
+            try:                
+                # Get recently inserted products (ones without category)
+                uncategorized_products = Mitra10Product.objects.filter(category='').order_by('-id')[:save_result['inserted']]
+                product_ids = list(uncategorized_products.values_list('id', flat=True))
+                
+                if product_ids:
+                    categorization_service = AutoCategorizationService()
+                    categorization_result = categorization_service.categorize_products('mitra10', product_ids)
+                    categorized_count = categorization_result.get('categorized', 0)
+                    
+                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new Mitra10 products")
+            except Exception as cat_error:
+                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+                # Don't fail the entire operation if categorization fails
         
         logger.info(f"Mitra10 saved {save_result['inserted']} new, updated {save_result['updated']}, detected {len(save_result['anomalies'])} anomalies for query '{query}'")
         

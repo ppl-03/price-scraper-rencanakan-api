@@ -30,7 +30,7 @@ class KeywordValidator(FieldValidator):
         r'data:',
         r'vbscript:',
         r'on\w+\s*=',
-        r'[<>"\']',
+        r'[<>"\'\\]',
         r'\bunion\b.*\bselect\b',
         r'\bselect\b.*\bfrom\b',
         r'\binsert\b.*\binto\b',

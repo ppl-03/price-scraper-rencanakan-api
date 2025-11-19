@@ -1,5 +1,5 @@
 from django.test import TestCase
-from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct
+from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct, TokopediaProduct
 from db_pricing.categorization import ProductCategorizer
 
 
@@ -83,6 +83,7 @@ class ListrikAutoCategorizationIntegrationTest(TestCase):
             Mitra10Product.objects.create(name="Saklar Engkel Broco", price=15000, url="https://t/2", unit="pcs"),
             DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="https://t/3", unit="kaleng"),
             JuraganMaterialProduct.objects.create(name="MCB Schneider 16A", price=35000, url="https://t/4", unit="pcs"),
+            TokopediaProduct.objects.create(name="Fitting Lampu E27", price=20000, url="https://t/5", unit="pcs"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])

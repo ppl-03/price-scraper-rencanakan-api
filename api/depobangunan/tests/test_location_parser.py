@@ -1,5 +1,6 @@
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
 from api.interfaces import Location, HtmlParserError
 from api.depobangunan.location_parser import DepoBangunanLocationParser
 from api.depobangunan.location_parser import TextCleaner, HtmlElementExtractor, ParserConfiguration
@@ -383,3 +384,152 @@ class TestLocationParserEdgeCases(TestCase):
         result = parser.parse_locations(html)
         # Should skip invalid items
         self.assertIsInstance(result, list)
+    
+    def test_text_cleaner_clean_store_name_empty(self):
+        """Line 19: clean_store_name with empty text returns empty string"""
+        result = TextCleaner.clean_store_name("")
+        self.assertEqual(result, "")
+    
+    def test_text_cleaner_clean_address_empty(self):
+        """Line 29: clean_address with empty text returns empty string"""
+        result = TextCleaner.clean_address("")
+        self.assertEqual(result, "")
+    
+    def test_extract_store_name_invalid_text(self):
+        """Lines 57-58: extract_store_name with invalid text returns None"""
+        config = ParserConfiguration()
+        extractor = HtmlElementExtractor(TextCleaner(), config)
+        
+        # Create header with whitespace-only text
+        html = '<h2>   </h2>'
+        soup = BeautifulSoup(html, 'html.parser')
+        header = soup.find('h2')
+        
+        result = extractor.extract_store_name(header)
+        self.assertIsNone(result)
+    
+    def test_extract_address_cleaned_whitespace_only(self):
+        """Lines 100-102: extract_address returns None when cleaned address is whitespace"""
+        config = ParserConfiguration()
+        extractor = HtmlElementExtractor(TextCleaner(), config)
+        
+        # Create HTML where address becomes whitespace after cleaning
+        html = '<h2>Test</h2><p>\n\n\n</p>'
+        soup = BeautifulSoup(html, 'html.parser')
+        header = soup.find('h2')
+        
+        result = extractor.extract_address(header)
+        self.assertIsNone(result)
+    
+    def test_extract_address_exception_handling(self):
+        """Lines 158-160: extract_address handles exceptions"""
+        config = ParserConfiguration()
+        extractor = HtmlElementExtractor(TextCleaner(), config)
+        
+        # Create a mock header that causes exception
+        class BadHeader:
+            def find_next_sibling(self):
+                raise ValueError("Simulated error")
+        
+        result = extractor.extract_address(BadHeader())
+        self.assertIsNone(result)
+    
+    def test_extract_locations_from_soup_exception_handling(self):
+        """Lines 195-197: _extract_locations_from_soup handles exceptions per header"""
+        parser = DepoBangunanLocationParser()
+        
+        # Create HTML with a header that will cause issues
+        html = '''
+        <html>
+            <h2>Depo Bangunan - Valid Store</h2>
+            <p>Valid Address</p>
+            <h2>Depo Bangunan - Will Fail</h2>
+        </html>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # The parser should continue even if one header fails
+        locations = parser._extract_locations_from_soup(soup)
+        # Should get at least the valid one
+        self.assertGreaterEqual(len(locations), 1)
+    
+    def test_parse_locations_general_exception(self):
+        """Lines 205-206: parse_locations handles general exceptions"""
+        parser = DepoBangunanLocationParser()
+        
+        # Override _create_soup to raise an exception
+        def bad_create_soup(html_content):
+            raise RuntimeError("Simulated parsing error")
+        
+        parser._create_soup = bad_create_soup
+        
+        result = parser.parse_locations("<html>test</html>")
+        self.assertEqual(result, [])
+    
+    def test_gerai_header_skipped(self):
+        """Line 187: Headers starting with 'Gerai' are skipped"""
+        parser = DepoBangunanLocationParser()
+        
+        html = '''
+        <html>
+            <h2>Gerai Depo Bangunan Central</h2>
+            <p>This should be skipped</p>
+            <h2>Depo Bangunan - Valid Store</h2>
+            <p>Valid Address</p>
+        </html>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        locations = parser._extract_locations_from_soup(soup)
+        # Should only get the valid one, not the "Gerai" header
+        self.assertEqual(len(locations), 1)
+        self.assertNotIn("Gerai", locations[0].store_name)
+    
+    def test_extract_locations_continue_on_exception(self):
+        """Lines 195-197: Exception in one header continues to next"""
+        parser = DepoBangunanLocationParser()
+        
+        # Create HTML with multiple headers where one will cause exception
+        html = '''
+        <html>
+            <h2>Depo Bangunan - First Store</h2>
+            <p>First Address</p>
+            <h2>Depo Bangunan - Second Store</h2>
+            <p>Second Address</p>
+        </html>
+        '''
+        soup = BeautifulSoup(html, 'html.parser')
+        headers = soup.find_all('h2')
+        
+        # Mock get_text to fail on second header
+        original_get_text = headers[1].get_text
+        def bad_get_text(*args, **kwargs):
+            raise ValueError("Simulated header error")
+        headers[1].get_text = bad_get_text
+        
+        # Should still process other headers despite exception
+        locations = parser._extract_locations_from_soup(soup)
+        self.assertGreaterEqual(len(locations), 1)
+    
+    def test_parse_locations_with_bad_html_structure(self):
+        """Lines 205-206: parse_locations returns [] on parsing failure"""
+        parser = DepoBangunanLocationParser()
+        
+        # Provide malformed HTML that causes BeautifulSoup issues
+        # But we need to trigger exception in parse_locations, not _create_soup
+        with patch.object(parser, '_extract_locations_from_soup', side_effect=Exception("Parse error")):
+            result = parser.parse_locations("<html><h2>Test</h2></html>")
+            self.assertEqual(result, [])
+    
+    def test_extract_location_from_header_no_store_name(self):
+        """Lines 205-206: _extract_location_from_header returns None when store name extraction fails"""
+        parser = DepoBangunanLocationParser()
+        
+        # Create a header that will fail store name extraction
+        html = '<h2>   </h2><p>Some Address</p>'
+        soup = BeautifulSoup(html, 'html.parser')
+        header = soup.find('h2')
+        
+        result = parser._extract_location_from_header(header)
+        self.assertIsNone(result)
+

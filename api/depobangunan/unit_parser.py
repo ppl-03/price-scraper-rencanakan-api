@@ -7,10 +7,18 @@ logger = logging.getLogger(__name__)
 
 
 class DepoBangunanUnitExtractor:
+    # Pre-compile commonly used patterns
+    _AREA_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)\s?[x×]\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(cm|mm|m)(?:\s|$)', re.IGNORECASE)
+    _INCH_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)\s*["″]|(\d{1,10}(?:[.,]\d{1,10})?)\s*(inch|inchi)', re.IGNORECASE)
+    _FEET_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)\s*[\'′]|(\d{1,10}(?:[.,]\d{1,10})?)\s*(feet|ft)', re.IGNORECASE)
+    _ADJACENT_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)(kg|gram|gr|g|ml|lt|l|cc|pcs|set|mm|cm|m)(?:\s|$)', re.IGNORECASE)
+    _SPEC_UNIT_PATTERN = re.compile(r'[a-zA-Z²³]+')
     
     def __init__(self):
         self.unit_patterns = self._initialize_unit_patterns()
         self.priority_order = self._initialize_priority_order()
+        # Cache for compiled priority patterns
+        self._compiled_patterns = {}
     
     def _initialize_unit_patterns(self) -> Dict[str, List[str]]:
         return {
@@ -88,8 +96,8 @@ class DepoBangunanUnitExtractor:
             return None
         
         try:
-            # Remove numbers and get only the unit part
-            unit_match = re.search(r'[a-zA-Z²³]+', spec_text.strip())
+            # Remove numbers and get only the unit part using pre-compiled pattern
+            unit_match = self._SPEC_UNIT_PATTERN.search(spec_text.strip())
             if unit_match:
                 unit = unit_match.group().upper()
                 
@@ -125,8 +133,7 @@ class DepoBangunanUnitExtractor:
     
     def _extract_area_unit(self, text_lower: str) -> Optional[str]:
         try:
-            area_pattern = r'(\d{1,10}(?:[.,]\d{1,10})?)\s?[x×]\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(cm|mm|m)(?:\s|$)'
-            match = re.search(area_pattern, text_lower, re.IGNORECASE)
+            match = self._AREA_PATTERN.search(text_lower)
             if match:
                 unit_key = match.group(3).lower()
                 area_map = {'cm': 'CM²', 'mm': 'MM²', 'm': 'M²'}
@@ -160,51 +167,39 @@ class DepoBangunanUnitExtractor:
             return None
     
     def _extract_inch_patterns(self, text_lower: str) -> Optional[str]:
-        inch_patterns = [
-            r'(\d{1,10}(?:[.,]\d{1,10})?)\s*["″]',
-            r'(\d{1,10}(?:[.,]\d{1,10})?)\s*(inch|inchi)'
-        ]
-        
-        for pattern in inch_patterns:
-            if re.search(pattern, text_lower, re.IGNORECASE):
-                return 'INCH'
+        if self._INCH_PATTERN.search(text_lower):
+            return 'INCH'
         return None
     
     def _extract_feet_patterns(self, text_lower: str) -> Optional[str]:
-        feet_patterns = [
-            r'(\d{1,10}(?:[.,]\d{1,10})?)\s*[\'′]',
-            r'(\d{1,10}(?:[.,]\d{1,10})?)\s*(feet|ft)'
-        ]
-        
-        for pattern in feet_patterns:
-            if re.search(pattern, text_lower, re.IGNORECASE):
-                return 'FEET'
+        if self._FEET_PATTERN.search(text_lower):
+            return 'FEET'
         return None
     
     def _extract_standard_adjacent_patterns(self, text_lower: str) -> Optional[str]:
-        pattern = r'(\d{1,10}(?:[.,]\d{1,10})?)(kg|gram|gr|g|ml|lt|l|cc|pcs|set|mm|cm|m)(?:\s|$)'
         unit_map = {
             'kg': 'KG', 'gram': 'G', 'gr': 'G', 'g': 'G', 'ml': 'ML', 
             'lt': 'L', 'l': 'L', 'cc': 'CC', 'pcs': 'PCS', 'set': 'SET', 
             'mm': 'MM', 'cm': 'CM', 'm': 'M'
         }
         
-        matches = re.finditer(pattern, text_lower, re.IGNORECASE)
-        for match in matches:
-            if len(match.groups()) >= 2:
-                unit_key = match.group(2).lower()
-                if unit_key in unit_map:
-                    return unit_map[unit_key]
+        match = self._ADJACENT_PATTERN.search(text_lower)
+        if match and len(match.groups()) >= 2:
+            unit_key = match.group(2).lower()
+            return unit_map.get(unit_key)
         return None
     
     def _extract_by_priority_patterns(self, text_lower: str) -> Optional[str]:
         try:
             for unit in self.priority_order:
-                patterns = self.unit_patterns.get(unit, [])
-                for pattern in patterns:
-                    pattern_with_boundaries = f'(?:^|\\s|[\\(\\[{{]|\\d)({pattern})(?:\\s|[\\)\\]}}]|$)'
-                    if re.search(pattern_with_boundaries, text_lower, re.IGNORECASE):
-                        return unit
+                # Use cached compiled pattern
+                if unit not in self._compiled_patterns:
+                    patterns = self.unit_patterns.get(unit, [])
+                    combined_pattern = '|'.join(f'(?:^|\\s|[\\(\\[{{]|\\d)({p})(?:\\s|[\\)\\]}}]|$)' for p in patterns)
+                    self._compiled_patterns[unit] = re.compile(combined_pattern, re.IGNORECASE)
+                
+                if self._compiled_patterns[unit].search(text_lower):
+                    return unit
             return None
         except Exception as e:
             logger.warning(f"Error in priority pattern extraction: {e}")

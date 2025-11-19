@@ -1,5 +1,6 @@
 from django.db import connection, transaction
 from django.utils import timezone
+from db_pricing.anomaly_service import PriceAnomalyService
 
 
 class TokopediaDatabaseService:
@@ -80,6 +81,17 @@ class TokopediaDatabaseService:
         
         return None
 
+    def _save_detected_anomalies(self, anomalies):
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('tokopedia', anomalies)
+        if not anomaly_result['success']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
         """
         Update existing product with SQL injection protection.
@@ -89,14 +101,24 @@ class TokopediaDatabaseService:
         if existing_price != new_price:
             anomaly = self._check_anomaly(item, existing_price, new_price)
             if anomaly:
+                # Price change detected - save anomaly for admin approval
                 anomalies.append(anomaly)
-            
-            # SQL injection protection: parameterized query
-            cursor.execute(
-                "UPDATE tokopedia_products SET price = %s, updated_at = %s WHERE id = %s",
-                (new_price, now, existing_id)
-            )
-            return 1
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Price anomaly detected for {item['name']}: "
+                    f"{existing_price} -> {new_price}. Pending admin approval."
+                )
+                # Do NOT update price - wait for admin approval
+                return 0
+            else:
+                # Small price change (< 15%) - update automatically
+                # SQL injection protection: parameterized query
+                cursor.execute(
+                    "UPDATE tokopedia_products SET price = %s, updated_at = %s WHERE id = %s",
+                    (new_price, now, existing_id)
+                )
+                return 1
         
         return 0
 
@@ -155,6 +177,9 @@ class TokopediaDatabaseService:
                         )
                     else:
                         inserted_count += self._insert_new_product(cursor, item, now)
+
+        # Save anomalies to database for review
+        self._save_detected_anomalies(anomalies)
 
         return {
             "success": True,

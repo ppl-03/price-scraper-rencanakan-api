@@ -7,8 +7,8 @@ import unittest
 
 class TestMitra10HandshakeTest(TestCase):
     
-    @unittest.skipIf(
-        'sqlite' in connection.settings_dict.get('ENGINE', ''),
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
         "Test requires MySQL database (uses MySQL-specific table checking)"
     )
     def test_check_mitra10_table_exists_returns_true_when_table_exists(self):
@@ -25,8 +25,8 @@ class TestMitra10HandshakeTest(TestCase):
         self.assertIsInstance(result['columns'], list)
         self.assertGreater(len(result['columns']), 0)
     
-    @unittest.skipIf(
-        'sqlite' in connection.settings_dict.get('ENGINE', ''),
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
         "Test requires MySQL database (uses MySQL-specific table checking)"
     )
     def test_check_mitra10_table_returns_correct_column_structure(self):
@@ -48,8 +48,8 @@ class TestMitra10HandshakeTest(TestCase):
         self.assertIn('created_at', column_names)
         self.assertIn('updated_at', column_names)
     
-    @unittest.skipIf(
-        'sqlite' in connection.settings_dict.get('ENGINE', ''),
+    @unittest.skipUnless(
+        connection.vendor == 'mysql',
         "Test requires MySQL database"
     )
     def test_uses_mysql_for_mitra10_table(self):

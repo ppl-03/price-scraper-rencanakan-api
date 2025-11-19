@@ -1,5 +1,5 @@
 from django.test import TestCase
-from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct
+from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct, TokopediaProduct
 from db_pricing.categorization import ProductCategorizer
 
 
@@ -134,6 +134,7 @@ class AlatBeratAutoCategorizationIntegrationTest(TestCase):
             Mitra10Product.objects.create(name="Crane 10 Ton", price=250000000, url="https://t/2", unit="unit"),
             DepoBangunanProduct.objects.create(name="Cat Kayu", price=85000, url="https://t/3", unit="kaleng"),
             JuraganMaterialProduct.objects.create(name="Diesel Generator 50kVA", price=95000000, url="https://t/4", unit="unit"),
+            TokopediaProduct.objects.create(name="Bulldozer CAT D6", price=500000000, url="https://t/5", unit="unit"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])

@@ -96,9 +96,9 @@ class TestJuraganMaterialEndToEnd(MySQLTestCase):
         ]
         service.save(initial_data)
 
-        # Now update with new price
+        # Now update with new price (10% increase - below 15% threshold)
         update_data = [
-            {"name": "Price Update Product", "price": 12000, "url": "https://example.com/update", "unit": "pcs", "location": "Jakarta"}
+            {"name": "Price Update Product", "price": 11000, "url": "https://example.com/update", "unit": "pcs", "location": "Jakarta"}
         ]
         update_result = service.save_with_price_update(update_data)
 
@@ -108,7 +108,7 @@ class TestJuraganMaterialEndToEnd(MySQLTestCase):
 
         # Check that price was updated
         product = JuraganMaterialProduct.objects.get(name="Price Update Product")
-        self.assertEqual(product.price, 12000)
+        self.assertEqual(product.price, 11000)
 
     def test_database_service_save_with_price_anomaly(self):
         # First save some initial data

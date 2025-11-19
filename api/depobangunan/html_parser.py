@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class DepoHtmlParser(IHtmlParser):
+    # Pre-compile regex patterns
+    _SOLD_COUNT_PATTERN = re.compile(r'terjual[:\s]+(\d+)', re.IGNORECASE)
     
     def __init__(self, price_cleaner: DepoPriceCleaner = None, unit_parser: DepoBangunanUnitParser = None):
         self.price_cleaner = price_cleaner or DepoPriceCleaner()
@@ -181,21 +183,13 @@ class DepoHtmlParser(IHtmlParser):
         Looks for text like "Terjual 5", "terjual 10", "Terjual: 38" etc.
         """
         try:
-            # Search for all text in the item
+            # Search for all text in the item (more efficient single pass)
             all_text = item.get_text()
             
-            # Try different patterns for terjual
-            # Pattern 1: "Terjual: 38" or "Terjual 38"
-            match = re.search(r'terjual[:\s]+(\d+)', all_text, re.IGNORECASE)
+            # Use pre-compiled pattern
+            match = self._SOLD_COUNT_PATTERN.search(all_text)
             if match:
                 return int(match.group(1))
-            
-            # Pattern 2: Search in specific elements that might contain terjual
-            terjual_elements = item.find_all(string=re.compile(r'terjual', re.IGNORECASE))
-            for element in terjual_elements:
-                match = re.search(r'terjual[:\s]+(\d+)', element, re.IGNORECASE)
-                if match:
-                    return int(match.group(1))
             
             return None
         except Exception as e:

@@ -3,6 +3,7 @@ from django.test import TestCase, RequestFactory
 from unittest.mock import patch, MagicMock
 from api.mitra10 import views
 from api.views import get_csrf_token
+from db_pricing.models import Mitra10Product
 from api.interfaces import Product, ScrapingResult
 
 
@@ -215,6 +216,41 @@ class TestMitra10Views(TestCase):
         self.assertEqual(data["locations"], [])
         self.assertEqual(data["count"], 0)
         self.assertEqual(data["error_message"], 'bad')
+
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
+    def test_scrape_locations_object_format(self, mock_factory):
+        """Test that object locations are properly formatted using getattr - covers line 161"""
+        mock_scraper = MagicMock()
+        
+        # Create mock location objects (not dicts, not strings)
+        mock_location1 = MagicMock()
+        mock_location1.name = "Object Location 1"
+        mock_location1.code = "OBJ_LOC_1"
+        
+        mock_location2 = MagicMock()
+        mock_location2.name = "Object Location 2"
+        # This one has no code attribute to test fallback
+        del mock_location2.code
+        
+        mock_result = {
+            'success': True,
+            'locations': [mock_location1, mock_location2],
+            'error_message': ''
+        }
+        mock_scraper.scrape_locations.return_value = mock_result
+        mock_factory.return_value = mock_scraper
+
+        request = self.factory.get("/api/mitra10/locations")
+        response = views.scrape_locations(request)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertTrue(data["success"])
+        self.assertEqual(len(data["locations"]), 2)
+        # Verify line 161-163: getattr with fallback
+        self.assertEqual(data["locations"][0]["name"], "Object Location 1")
+        self.assertEqual(data["locations"][0]["code"], "OBJ_LOC_1")
+        self.assertEqual(data["locations"][1]["name"], "Object Location 2")
+        self.assertEqual(data["locations"][1]["code"], "MITRA10_2")  # Fallback code
 
     def test_scrape_and_save_missing_query(self):
         request = self.factory.post("/api/mitra10/scrape-and-save/", **self.auth_headers)
@@ -742,6 +778,163 @@ class TestMitra10Views(TestCase):
         # Verify products were saved with empty location
         call_args = mock_service_instance.save_with_price_update.call_args[0][0]
         self.assertEqual(call_args[0]['location'], '')
+
+    @patch("api.mitra10.views.AutoCategorizationService")
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
+    @patch("api.mitra10.views.Mitra10DatabaseService")
+    @patch("api.mitra10.views.create_mitra10_scraper")
+    def test_scrape_and_save_with_categorization_success(self, mock_scraper_factory, mock_db_service, mock_location_factory, mock_categorization_service):        
+        products = [Product(name="Test Product", price=10000, url="test.com", unit="pcs")]
+        mock_scraper = self._create_mock_scraper_with_products(products)
+        mock_scraper_factory.return_value = mock_scraper
+
+        mock_location_scraper = MagicMock()
+        mock_location_scraper.scrape_locations.return_value = {'success': True, 'locations': ['Loc1'], 'error_message': ''}
+        mock_location_factory.return_value = mock_location_scraper
+
+        save_result = {'success': True, 'inserted': 2, 'updated': 0, 'anomalies': []}
+        mock_service_instance = self._create_mock_db_service(save_result)
+        mock_db_service.return_value = mock_service_instance
+        
+        mock_queryset = MagicMock()
+        mock_queryset.values_list.return_value = [1, 2]
+        
+        with patch.object(Mitra10Product.objects, 'filter', return_value=mock_queryset):
+            mock_queryset.order_by.return_value = mock_queryset
+            mock_queryset.__getitem__.return_value = mock_queryset
+            
+            # Mock categorization service
+            mock_cat_service_instance = MagicMock()
+            mock_cat_service_instance.categorize_products.return_value = {'categorized': 2}
+            mock_categorization_service.return_value = mock_cat_service_instance
+
+            request = self.factory.post("/api/mitra10/scrape-and-save/?q=test", **self.auth_headers)
+            response = views.scrape_and_save_products(request)
+
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            self.assertTrue(data["success"])
+            
+            # Verify categorization was called
+            mock_categorization_service.assert_called_once()
+            mock_cat_service_instance.categorize_products.assert_called_once_with('mitra10', [1, 2])
+
+    @patch("api.mitra10.views.logger")
+    @patch("api.mitra10.views.AutoCategorizationService")
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
+    @patch("api.mitra10.views.Mitra10DatabaseService")
+    @patch("api.mitra10.views.create_mitra10_scraper")
+    def test_scrape_and_save_categorization_failure_does_not_break_response(self, mock_scraper_factory, mock_db_service, mock_location_factory, mock_categorization_service, mock_logger):
+        products = [Product(name="Test Product", price=10000, url="test.com", unit="pcs")]
+        mock_scraper = self._create_mock_scraper_with_products(products)
+        mock_scraper_factory.return_value = mock_scraper
+
+        mock_location_scraper = MagicMock()
+        mock_location_scraper.scrape_locations.return_value = {'success': True, 'locations': [], 'error_message': ''}
+        mock_location_factory.return_value = mock_location_scraper
+
+        save_result = {'success': True, 'inserted': 1, 'updated': 0, 'anomalies': []}
+        mock_service_instance = self._create_mock_db_service(save_result)
+        mock_db_service.return_value = mock_service_instance
+
+        with patch("api.mitra10.views.Mitra10Product") as mock_product_model:
+            mock_products_qs = MagicMock()
+            mock_products_qs.values_list.return_value = [1]
+            mock_product_model.objects.filter.return_value.order_by.return_value.__getitem__.return_value = mock_products_qs
+            
+            mock_categorization_service.side_effect = Exception("Categorization error")
+
+            request = self.factory.post("/api/mitra10/scrape-and-save/?q=test", **self.auth_headers)
+            response = views.scrape_and_save_products(request)
+
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            self.assertTrue(data["success"])
+            
+            mock_logger.warning.assert_called_once()
+            self.assertIn("Auto-categorization failed", str(mock_logger.warning.call_args))
+
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
+    @patch("api.mitra10.views.Mitra10DatabaseService")
+    @patch("api.mitra10.views.create_mitra10_scraper")
+    def test_scrape_and_save_no_categorization_when_no_inserts(self, mock_scraper_factory, mock_db_service, mock_location_factory):
+        products = [Product(name="Test Product", price=10000, url="test.com", unit="pcs")]
+        mock_scraper = self._create_mock_scraper_with_products(products)
+        mock_scraper_factory.return_value = mock_scraper
+
+        mock_location_scraper = MagicMock()
+        mock_location_scraper.scrape_locations.return_value = {'success': True, 'locations': [], 'error_message': ''}
+        mock_location_factory.return_value = mock_location_scraper
+
+        save_result = {'success': True, 'inserted': 0, 'updated': 1, 'anomalies': []}
+        mock_service_instance = self._create_mock_db_service(save_result)
+        mock_db_service.return_value = mock_service_instance
+
+        with patch("api.mitra10.views.AutoCategorizationService") as mock_cat_service:
+            request = self.factory.post("/api/mitra10/scrape-and-save/?q=test", **self.auth_headers)
+            response = views.scrape_and_save_products(request)
+
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.content)
+            self.assertTrue(data["success"])
+            
+            mock_cat_service.assert_not_called()
+
+    @patch("api.mitra10.views.AutoCategorizationService")
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
+    @patch("api.mitra10.views.Mitra10DatabaseService")
+    @patch("api.mitra10.views.create_mitra10_scraper")
+    def test_scrape_and_save_no_categorization_when_save_fails(self, mock_scraper_factory, mock_db_service, mock_location_factory, mock_categorization_service):
+        products = [Product(name="Test Product", price=10000, url="test.com", unit="pcs")]
+        mock_scraper = self._create_mock_scraper_with_products(products)
+        mock_scraper_factory.return_value = mock_scraper
+
+        mock_location_scraper = MagicMock()
+        mock_location_scraper.scrape_locations.return_value = {'success': True, 'locations': [], 'error_message': ''}
+        mock_location_factory.return_value = mock_location_scraper
+
+        save_result = {'success': False, 'inserted': 0, 'updated': 0, 'anomalies': []}
+        mock_service_instance = self._create_mock_db_service(save_result)
+        mock_db_service.return_value = mock_service_instance
+
+        request = self.factory.post("/api/mitra10/scrape-and-save/?q=test", **self.auth_headers)
+        response = views.scrape_and_save_products(request)
+
+        self.assertEqual(response.status_code, 200)
+        
+        mock_categorization_service.assert_not_called()
+
+    @patch("api.mitra10.views.logger")
+    @patch("api.mitra10.views.AutoCategorizationService")
+    @patch("api.mitra10.views.create_mitra10_location_scraper")
+    @patch("api.mitra10.views.Mitra10DatabaseService")
+    @patch("api.mitra10.views.create_mitra10_scraper")
+    def test_scrape_and_save_categorization_with_no_product_ids(self, mock_scraper_factory, mock_db_service, mock_location_factory, mock_categorization_service, mock_logger):       
+        products = [Product(name="Test Product", price=10000, url="test.com", unit="pcs")]
+        mock_scraper = self._create_mock_scraper_with_products(products)
+        mock_scraper_factory.return_value = mock_scraper
+
+        mock_location_scraper = MagicMock()
+        mock_location_scraper.scrape_locations.return_value = {'success': True, 'locations': [], 'error_message': ''}
+        mock_location_factory.return_value = mock_location_scraper
+
+        save_result = {'success': True, 'inserted': 1, 'updated': 0, 'anomalies': []}
+        mock_service_instance = self._create_mock_db_service(save_result)
+        mock_db_service.return_value = mock_service_instance
+
+        mock_queryset = MagicMock()
+        mock_queryset.values_list.return_value = []
+        
+        with patch.object(Mitra10Product.objects, 'filter', return_value=mock_queryset):
+            mock_queryset.order_by.return_value = mock_queryset
+            mock_queryset.__getitem__.return_value = mock_queryset
+            
+            request = self.factory.post("/api/mitra10/scrape-and-save/?q=test", **self.auth_headers)
+            response = views.scrape_and_save_products(request)
+
+            self.assertEqual(response.status_code, 200)
+            
+            mock_categorization_service.assert_not_called()
 
     @patch("api.mitra10.views.create_mitra10_location_scraper")
     @patch("api.mitra10.views.Mitra10DatabaseService")

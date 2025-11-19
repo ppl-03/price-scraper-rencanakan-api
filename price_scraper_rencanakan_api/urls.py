@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/mitra10/', include('api.mitra10.urls')),
     path('api/db-status/', db_views.check_database_status, name='check_database_status'),
     path('api/tokopedia/', include('api.tokopedia.urls')),
+    path('api/pricing/', include('db_pricing.urls')),
     path("", include("dashboard.urls")),
     
     path('api/government_wage/', include('api.government_wage.urls')),
