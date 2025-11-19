@@ -125,7 +125,7 @@ class TestA01BrokenAccessControl(TestCase):
             '/api/juragan_material/scrape/',
             HTTP_AUTHORIZATION='Bearer dev-token-12345'
         )
-        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+        is_valid, _, token_info = AccessControlManager.validate_token(request)
         
         self.assertTrue(is_valid, "Token with Bearer prefix should be accepted")
         self.assertEqual(token_info['name'], 'Development Token')
@@ -654,7 +654,7 @@ class TestA03InjectionPrevention(TestCase):
         """Test that out-of-range integers are rejected"""
         print("\n[A03] Test: Integer validation - Out of range")
         
-        is_valid, value, error_msg = InputValidator.validate_integer_param("999", "page", 0, 100)
+        is_valid, _, error_msg = InputValidator.validate_integer_param("999", "page", 0, 100)
         
         self.assertFalse(is_valid, "Out of range integer should be rejected")
         self.assertIsNotNone(error_msg)
@@ -664,7 +664,7 @@ class TestA03InjectionPrevention(TestCase):
         """Test that SQL injection in integer param is rejected"""
         print("\n[A03] Test: Integer validation - SQL injection attempt")
         
-        is_valid, value, _ = InputValidator.validate_integer_param("1 OR 1=1", "page", 0, 100)
+        is_valid, _, _ = InputValidator.validate_integer_param("1 OR 1=1", "page", 0, 100)
         
         self.assertFalse(is_valid, "SQL injection in integer should be rejected")
         print(f"✓ SQL injection in integer parameter rejected")
@@ -690,7 +690,7 @@ class TestA03InjectionPrevention(TestCase):
         """Test that injection in boolean param is rejected"""
         print("\n[A03] Test: Boolean validation - Injection attempt")
         
-        is_valid, value, _ = InputValidator.validate_boolean_param("true' OR '1'='1", "flag")
+        is_valid, _, _ = InputValidator.validate_boolean_param("true' OR '1'='1", "flag")
         
         self.assertFalse(is_valid, "SQL injection in boolean should be rejected")
         print(f"✓ SQL injection in boolean parameter rejected")
