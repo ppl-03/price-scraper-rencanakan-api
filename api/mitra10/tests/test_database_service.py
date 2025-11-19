@@ -12,7 +12,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 2", "price": 20000, "url": "https://example.com/2", "unit": "box", "location": "Bandung"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         self.assertEqual(Mitra10Product.objects.count(), 2)
         product = Mitra10Product.objects.get(name="Item 1")
@@ -23,8 +23,9 @@ class TestMitra10DatabaseService(TestCase):
     def test_save_empty_data(self):
         data = []
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('No data provided', error_msg)
         self.assertEqual(Mitra10Product.objects.count(), 0)
 
     def test_save_missing_name_field(self):
@@ -32,8 +33,9 @@ class TestMitra10DatabaseService(TestCase):
             {"price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('name', error_msg)
         self.assertEqual(Mitra10Product.objects.count(), 0)
 
     def test_save_missing_price_field(self):
@@ -41,8 +43,9 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('price', error_msg)
         self.assertEqual(Mitra10Product.objects.count(), 0)
 
     def test_save_missing_url_field(self):
@@ -50,8 +53,9 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 10000, "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('url', error_msg)
         self.assertEqual(Mitra10Product.objects.count(), 0)
 
     def test_save_missing_unit_field(self):
@@ -59,8 +63,9 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('unit', error_msg)
         self.assertEqual(Mitra10Product.objects.count(), 0)
 
     def test_save_negative_price(self):
@@ -68,8 +73,9 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": -100, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('positive number', error_msg)
         self.assertEqual(Mitra10Product.objects.count(), 0)
 
     def test_save_zero_price(self):
@@ -77,7 +83,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 0, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         self.assertEqual(Mitra10Product.objects.count(), 1)
         product = Mitra10Product.objects.first()
@@ -89,7 +95,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         self.assertEqual(Mitra10Product.objects.count(), 2)
 
@@ -98,7 +104,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 999999999, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         product = Mitra10Product.objects.first()
         self.assertEqual(product.price, 999999999)
@@ -108,8 +114,9 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": "10000", "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('must be a number', error_msg)
 
     def test_save_long_product_name(self):
         long_name = "A" * 500
@@ -117,7 +124,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": long_name, "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         product = Mitra10Product.objects.first()
         self.assertEqual(product.name, long_name)
@@ -127,7 +134,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         product = Mitra10Product.objects.first()
         self.assertEqual(product.unit, "")
@@ -138,7 +145,7 @@ class TestMitra10DatabaseService(TestCase):
             for i in range(1, 11)
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         self.assertEqual(Mitra10Product.objects.count(), 10)
 
@@ -147,7 +154,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item & Special <> Characters", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         product = Mitra10Product.objects.first()
         self.assertEqual(product.name, "Item & Special <> Characters")
@@ -157,7 +164,7 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "m²", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, _ = service.save(data)
         self.assertTrue(result)
         product = Mitra10Product.objects.first()
         self.assertEqual(product.unit, "m²")
@@ -165,8 +172,9 @@ class TestMitra10DatabaseService(TestCase):
     def test_save_with_none_data(self):
         data = None
         service = Mitra10DatabaseService()
-        result = service.save(data)
+        result, error_msg = service.save(data)
         self.assertFalse(result)
+        self.assertIn('No data provided', error_msg)
         self.assertEqual(Mitra10Product.objects.count(), 0)
 
     def test_validate_data_valid(self):
@@ -174,16 +182,18 @@ class TestMitra10DatabaseService(TestCase):
             {"name": "Item 1", "price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service._validate_data(data)
+        result, error_msg = service._validate_data(data)
         self.assertTrue(result)
+        self.assertEqual(error_msg, '')
 
     def test_validate_data_invalid(self):
         data = [
             {"name": "Item 1", "price": -100, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = Mitra10DatabaseService()
-        result = service._validate_data(data)
+        result, error_msg = service._validate_data(data)
         self.assertFalse(result)
+        self.assertIn('positive number', error_msg)
 
     def test_detect_anomaly_with_zero_old_price(self):
         """Test that no anomaly is detected when old price is 0"""
