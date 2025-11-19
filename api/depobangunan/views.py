@@ -3,7 +3,15 @@ from django.views.decorators.http import require_http_methods
 from .factory import create_depo_scraper, create_depo_location_scraper
 from .database_service import DepoBangunanDatabaseService
 from db_pricing.auto_categorization_service import AutoCategorizationService
-from .security import SecurityDesignPatterns
+from .security import (
+    SecurityDesignPatterns,
+    require_api_token,
+    validate_input,
+    enforce_resource_limits,
+    InputValidator,
+    AccessControlManager,
+    RateLimiter
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -207,10 +215,17 @@ def _create_error_response(message, status=400):
 
 
 def _validate_and_parse_keyword(keyword):
-    """Validate and parse keyword parameter"""
+    """Validate and parse keyword parameter with security checks"""
     if not keyword or not keyword.strip():
         return None, _create_error_response(ERROR_KEYWORD_REQUIRED)
-    return keyword.strip(), None
+    
+    # Validate keyword for SQL injection and XSS
+    validator = InputValidator()
+    is_valid, error_msg, sanitized_keyword = validator.validate_keyword(keyword.strip())
+    if not is_valid:
+        return None, _create_error_response(error_msg)
+    
+    return sanitized_keyword, None
 
 
 def _parse_sort_by_price(sort_by_price_param):
@@ -296,13 +311,9 @@ def _convert_products_to_dict_with_sold_count(products):
 
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_products(request):
     try:
-        # Enforce resource limits
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
-        if not is_valid:
-            return _create_error_response(error_msg)
-        
         # Validate and parse parameters
         keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
         if error:
@@ -376,14 +387,10 @@ def scrape_products(request):
 
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def depobangunan_locations_view(request):
     """View function for fetching Depo Bangunan store locations"""
     try:
-        # Enforce resource limits
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
-        if not is_valid:
-            return _create_error_response(error_msg)
-        
         timeout_param = request.GET.get('timeout', '30')
         try:
             timeout = int(timeout_param)
@@ -415,6 +422,8 @@ def depobangunan_locations_view(request):
 
 
 @require_http_methods(["POST"])
+@require_api_token(required_permission='write')
+@enforce_resource_limits
 def scrape_and_save_products(request):
     try:
         keyword, error = _validate_and_parse_keyword(request.POST.get('keyword'))
@@ -452,14 +461,10 @@ def scrape_and_save_products(request):
         return _create_error_response(ERROR_INTERNAL_SERVER, 500)
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_popularity(request):
     """Scrape products sorted by popularity and return top N best sellers."""
     try:
-        # Enforce resource limits
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
-        if not is_valid:
-            return _create_error_response(error_msg)
-        
         # Validate and parse parameters
         keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
         if error:
@@ -514,6 +519,8 @@ def scrape_popularity(request):
 
 
 @require_http_methods(["POST"])
+@require_api_token(required_permission='write')
+@enforce_resource_limits
 def scrape_and_save_popularity(request):
     """Scrape products by popularity and save to database with location data."""
     try:
