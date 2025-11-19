@@ -61,7 +61,7 @@ class TestA01BrokenAccessControl(TestCase):
     def _test_rate_limit_requests(self, rate_limiter, client_id, max_requests, window_seconds, expected_allowed):
         """Helper method to test multiple rate limit requests"""
         for i in range(expected_allowed):
-            is_allowed, error = rate_limiter.check_rate_limit(
+            is_allowed, _ = rate_limiter.check_rate_limit(
                 client_id, max_requests=max_requests, window_seconds=window_seconds
             )
             self.assertTrue(is_allowed, f"Request {i+1} should be allowed")
@@ -221,8 +221,8 @@ class TestA01BrokenAccessControl(TestCase):
         print("✓ Client blocked after rate limit violation")
         
         # Attempt another request - should still be blocked
-        error = self._test_rate_limit_exceeded(rate_limiter, client_id, max_requests, window_seconds)
-        self.assertIn("Blocked for", error, "Error should indicate blocking duration")
+        error_msg = self._test_rate_limit_exceeded(rate_limiter, client_id, max_requests, window_seconds)
+        self.assertIn("Blocked for", error_msg, "Error should indicate blocking duration")
         print("✓ Blocked client cannot make requests")
     
     def test_rate_limiting_window_cleanup(self):
@@ -443,10 +443,10 @@ class TestA03InjectionPrevention(TestCase):
         
         # Classic UNION SELECT attack from OWASP example
         malicious_keyword = "' UNION SELECT * FROM users--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, error_msg, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "SQL UNION attack should be rejected")
-        self.assertIsNotNone(error, "Error message should be provided")
+        self.assertIsNotNone(error_msg, "Error message should be provided")
         print(f"✓ UNION SELECT attack blocked: {malicious_keyword}")
     
     def test_sql_injection_sleep_attack(self):
@@ -455,7 +455,7 @@ class TestA03InjectionPrevention(TestCase):
         
         # Time-based SQL injection from OWASP example
         malicious_keyword = "' UNION SELECT SLEEP(10);--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "SQL SLEEP attack should be rejected")
         print(f"✓ SLEEP attack blocked: {malicious_keyword}")
@@ -465,7 +465,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: SQL Injection - OR 1=1 attack")
         
         malicious_keyword = "' OR 1=1--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "OR 1=1 attack should be rejected")
         print(f"✓ OR 1=1 attack blocked: {malicious_keyword}")
@@ -475,7 +475,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: SQL Injection - DROP TABLE attack")
         
         malicious_keyword = "cement'; DROP TABLE products;--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "DROP TABLE attack should be rejected")
         print(f"✓ DROP TABLE attack blocked")
@@ -485,7 +485,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: SQL Injection - INSERT attack")
         
         malicious_keyword = "'; INSERT INTO users (username, password) VALUES ('hacker', 'pass');--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "INSERT attack should be rejected")
         print(f"✓ INSERT attack blocked")
@@ -495,7 +495,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: SQL Injection - DELETE attack")
         
         malicious_keyword = "'; DELETE FROM products WHERE 1=1;--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "DELETE attack should be rejected")
         print(f"✓ DELETE attack blocked")
@@ -505,7 +505,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: SQL Injection - UPDATE attack")
         
         malicious_keyword = "'; UPDATE products SET price=0 WHERE 1=1;--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "UPDATE attack should be rejected")
         print(f"✓ UPDATE attack blocked")
@@ -521,7 +521,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for keyword in malicious_keywords:
-            is_valid, error, sanitized = InputValidator.validate_keyword(keyword)
+            is_valid, _, _ = InputValidator.validate_keyword(keyword)
             self.assertFalse(is_valid, f"Comment-based attack should be rejected: {keyword}")
         
         print(f"✓ Comment-based attacks blocked")
@@ -531,7 +531,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: SQL Injection - BENCHMARK attack")
         
         malicious_keyword = "' AND BENCHMARK(1000000,MD5('A'))--"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "BENCHMARK attack should be rejected")
         print(f"✓ BENCHMARK attack blocked")
@@ -576,7 +576,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: Command Injection - Pipe attack")
         
         malicious_keyword = "cement | cat /etc/passwd"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command injection with pipe should be rejected")
         print(f"✓ Pipe command injection blocked")
@@ -586,7 +586,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: Command Injection - Semicolon attack")
         
         malicious_keyword = "cement; rm -rf /"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command injection with semicolon should be rejected")
         print(f"✓ Semicolon command injection blocked")
@@ -596,7 +596,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: Command Injection - Backtick attack")
         
         malicious_keyword = "cement`whoami`"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command injection with backticks should be rejected")
         print(f"✓ Backtick command injection blocked")
@@ -606,7 +606,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: Command Injection - Command substitution")
         
         malicious_keyword = "cement$(cat /etc/passwd)"
-        is_valid, error, sanitized = InputValidator.validate_keyword(malicious_keyword)
+        is_valid, _, _ = InputValidator.validate_keyword(malicious_keyword)
         
         self.assertFalse(is_valid, "Command substitution should be rejected")
         print(f"✓ Command substitution blocked")
@@ -622,7 +622,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for keyword in malicious_keywords:
-            is_valid, error, sanitized = InputValidator.validate_keyword(keyword)
+            is_valid, _, _ = InputValidator.validate_keyword(keyword)
             self.assertFalse(is_valid, f"Path traversal should be rejected: {keyword}")
         
         print(f"✓ Path traversal attacks blocked")
@@ -632,7 +632,7 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: XSS sanitization")
         
         xss_payload = "<script>alert('XSS')</script>"
-        is_valid, error, sanitized = InputValidator.validate_keyword(xss_payload)
+        is_valid, _, _ = InputValidator.validate_keyword(xss_payload)
         
         # Should be rejected due to invalid characters
         self.assertFalse(is_valid, "XSS payload should be rejected")
@@ -643,28 +643,28 @@ class TestA03InjectionPrevention(TestCase):
         """Test that valid integer parameters are accepted"""
         print("\n[A03] Test: Integer validation - Valid input")
         
-        is_valid, value, error = InputValidator.validate_integer_param("5", "page", 0, 100)
+        is_valid, value, error_msg = InputValidator.validate_integer_param("5", "page", 0, 100)
         
         self.assertTrue(is_valid, "Valid integer should be accepted")
         self.assertEqual(value, 5)
-        self.assertIsNone(error)
+        self.assertIsNone(error_msg)
         print(f"✓ Valid integer accepted")
     
     def test_integer_validation_out_of_range(self):
         """Test that out-of-range integers are rejected"""
         print("\n[A03] Test: Integer validation - Out of range")
         
-        is_valid, value, error = InputValidator.validate_integer_param("999", "page", 0, 100)
+        is_valid, value, error_msg = InputValidator.validate_integer_param("999", "page", 0, 100)
         
         self.assertFalse(is_valid, "Out of range integer should be rejected")
-        self.assertIsNotNone(error)
+        self.assertIsNotNone(error_msg)
         print(f"✓ Out of range integer rejected")
     
     def test_integer_validation_sql_injection(self):
         """Test that SQL injection in integer param is rejected"""
         print("\n[A03] Test: Integer validation - SQL injection attempt")
         
-        is_valid, value, error = InputValidator.validate_integer_param("1 OR 1=1", "page", 0, 100)
+        is_valid, value, _ = InputValidator.validate_integer_param("1 OR 1=1", "page", 0, 100)
         
         self.assertFalse(is_valid, "SQL injection in integer should be rejected")
         print(f"✓ SQL injection in integer parameter rejected")
@@ -677,11 +677,11 @@ class TestA03InjectionPrevention(TestCase):
         valid_false = ['false', '0', 'no']
         
         for val in valid_true:
-            is_valid, result, error = InputValidator.validate_boolean_param(val, "flag")
+            is_valid, result, _ = InputValidator.validate_boolean_param(val, "flag")
             self.assertTrue(is_valid and result is True, f"Valid true value should be accepted: {val}")
         
         for val in valid_false:
-            is_valid, result, error = InputValidator.validate_boolean_param(val, "flag")
+            is_valid, result, _ = InputValidator.validate_boolean_param(val, "flag")
             self.assertTrue(is_valid and result is False, f"Valid false value should be accepted: {val}")
         
         print(f"✓ Valid boolean values accepted")
@@ -690,7 +690,7 @@ class TestA03InjectionPrevention(TestCase):
         """Test that injection in boolean param is rejected"""
         print("\n[A03] Test: Boolean validation - Injection attempt")
         
-        is_valid, value, error = InputValidator.validate_boolean_param("true' OR '1'='1", "flag")
+        is_valid, value, _ = InputValidator.validate_boolean_param("true' OR '1'='1", "flag")
         
         self.assertFalse(is_valid, "SQL injection in boolean should be rejected")
         print(f"✓ SQL injection in boolean parameter rejected")
@@ -702,12 +702,12 @@ class TestA03InjectionPrevention(TestCase):
         # Valid values
         valid_values = ['cheapest', 'popularity', 'relevance']
         for val in valid_values:
-            is_valid, result, error = InputValidator.validate_sort_type(val)
+            is_valid, result, _ = InputValidator.validate_sort_type(val)
             self.assertTrue(is_valid, f"Valid sort type should be accepted: {val}")
             self.assertEqual(result, val.lower())
         
         # Invalid value (potential injection)
-        is_valid, result, error = InputValidator.validate_sort_type("cheapest' OR '1'='1")
+        is_valid, result, _ = InputValidator.validate_sort_type("cheapest' OR '1'='1")
         self.assertFalse(is_valid, "Invalid sort type should be rejected")
         
         print(f"✓ Sort type whitelist enforced")
@@ -822,7 +822,7 @@ class TestA03InjectionPrevention(TestCase):
         
         # Keyword too long
         long_keyword = "A" * 200
-        is_valid, error, sanitized = InputValidator.validate_keyword(long_keyword, max_length=100)
+        is_valid, _, _ = InputValidator.validate_keyword(long_keyword, max_length=100)
         self.assertFalse(is_valid, "Oversized keyword should be rejected")
         
         print(f"✓ Length limits enforced")
@@ -839,7 +839,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for keyword in valid_keywords:
-            is_valid, error, sanitized = InputValidator.validate_keyword(keyword)
+            is_valid, _, sanitized = InputValidator.validate_keyword(keyword)
             self.assertTrue(is_valid, f"Valid keyword should be accepted: {keyword}")
             self.assertIsNotNone(sanitized, "Sanitized value should be provided")
         
