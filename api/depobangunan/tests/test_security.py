@@ -116,9 +116,12 @@ class SecurityDesignPatternsValidateURLTests(TestCase):
     
     def test_http_url_rejected(self):
         """Test that HTTP URLs are rejected"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_url_field("http://example.com/product")
+        is_valid, error_msg = SecurityDesignPatterns._validate_url_field(
+            "http://example.com/product"  # NOSONAR: intentionally insecure for rejection test
+        )
         self.assertFalse(is_valid)
         self.assertEqual(error_msg, "URL must use HTTPS protocol for security")
+
     
     def test_localhost_rejected(self):
         """Test that localhost URLs are rejected (SSRF protection)"""
@@ -186,11 +189,12 @@ class SecurityDesignPatternsValidateBusinessLogicTests(TestCase):
         data = {
             'name': 'Cement Bag 50kg',
             'price': 75000,
-            'url': 'http://depobangunan.com/product/cement'
+            'url': 'http://depobangunan.com/product/cement',  # NOSONAR: test ensures HTTP is rejected
         }
         is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
         self.assertFalse(is_valid)
         self.assertEqual(error_msg, "URL must use HTTPS protocol for security")
+
     
     def test_ssrf_attempt_detected(self):
         """Test that SSRF attempts are detected and blocked"""
@@ -222,12 +226,12 @@ class SecurityDesignPatternsValidateBusinessLogicTests(TestCase):
         data = {
             'price': -100,
             'name': 'A',
-            'url': 'http://example.com'
+            'url': 'http://example.com',  # NOSONAR: intentionally insecure for validation test
         }
         is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
         self.assertFalse(is_valid)
-        # Should return the price error first
         self.assertEqual(error_msg, "Price must be a positive number")
+
 
 
 class SecurityDesignPatternsEnforceResourceLimitsTests(TestCase):
