@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .factory import create_mitra10_scraper, create_mitra10_location_scraper
 from .database_service import Mitra10DatabaseService
+from .security import SecurityDesignPatterns, enforce_resource_limits
 from db_pricing.models import Mitra10Product
 from db_pricing.auto_categorization_service import AutoCategorizationService
 import logging
@@ -64,6 +65,7 @@ def _validate_api_token(request) -> tuple[bool, str]:
 
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_products(request):
     try:
         query = request.GET.get('q')
@@ -140,6 +142,7 @@ def scrape_products(request):
         }, status=500)
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_locations(request):
     """Django view to scrape Mitra10 store locations."""
     try:
@@ -269,6 +272,7 @@ def _format_products_data(products, location_value):
 
 
 @require_http_methods(["POST"])
+@enforce_resource_limits
 def scrape_and_save_products(request):
     # Validate API token
     is_valid, error_message = _validate_api_token(request)
@@ -337,6 +341,7 @@ def scrape_and_save_products(request):
         return _create_error_response(f'Internal server error: {str(e)}', status_code=500)
     
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_popularity(request):
     """Scrape products sorted by popularity and return top 5 best sellers."""
     try:
