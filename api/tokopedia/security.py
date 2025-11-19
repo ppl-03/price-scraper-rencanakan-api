@@ -45,13 +45,13 @@ SECURITY_CONFIG = {
         'max_name_length': 500
     },
     'ssrf_protection': {
-        'blocked_hosts': [
-            'localhost', 
-            '127.0.0.1', 
-            '0.0.0.0', 
-            os.getenv('AWS_METADATA_IP', '169.254.169.254')
-        ],
-        'required_protocol': 'https://'
+        'blocked_hosts': list(filter(None, [
+            os.getenv('SSRF_BLOCK_LOCALHOST', 'localhost'),
+            os.getenv('SSRF_BLOCK_LOOPBACK', '127.0.0.1'),
+            os.getenv('SSRF_BLOCK_ANY', '0.0.0.0'),
+            os.getenv('SSRF_BLOCK_AWS_METADATA')  # AWS EC2 metadata IP for SSRF protection
+        ])),
+        'required_protocol': os.getenv('SSRF_REQUIRED_PROTOCOL', 'https://')
     }
 }
 
