@@ -5,14 +5,15 @@ Tests A01:2021 (Broken Access Control), A03:2021 (Injection), A04:2021 (Insecure
 from django.test import RequestFactory, TestCase
 from django.http import JsonResponse
 from api.tokopedia.security import (
-    RateLimiter,
-    AccessControlManager,
-    InputValidator,
-    DatabaseQueryValidator,
-    SecurityDesignPatterns,
+    TokopediaRateLimitTracker,
+    TokopediaAccessControl,
+    ValidationPipeline,
+    DatabaseSecurityValidator,
+    BusinessLogicValidator,
     require_api_token,
     validate_input,
-    enforce_resource_limits
+    enforce_resource_limits,
+    _rate_tracker
 )
 import time
 import json
@@ -22,7 +23,7 @@ class TestRateLimiter(TestCase):
     """Test rate limiting functionality"""
     
     def setUp(self):
-        self.rate_limiter = RateLimiter()
+        self.rate_limiter = TokopediaRateLimitTracker()
         
     def test_rate_limit_allows_requests_within_limit(self):
         """Test that requests within rate limit are allowed"""
@@ -30,8 +31,8 @@ class TestRateLimiter(TestCase):
         
         # Make requests within limit
         for _ in range(10):
-            is_allowed, error = self.rate_limiter.check_rate_limit(
-                client_id, max_requests=10, window_seconds=60
+            is_allowed, error = self.rate_limiter.evaluate_limit(
+                client_id, max_requests=10
             )
             if _ < 10:
                 self.assertTrue(is_allowed)
@@ -43,13 +44,13 @@ class TestRateLimiter(TestCase):
         
         # Make requests up to limit
         for _ in range(10):
-            self.rate_limiter.check_rate_limit(
-                client_id, max_requests=10, window_seconds=60
+            self.rate_limiter.evaluate_limit(
+                client_id, max_requests=10
             )
         
         # Next request should be blocked
-        is_allowed, error = self.rate_limiter.check_rate_limit(
-            client_id, max_requests=10, window_seconds=60
+        is_allowed, error = self.rate_limiter.evaluate_limit(
+            client_id, max_requests=10
         )
         self.assertFalse(is_allowed)
         self.assertIsNotNone(error)
@@ -60,34 +61,33 @@ class TestRateLimiter(TestCase):
         client_id = "test_client_3"
         
         # Block the client
-        self.rate_limiter.block_client(client_id, duration_seconds=1)
+        self.rate_limiter.apply_block(client_id, duration=1)
         
         # Check that client is blocked
-        self.assertTrue(self.rate_limiter.is_blocked(client_id))
+        is_blocked, _ = self.rate_limiter.check_client_blocked(client_id)
+        self.assertTrue(is_blocked)
         
         # Wait for block to expire
         time.sleep(1.1)
         
         # Check that client is no longer blocked
-        self.assertFalse(self.rate_limiter.is_blocked(client_id))
+        is_blocked, _ = self.rate_limiter.check_client_blocked(client_id)
+        self.assertFalse(is_blocked)
     
     def test_rate_limit_cleans_old_requests(self):
         """Test that old requests are properly cleaned up"""
         client_id = "test_client_4"
+        tracker = TokopediaRateLimitTracker({'default_window': 1, 'default_max_requests': 10, 'block_duration': 300, 'attack_threshold': 10})
         
         # Make requests
         for _ in range(5):
-            self.rate_limiter.check_rate_limit(
-                client_id, max_requests=10, window_seconds=1
-            )
+            tracker.evaluate_limit(client_id, max_requests=10)
         
         # Wait for window to pass
         time.sleep(1.1)
         
         # Old requests should be cleaned, new requests allowed
-        is_allowed, _ = self.rate_limiter.check_rate_limit(
-            client_id, max_requests=10, window_seconds=1
-        )
+        is_allowed, _ = tracker.evaluate_limit(client_id, max_requests=10)
         self.assertTrue(is_allowed)
 
 
@@ -102,7 +102,7 @@ class TestAccessControlManager(TestCase):
         request = self.factory.get('/api/test')
         request.META['HTTP_X_API_TOKEN'] = 'dev-token-12345'
         
-        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+        is_valid, error_msg, token_info = TokopediaAccessControl().authenticate_request(request)
         
         self.assertTrue(is_valid)
         self.assertEqual(error_msg, '')
@@ -113,7 +113,7 @@ class TestAccessControlManager(TestCase):
         """Test that requests without tokens are rejected"""
         request = self.factory.get('/api/test')
         
-        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+        is_valid, error_msg, token_info = TokopediaAccessControl().authenticate_request(request)
         
         self.assertFalse(is_valid)
         self.assertEqual(error_msg, 'API token required')
@@ -124,7 +124,7 @@ class TestAccessControlManager(TestCase):
         request = self.factory.get('/api/test')
         request.META['HTTP_X_API_TOKEN'] = 'invalid-token'
         
-        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+        is_valid, error_msg, token_info = TokopediaAccessControl().authenticate_request(request)
         
         self.assertFalse(is_valid)
         self.assertEqual(error_msg, 'Invalid API token')
@@ -137,7 +137,7 @@ class TestAccessControlManager(TestCase):
             'permissions': ['read', 'write', 'scrape']
         }
         
-        has_permission = AccessControlManager.check_permission(token_info, 'scrape')
+        has_permission = TokopediaAccessControl.has_permission(token_info, 'scrape')
         self.assertTrue(has_permission)
     
     def test_permission_check_denies_unauthorized_action(self):
@@ -147,7 +147,7 @@ class TestAccessControlManager(TestCase):
             'permissions': ['read']
         }
         
-        has_permission = AccessControlManager.check_permission(token_info, 'scrape')
+        has_permission = TokopediaAccessControl.has_permission(token_info, 'scrape')
         self.assertFalse(has_permission)
     
     def test_token_authorization_header(self):
@@ -155,7 +155,7 @@ class TestAccessControlManager(TestCase):
         request = self.factory.get('/api/test')
         request.META['HTTP_AUTHORIZATION'] = 'Bearer dev-token-12345'
         
-        is_valid, _, token_info = AccessControlManager.validate_token(request)
+        is_valid, _, token_info = TokopediaAccessControl().authenticate_request(request)
         
         self.assertTrue(is_valid)
         self.assertIsNotNone(token_info)
@@ -290,8 +290,7 @@ class TestIntegratedAccessControl(TestCase):
     
     def test_full_access_control_flow_with_rate_limiting(self):
         """Test that rate limiting works in full flow"""
-        # Create a fresh rate limiter for this test to avoid interference
-        from api.tokopedia.security import rate_limiter as rl
+        # Rate limiting is tested through the decorator
         
         @require_api_token(required_permission='scrape')
         def test_view(request):
@@ -358,13 +357,13 @@ class TestOWASPA01Compliance(TestCase):
     
     def test_rate_limiting_enforced(self):
         """Verify: Rate limiting to minimize harm from automated attacks"""
-        rate_limiter = RateLimiter()
+        rate_limiter = TokopediaRateLimitTracker()
         
         # Exceed rate limit
         for _ in range(11):
-            rate_limiter.check_rate_limit("test", max_requests=10, window_seconds=60)
+            rate_limiter.evaluate_limit("test", max_requests=10)
         
-        is_allowed, _ = rate_limiter.check_rate_limit("test", max_requests=10, window_seconds=60)
+        is_allowed, _ = rate_limiter.evaluate_limit("test", max_requests=10)
         self.assertFalse(is_allowed)
     
     def test_access_control_failures_logged(self):
@@ -383,7 +382,7 @@ class TestOWASPA01Compliance(TestCase):
             response = test_view(request)
             self.assertEqual(response.status_code, 401)
             # Verify that access denial was logged
-            self.assertTrue(any('Access denied' in log for log in cm.output))
+            self.assertTrue(any('DENIED' in log for log in cm.output))
 
 
 # =============================================================================
@@ -395,14 +394,14 @@ class TestInputValidator(TestCase):
     
     def test_validate_keyword_accepts_valid_input(self):
         """Test that valid keywords are accepted"""
-        is_valid, error_msg, sanitized = InputValidator.validate_keyword("valid keyword")
+        is_valid, error_msg, sanitized = ValidationPipeline.validate_keyword_field("valid keyword")
         self.assertTrue(is_valid)
         self.assertEqual(error_msg, "")
         self.assertEqual(sanitized, "valid keyword")
     
     def test_validate_keyword_rejects_empty_input(self):
         """Test that empty keywords are rejected"""
-        is_valid, error_msg, sanitized = InputValidator.validate_keyword("")
+        is_valid, error_msg, sanitized = ValidationPipeline.validate_keyword_field("")
         self.assertFalse(is_valid)
         self.assertIn("required", error_msg)
         self.assertIsNone(sanitized)
@@ -417,13 +416,13 @@ class TestInputValidator(TestCase):
         ]
         
         for malicious in malicious_inputs:
-            is_valid, _, sanitized = InputValidator.validate_keyword(malicious)
+            is_valid, _, sanitized = ValidationPipeline.validate_keyword_field(malicious)
             self.assertFalse(is_valid, f"Should reject: {malicious}")
             self.assertIsNone(sanitized)
     
     def test_validate_keyword_rejects_invalid_characters(self):
         """Test that invalid characters are rejected"""
-        is_valid, error_msg, sanitized = InputValidator.validate_keyword("keyword<script>alert(1)</script>")
+        is_valid, error_msg, sanitized = ValidationPipeline.validate_keyword_field("keyword<script>alert(1)</script>")
         self.assertFalse(is_valid)
         self.assertIn("invalid characters", error_msg.lower())
         self.assertIsNone(sanitized)
@@ -431,41 +430,41 @@ class TestInputValidator(TestCase):
     def test_validate_keyword_enforces_length_limit(self):
         """Test that length limits are enforced"""
         long_keyword = "a" * 101
-        is_valid, error_msg, sanitized = InputValidator.validate_keyword(long_keyword, max_length=100)
+        is_valid, error_msg, sanitized = ValidationPipeline.validate_keyword_field(long_keyword, max_length=100)
         self.assertFalse(is_valid)
         self.assertIn("maximum length", error_msg)
         self.assertIsNone(sanitized)
     
     def test_validate_integer_accepts_valid_input(self):
         """Test that valid integers are accepted"""
-        is_valid, error_msg, value = InputValidator.validate_integer(42, "page")
+        is_valid, error_msg, value = ValidationPipeline.validate_integer_field(42, "page")
         self.assertTrue(is_valid)
         self.assertEqual(error_msg, "")
         self.assertEqual(value, 42)
     
     def test_validate_integer_converts_string_to_int(self):
         """Test that numeric strings are converted to integers"""
-        is_valid, _, value = InputValidator.validate_integer("42", "page")
+        is_valid, _, value = ValidationPipeline.validate_integer_field("42", "page")
         self.assertTrue(is_valid)
         self.assertEqual(value, 42)
     
     def test_validate_integer_enforces_min_value(self):
         """Test that minimum value is enforced"""
-        is_valid, error_msg, value = InputValidator.validate_integer(-1, "page", min_value=0)
+        is_valid, error_msg, value = ValidationPipeline.validate_integer_field(-1, "page", min_value=0)
         self.assertFalse(is_valid)
         self.assertIn("at least", error_msg)
         self.assertIsNone(value)
     
     def test_validate_integer_enforces_max_value(self):
         """Test that maximum value is enforced"""
-        is_valid, error_msg, value = InputValidator.validate_integer(1001, "limit", max_value=1000)
+        is_valid, error_msg, value = ValidationPipeline.validate_integer_field(1001, "limit", max_value=1000)
         self.assertFalse(is_valid)
         self.assertIn("at most", error_msg)
         self.assertIsNone(value)
     
     def test_validate_integer_rejects_invalid_input(self):
         """Test that non-numeric strings are rejected"""
-        is_valid, error_msg, value = InputValidator.validate_integer("not a number", "page")
+        is_valid, error_msg, value = ValidationPipeline.validate_integer_field("not a number", "page")
         self.assertFalse(is_valid)
         self.assertIn("valid integer", error_msg)
         self.assertIsNone(value)
@@ -474,7 +473,7 @@ class TestInputValidator(TestCase):
         """Test that various true values are accepted"""
         true_values = [True, "true", "1", "yes", "TRUE", "YES"]
         for val in true_values:
-            is_valid, _, result = InputValidator.validate_boolean(val, "flag")
+            is_valid, _, result = ValidationPipeline.validate_boolean_field(val, "flag")
             self.assertTrue(is_valid, f"Should accept: {val}")
             self.assertTrue(result)
     
@@ -482,19 +481,19 @@ class TestInputValidator(TestCase):
         """Test that various false values are accepted"""
         false_values = [False, "false", "0", "no", "FALSE", "NO"]
         for val in false_values:
-            is_valid, _, result = InputValidator.validate_boolean(val, "flag")
+            is_valid, _, result = ValidationPipeline.validate_boolean_field(val, "flag")
             self.assertTrue(is_valid, f"Should accept: {val}")
             self.assertFalse(result)
     
     def test_validate_boolean_accepts_none(self):
         """Test that None is accepted (for optional fields)"""
-        is_valid, _, result = InputValidator.validate_boolean(None, "flag")
+        is_valid, _, result = ValidationPipeline.validate_boolean_field(None, "flag")
         self.assertTrue(is_valid)
         self.assertIsNone(result)
     
     def test_validate_boolean_rejects_invalid_input(self):
         """Test that invalid boolean values are rejected"""
-        is_valid, error_msg, result = InputValidator.validate_boolean("invalid", "flag")
+        is_valid, error_msg, result = ValidationPipeline.validate_boolean_field("invalid", "flag")
         self.assertFalse(is_valid)
         self.assertIn("boolean", error_msg)
         self.assertIsNone(result)
@@ -502,19 +501,19 @@ class TestInputValidator(TestCase):
     def test_sanitize_for_database_removes_null_bytes(self):
         """Test that null bytes are removed"""
         data = {"name": "test\x00product"}
-        sanitized = InputValidator.sanitize_for_database(data)
+        sanitized = ValidationPipeline.sanitize_for_db(data)
         self.assertNotIn("\x00", sanitized["name"])
     
     def test_sanitize_for_database_limits_length(self):
         """Test that strings are length-limited"""
         data = {"description": "a" * 2000}
-        sanitized = InputValidator.sanitize_for_database(data)
+        sanitized = ValidationPipeline.sanitize_for_db(data)
         self.assertLessEqual(len(sanitized["description"]), 1000)
     
     def test_sanitize_for_database_escapes_html(self):
         """Test that HTML is escaped"""
         data = {"name": "<script>alert('xss')</script>"}
-        sanitized = InputValidator.sanitize_for_database(data)
+        sanitized = ValidationPipeline.sanitize_for_db(data)
         self.assertNotIn("<script>", sanitized["name"])
 
 
@@ -529,29 +528,29 @@ class TestDatabaseQueryValidator(TestCase):
             'tokopedia_price_history'
         ]
         for table in valid_tables:
-            self.assertTrue(DatabaseQueryValidator.validate_table_name(table))
+            self.assertTrue(DatabaseSecurityValidator.is_valid_table(table))
     
     def test_validate_table_name_rejects_non_whitelisted_tables(self):
         """Test that non-whitelisted table names are rejected"""
         invalid_tables = ['users', 'admin', 'information_schema', 'mysql']
         for table in invalid_tables:
-            self.assertFalse(DatabaseQueryValidator.validate_table_name(table))
+            self.assertFalse(DatabaseSecurityValidator.is_valid_table(table))
     
     def test_validate_column_name_accepts_whitelisted_columns(self):
         """Test that whitelisted column names are accepted"""
         valid_columns = ['id', 'name', 'price', 'url', 'unit', 'created_at']
         for column in valid_columns:
-            self.assertTrue(DatabaseQueryValidator.validate_column_name(column))
+            self.assertTrue(DatabaseSecurityValidator.is_valid_column(column))
     
     def test_validate_column_name_rejects_non_whitelisted_columns(self):
         """Test that non-whitelisted column names are rejected"""
         invalid_columns = ['password', 'secret', 'admin', 'custom_field']
         for column in invalid_columns:
-            self.assertFalse(DatabaseQueryValidator.validate_column_name(column))
+            self.assertFalse(DatabaseSecurityValidator.is_valid_column(column))
     
     def test_build_safe_query_creates_valid_select(self):
         """Test that safe SELECT queries are built"""
-        is_valid, error_msg, query = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, query = DatabaseSecurityValidator.construct_safe_query(
             'SELECT',
             'tokopedia_products',
             ['id', 'name', 'price']
@@ -562,7 +561,7 @@ class TestDatabaseQueryValidator(TestCase):
     
     def test_build_safe_query_rejects_invalid_table(self):
         """Test that queries with invalid table names are rejected"""
-        is_valid, error_msg, _ = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, _ = DatabaseSecurityValidator.construct_safe_query(
             'SELECT',
             'malicious_table',
             ['id']
@@ -572,17 +571,17 @@ class TestDatabaseQueryValidator(TestCase):
     
     def test_build_safe_query_rejects_invalid_column(self):
         """Test that queries with invalid column names are rejected"""
-        is_valid, error_msg, _ = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, _ = DatabaseSecurityValidator.construct_safe_query(
             'SELECT',
             'tokopedia_products',
             ['id', 'malicious_column']
         )
         self.assertFalse(is_valid)
-        self.assertIn("Invalid column name", error_msg)
+        self.assertIn("Invalid column", error_msg)
     
     def test_build_safe_query_rejects_invalid_operation(self):
         """Test that invalid operations are rejected"""
-        is_valid, error_msg, _ = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, _ = DatabaseSecurityValidator.construct_safe_query(
             'DROP',
             'tokopedia_products',
             ['id']
@@ -600,8 +599,8 @@ class TestValidateInputDecorator(TestCase):
     def test_validate_input_decorator_accepts_valid_input(self):
         """Test that decorator allows requests with valid input"""
         @validate_input({
-            'keyword': lambda x: InputValidator.validate_keyword(x),
-            'page': lambda x: InputValidator.validate_integer(x, 'page', min_value=0)
+            'keyword': lambda x: ValidationPipeline.validate_keyword_field(x),
+            'page': lambda x: ValidationPipeline.validate_integer_field(x, 'page', min_value=0)
         })
         def test_view(request):
             return JsonResponse({
@@ -620,7 +619,7 @@ class TestValidateInputDecorator(TestCase):
     def test_validate_input_decorator_rejects_invalid_input(self):
         """Test that decorator rejects requests with invalid input"""
         @validate_input({
-            'keyword': lambda x: InputValidator.validate_keyword(x)
+            'keyword': lambda x: ValidationPipeline.validate_keyword_field(x)
         })
         def test_view(request):
             return JsonResponse({'success': True})
@@ -636,8 +635,8 @@ class TestValidateInputDecorator(TestCase):
     def test_validate_input_decorator_handles_post_json(self):
         """Test that decorator handles POST requests with JSON body"""
         @validate_input({
-            'name': lambda x: InputValidator.validate_keyword(x),
-            'price': lambda x: InputValidator.validate_integer(x, 'price', min_value=0)
+            'name': lambda x: ValidationPipeline.validate_keyword_field(x),
+            'price': lambda x: ValidationPipeline.validate_integer_field(x, 'price', min_value=0)
         })
         def test_view(request):
             return JsonResponse(request.validated_data)
@@ -657,7 +656,7 @@ class TestValidateInputDecorator(TestCase):
     def test_validate_input_decorator_returns_validation_errors(self):
         """Test that decorator returns detailed validation errors"""
         @validate_input({
-            'page': lambda x: InputValidator.validate_integer(x, 'page', min_value=0, max_value=100)
+            'page': lambda x: ValidationPipeline.validate_integer_field(x, 'page', min_value=0, max_value=100)
         })
         def test_view(request):
             return JsonResponse({'success': True})
@@ -685,35 +684,35 @@ class TestSecurityDesignPatterns(TestCase):
             'price': 100.50,
             'url': 'https://tokopedia.com/product'
         }
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, error_msg = BusinessLogicValidator.validate_business_constraints(data)
         self.assertTrue(is_valid)
         self.assertEqual(error_msg, "")
     
     def test_validate_business_logic_rejects_negative_price(self):
         """Test that negative prices are rejected"""
         data = {'price': -50}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, error_msg = BusinessLogicValidator.validate_business_constraints(data)
         self.assertFalse(is_valid)
         self.assertIn("positive", error_msg.lower())
     
     def test_validate_business_logic_rejects_excessive_price(self):
         """Test that unreasonably high prices are rejected"""
         data = {'price': 10000000000}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, error_msg = BusinessLogicValidator.validate_business_constraints(data)
         self.assertFalse(is_valid)
         self.assertIn("limit", error_msg.lower())
     
     def test_validate_business_logic_rejects_short_name(self):
         """Test that too-short names are rejected"""
         data = {'name': 'A'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, error_msg = BusinessLogicValidator.validate_business_constraints(data)
         self.assertFalse(is_valid)
         self.assertIn("short", error_msg.lower())
     
     def test_validate_business_logic_rejects_long_name(self):
         """Test that too-long names are rejected"""
         data = {'name': 'A' * 501}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, error_msg = BusinessLogicValidator.validate_business_constraints(data)
         self.assertFalse(is_valid)
         self.assertIn("long", error_msg.lower())
     
@@ -726,7 +725,7 @@ class TestSecurityDesignPatterns(TestCase):
         ]
         for url in ssrf_urls:
             data = {'url': url}
-            is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
+            is_valid, _ = BusinessLogicValidator.validate_business_constraints(data)
             self.assertFalse(is_valid, f"Should reject SSRF: {url}")
     
     def test_enforce_resource_limits_accepts_valid_limits(self):
@@ -734,7 +733,7 @@ class TestSecurityDesignPatterns(TestCase):
         factory = RequestFactory()
         request = factory.get('/api/test?limit=50')
         
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, error_msg = BusinessLogicValidator.enforce_resource_constraints(request)
         self.assertTrue(is_valid)
         self.assertEqual(error_msg, "")
     
@@ -743,7 +742,7 @@ class TestSecurityDesignPatterns(TestCase):
         factory = RequestFactory()
         request = factory.get('/api/test?limit=200')
         
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request, max_page_size=100)
+        is_valid, error_msg = BusinessLogicValidator.enforce_resource_constraints(request)
         self.assertFalse(is_valid)
         self.assertIn("maximum", error_msg.lower())
     
@@ -753,7 +752,7 @@ class TestSecurityDesignPatterns(TestCase):
         query_string = '&'.join([f'param{i}=value' for i in range(21)])
         request = factory.get(f'/api/test?{query_string}')
         
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, error_msg = BusinessLogicValidator.enforce_resource_constraints(request)
         self.assertFalse(is_valid)
         self.assertIn("Too many", error_msg)
 
@@ -768,11 +767,11 @@ class TestOWASPA03Compliance(TestCase):
     def test_input_validation_uses_whitelist(self):
         """Verify: Positive input validation using whitelists"""
         # Keyword validation uses whitelist pattern
-        is_valid, _, _ = InputValidator.validate_keyword("valid-input_123")
+        is_valid, _, _ = ValidationPipeline.validate_keyword_field("valid-input_123")
         self.assertTrue(is_valid)
         
         # Invalid characters rejected
-        is_valid, _, _ = InputValidator.validate_keyword("invalid<>input")
+        is_valid, _, _ = ValidationPipeline.validate_keyword_field("invalid<>input")
         self.assertFalse(is_valid)
     
     def test_sql_injection_detection(self):
@@ -783,12 +782,12 @@ class TestOWASPA03Compliance(TestCase):
             "1' AND '1'='1"
         ]
         for sql in sql_injections:
-            is_valid, _, _ = InputValidator.validate_keyword(sql)
+            is_valid, _, _ = ValidationPipeline.validate_keyword_field(sql)
             self.assertFalse(is_valid, f"Should detect SQL injection: {sql}")
     
     def test_database_queries_use_parameterization(self):
         """Verify: Database queries use parameterized approach"""
-        is_valid, _, query = DatabaseQueryValidator.build_safe_query(
+        is_valid, _, query = DatabaseSecurityValidator.construct_safe_query(
             'SELECT',
             'tokopedia_products',
             ['id', 'name'],
@@ -801,7 +800,7 @@ class TestOWASPA03Compliance(TestCase):
     def test_data_sanitization(self):
         """Verify: Data is sanitized before database operations"""
         data = {"name": "<script>alert('xss')</script>"}
-        sanitized = InputValidator.sanitize_for_database(data)
+        sanitized = ValidationPipeline.sanitize_for_db(data)
         self.assertNotIn("<script>", sanitized["name"])
 
 
@@ -815,7 +814,7 @@ class TestOWASPA04Compliance(TestCase):
     def test_business_logic_validation(self):
         """Verify: Business logic constraints are validated"""
         # Invalid business logic should be caught
-        is_valid, _ = SecurityDesignPatterns.validate_business_logic({'price': -100})
+        is_valid, _ = BusinessLogicValidator.validate_business_constraints({'price': -100})
         self.assertFalse(is_valid)
     
     def test_resource_consumption_limits(self):
@@ -823,12 +822,12 @@ class TestOWASPA04Compliance(TestCase):
         factory = RequestFactory()
         request = factory.get('/api/test?limit=10000')
         
-        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request, max_page_size=100)
+        is_valid, _ = BusinessLogicValidator.enforce_resource_constraints(request)
         self.assertFalse(is_valid)
     
     def test_ssrf_prevention(self):
         """Verify: SSRF attacks are prevented"""
-        is_valid, _ = SecurityDesignPatterns.validate_business_logic({
+        is_valid, _ = BusinessLogicValidator.validate_business_constraints({
             'url': 'https://localhost/admin'
         })
         self.assertFalse(is_valid)
@@ -836,5 +835,5 @@ class TestOWASPA04Compliance(TestCase):
     def test_plausibility_checks(self):
         """Verify: Plausibility checks on data"""
         # Unreasonably high price should be rejected
-        is_valid, _ = SecurityDesignPatterns.validate_business_logic({'price': 999999999999})
+        is_valid, _ = BusinessLogicValidator.validate_business_constraints({'price': 999999999999})
         self.assertFalse(is_valid)

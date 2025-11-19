@@ -1,12 +1,17 @@
 """
 OWASP Security Module for Tokopedia API
 Implements A01:2021 (Broken Access Control), A03:2021 (Injection), A04:2021 (Insecure Design)
+
+Architecture:
+- Configuration-driven security policies
+- Functional validation pipeline
+- Modular security components
 """
 import logging
 import re
 import time
 from functools import wraps
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Callable, List
 from collections import defaultdict
 from datetime import datetime
 from django.http import JsonResponse
@@ -17,492 +22,499 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Security Configuration
+# =============================================================================
+
+SECURITY_CONFIG = {
+    'rate_limiting': {
+        'default_window': 60,
+        'default_max_requests': 100,
+        'block_duration': 300,
+        'attack_threshold': 10
+    },
+    'validation': {
+        'max_keyword_length': 100,
+        'max_string_length': 1000,
+        'max_query_params': 20,
+        'max_page_size': 100
+    },
+    'business_logic': {
+        'max_price': 1000000000,
+        'min_name_length': 2,
+        'max_name_length': 500
+    },
+    'ssrf_protection': {
+        'blocked_hosts': ['localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254'],
+        'required_protocol': 'https://'
+    }
+}
+
+# API Token Registry with enhanced metadata
+TOKEN_REGISTRY = {
+    'dev-token-12345': {
+        'name': 'Development Token',
+        'owner': 'dev-team',
+        'permissions': ['read', 'write', 'scrape'],
+        'allowed_ips': [],
+        'rate_limit': {'requests': 100, 'window': 60},
+        'created': '2024-01-01',
+        'expires': None
+    },
+    'legacy-api-token-67890': {
+        'name': 'Legacy Client Token',
+        'owner': 'legacy-client',
+        'permissions': ['read', 'scrape'],
+        'allowed_ips': [],
+        'rate_limit': {'requests': 50, 'window': 60},
+        'created': '2024-01-01',
+        'expires': None
+    },
+    'read-only-token': {
+        'name': 'Read Only Token',
+        'owner': 'monitoring',
+        'permissions': ['read'],
+        'allowed_ips': [],
+        'rate_limit': {'requests': 200, 'window': 60},
+        'created': '2024-01-01',
+        'expires': None
+    }
+}
+
+# SQL Injection patterns for detection
+SQL_INJECTION_PATTERNS = [
+    r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)",
+    r"(;|\-\-|\/\*|\*\/)",
+    r"(\bOR\b.*=.*)",
+    r"(\bAND\b.*=.*)",
+    r"(\'|\"|`)",
+]
+
+# Whitelisted database identifiers
+DB_WHITELIST = {
+    'tables': {'tokopedia_products', 'tokopedia_locations', 'tokopedia_price_history'},
+    'columns': {'id', 'name', 'price', 'url', 'unit', 'created_at', 'updated_at', 'code'},
+    'operations': {'SELECT', 'INSERT', 'UPDATE', 'DELETE'}
+}
+
+
+# =============================================================================
 # A01:2021 – Broken Access Control Prevention
 # =============================================================================
 
-class RateLimiter:
+class TokopediaRateLimitTracker:
     """
-    Rate limiting implementation to prevent automated attacks.
-    Implements OWASP A01:2021 - Rate limit API and controller access.
+    Tokopedia-specific rate limiting with time-window based tracking.
+    Uses sliding window algorithm for accurate rate limiting.
     """
-    def __init__(self):
-        self.requests = defaultdict(list)
-        self.blocked_ips = {}
+    def __init__(self, config: Dict[str, Any] = None):
+        self._config = config or SECURITY_CONFIG['rate_limiting']
+        self._request_log = defaultdict(list)
+        self._blocked_clients = {}
         
-    def _clean_old_requests(self, client_id: str, window_seconds: int):
-        """Remove requests older than the time window."""
-        current_time = time.time()
-        cutoff_time = current_time - window_seconds
-        self.requests[client_id] = [
-            req_time for req_time in self.requests[client_id]
-            if req_time > cutoff_time
+    def record_request(self, identifier: str) -> None:
+        """Record a new request from client."""
+        self._request_log[identifier].append(time.time())
+        self._cleanup_old_entries(identifier)
+    
+    def _cleanup_old_entries(self, identifier: str) -> None:
+        """Remove expired request records."""
+        window = self._config['default_window']
+        cutoff = time.time() - window
+        self._request_log[identifier] = [
+            ts for ts in self._request_log[identifier] if ts > cutoff
         ]
     
-    def is_blocked(self, client_id: str) -> bool:
-        """Check if client is currently blocked."""
-        if client_id in self.blocked_ips:
-            block_until = self.blocked_ips[client_id]
-            if time.time() < block_until:
-                return True
-            else:
-                del self.blocked_ips[client_id]
-        return False
+    def check_client_blocked(self, identifier: str) -> Tuple[bool, int]:
+        """Check if client is currently blocked. Returns (is_blocked, remaining_seconds)."""
+        if identifier not in self._blocked_clients:
+            return False, 0
+        
+        unblock_time = self._blocked_clients[identifier]
+        if time.time() >= unblock_time:
+            del self._blocked_clients[identifier]
+            return False, 0
+        
+        return True, int(unblock_time - time.time())
     
-    def block_client(self, client_id: str, duration_seconds: int = 300):
-        """Block a client for specified duration (default 5 minutes)."""
-        self.blocked_ips[client_id] = time.time() + duration_seconds
-        logger.warning(f"Client {client_id} blocked for {duration_seconds} seconds due to rate limit violation")
+    def apply_block(self, identifier: str, duration: int = None) -> None:
+        """Apply temporary block to client."""
+        if duration is None:
+            duration = self._config['block_duration']
+        self._blocked_clients[identifier] = time.time() + duration
+        logger.warning(f"Applied {duration}s block to client: {identifier}")
     
-    def check_rate_limit(
+    def get_request_count(self, identifier: str) -> int:
+        """Get current request count in active window."""
+        self._cleanup_old_entries(identifier)
+        return len(self._request_log[identifier])
+    
+    def evaluate_limit(
         self, 
-        client_id: str, 
-        max_requests: int = 100, 
-        window_seconds: int = 60,
-        block_on_violation: bool = True
+        identifier: str, 
+        max_requests: int = None,
+        auto_block: bool = True
     ) -> Tuple[bool, Optional[str]]:
         """
-        Check if client has exceeded rate limit.
+        Evaluate if client is within rate limits.
         
-        Args:
-            client_id: Unique identifier for the client (IP + endpoint)
-            max_requests: Maximum requests allowed in the time window
-            window_seconds: Time window in seconds
-            block_on_violation: Whether to block client on violation
-            
         Returns:
-            Tuple of (is_allowed, error_message)
+            (allowed, error_message)
         """
-        # Check if client is blocked
-        if self.is_blocked(client_id):
-            remaining_time = int(self.blocked_ips[client_id] - time.time())
-            return False, f"Rate limit exceeded. Blocked for {remaining_time} more seconds"
+        # Check if blocked
+        is_blocked, remaining = self.check_client_blocked(identifier)
+        if is_blocked:
+            return False, f"Access temporarily blocked. Retry in {remaining} seconds"
         
-        # Clean old requests
-        self._clean_old_requests(client_id, window_seconds)
+        # Get configuration
+        max_req = max_requests or self._config['default_max_requests']
         
-        # Check rate limit
-        current_requests = len(self.requests[client_id])
+        # Check current usage
+        current_count = self.get_request_count(identifier)
         
-        if current_requests >= max_requests:
-            if block_on_violation:
-                self.block_client(client_id)
-            logger.warning(
-                f"Rate limit exceeded for {client_id}: "
-                f"{current_requests} requests in {window_seconds}s window"
-            )
-            return False, f"Rate limit exceeded. Maximum {max_requests} requests per {window_seconds} seconds"
+        if current_count >= max_req:
+            if auto_block:
+                self.apply_block(identifier)
+            
+            logger.warning(f"Rate limit exceeded: {identifier} ({current_count} requests)")
+            return False, f"Rate limit exceeded. Max {max_req} requests per {self._config['default_window']}s"
         
-        # Add current request
-        self.requests[client_id].append(time.time())
+        # Record this request
+        self.record_request(identifier)
         return True, None
 
 
-# Global rate limiter instance
-rate_limiter = RateLimiter()
+# Initialize rate limit tracker
+_rate_tracker = TokopediaRateLimitTracker()
 
 
-class AccessControlManager:
+class TokopediaAccessControl:
     """
-    Centralized access control management.
-    Implements OWASP A01:2021 - Deny by default, enforce ownership.
+    Token-based access control with permission management.
+    Implements OWASP A01:2021 - Centralized access control enforcement.
     """
     
-    # Token configuration with ownership and permissions
-    API_TOKENS = {
-        'dev-token-12345': {
-            'name': 'Development Token',
-            'owner': 'dev-team',
-            'permissions': ['read', 'write', 'scrape'],
-            'allowed_ips': [],  # Empty means all IPs allowed
-            'rate_limit': {'requests': 100, 'window': 60},  # 100 req/min
-            'created': '2024-01-01',
-            'expires': None
-        },
-        'legacy-api-token-67890': {
-            'name': 'Legacy Client Token',
-            'owner': 'legacy-client',
-            'permissions': ['read', 'scrape'],  # Limited permissions
-            'allowed_ips': [],
-            'rate_limit': {'requests': 50, 'window': 60},  # 50 req/min
-            'created': '2024-01-01',
-            'expires': None
-        },
-        'read-only-token': {
-            'name': 'Read Only Token',
-            'owner': 'monitoring',
-            'permissions': ['read'],  # Read-only access
-            'allowed_ips': [],
-            'rate_limit': {'requests': 200, 'window': 60},
-            'created': '2024-01-01',
-            'expires': None
-        }
-    }
+    @staticmethod
+    def extract_token(request) -> Optional[str]:
+        """Extract authentication token from request headers."""
+        token = request.headers.get('X-API-Token')
+        if not token:
+            auth_header = request.headers.get('Authorization', '')
+            if auth_header.startswith('Bearer '):
+                token = auth_header.replace('Bearer ', '')
+        return token
+    
+    @staticmethod
+    def lookup_token(token: str) -> Optional[Dict]:
+        """Lookup token in registry."""
+        return TOKEN_REGISTRY.get(token)
+    
+    @staticmethod
+    def verify_ip_whitelist(client_ip: str, token_data: Dict) -> bool:
+        """Verify client IP against token whitelist."""
+        allowed_ips = token_data.get('allowed_ips', [])
+        if not allowed_ips:  # Empty list means all IPs allowed
+            return True
+        return client_ip in allowed_ips
     
     @classmethod
-    def validate_token(cls, request) -> Tuple[bool, str, Optional[Dict]]:
+    def authenticate_request(cls, request) -> Tuple[bool, str, Optional[Dict]]:
         """
-        Validate API token with comprehensive checks.
+        Authenticate request using token-based auth.
         
         Returns:
-            Tuple of (is_valid, error_message, token_info)
+            (is_valid, error_message, token_data)
         """
-        # Extract token
-        token = request.headers.get('X-API-Token') or \
-                request.headers.get('Authorization', '').replace('Bearer ', '')
-        
+        # Extract and validate token
+        token = cls.extract_token(request)
         if not token:
             return False, 'API token required', None
         
-        # Validate token exists
-        if token not in cls.API_TOKENS:
+        token_data = cls.lookup_token(token)
+        if not token_data:
             client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-            logger.warning(f"Invalid API token attempt from {client_ip}")
+            logger.warning(f"Invalid token attempt from {client_ip}")
             return False, 'Invalid API token', None
         
-        token_info = cls.API_TOKENS[token]
+        # Verify IP restrictions
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-        
-        # Check expiration
-        if token_info.get('expires'):
-            # In production, implement proper date checking
-            pass
-        
-        # Check IP whitelist (deny by default if list is specified)
-        allowed_ips = token_info.get('allowed_ips', [])
-        if allowed_ips and client_ip not in allowed_ips:
-            logger.warning(
-                f"IP {client_ip} not authorized for token {token_info['name']}"
-            )
+        if not cls.verify_ip_whitelist(client_ip, token_data):
+            logger.warning(f"IP {client_ip} denied for token: {token_data['name']}")
             return False, 'IP not authorized for this token', None
         
-        logger.info(f"Valid API token used from {client_ip}: {token_info['name']}")
-        return True, '', token_info
-    
-    @classmethod
-    def check_permission(cls, token_info: Dict, required_permission: str) -> bool:
-        """
-        Check if token has required permission.
-        Implements principle of least privilege.
-        """
-        permissions = token_info.get('permissions', [])
-        has_permission = required_permission in permissions
+        # Check expiration (if implemented)
+        if token_data.get('expires'):
+            # Future: Add expiration check
+            pass
         
-        if not has_permission:
-            logger.warning(
-                f"Permission denied: {token_info['name']} lacks '{required_permission}' permission"
-            )
-        
-        return has_permission
+        logger.info(f"Authenticated: {token_data['name']} from {client_ip}")
+        return True, '', token_data
     
-    @classmethod
-    def _sanitize_log_value(cls, value: str, max_length: int = 200) -> str:
-        """Sanitize a value for safe logging."""
+    @staticmethod
+    def has_permission(token_data: Dict, required: str) -> bool:
+        """
+        Check if token grants required permission.
+        Implements least privilege principle.
+        """
+        granted = token_data.get('permissions', [])
+        has_access = required in granted
+        
+        if not has_access:
+            logger.warning(f"Permission '{required}' denied for {token_data['name']}")
+        
+        return has_access
+    
+    @staticmethod
+    def sanitize_log_data(value: str, max_len: int = 200) -> str:
+        """Sanitize data for safe logging (prevent log injection)."""
         if not value:
             return 'unknown'
-        truncated = str(value)[:max_length]
+        truncated = str(value)[:max_len]
         return ''.join(c if c.isprintable() else '' for c in truncated)
     
     @classmethod
-    def log_access_attempt(cls, request, success: bool, reason: str = ''):
+    def audit_access(cls, request, granted: bool, reason: str = '') -> None:
         """
-        Log access control events for monitoring and alerting.
+        Audit log for access control decisions.
         Implements OWASP A01:2021 - Log access control failures.
         """
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-        # Sanitize all user-controlled data to prevent log injection
-        path = cls._sanitize_log_value(request.path)
-        method = request.method
-        safe_reason = cls._sanitize_log_value(reason, max_length=100)
-        
-        # Log with sanitized values - don't log raw user input
+        safe_path = cls.sanitize_log_data(request.path)
+        safe_reason = cls.sanitize_log_data(reason, 100)
         timestamp = datetime.now().isoformat()
         
-        if success:
-            logger.info(
-                f"Access granted - IP: {client_ip}, Path: {path}, Method: {method}, Time: {timestamp}"
-            )
-        else:
-            logger.warning(
-                f"Access denied - IP: {client_ip}, Path: {path}, Method: {method}, "
-                f"Reason: {safe_reason}, Time: {timestamp}"
-            )
-            # In production: Alert admins on repeated failures
-            cls._check_for_attack_pattern(client_ip)
-    
-    @classmethod
-    def _check_for_attack_pattern(cls, client_ip: str):
-        """
-        Monitor for potential attack patterns.
-        Alert admins on suspicious activity.
-        """
-        cache_key = f"failed_access_{client_ip}"
-        failures = cache.get(cache_key, 0)
-        failures += 1
-        cache.set(cache_key, failures, 300)  # 5 minutes
+        log_entry = (
+            f"{'GRANTED' if granted else 'DENIED'} - "
+            f"IP: {client_ip}, Path: {safe_path}, Method: {request.method}, "
+            f"Time: {timestamp}"
+        )
         
-        if failures > 10:
+        if granted:
+            logger.info(log_entry)
+        else:
+            logger.warning(f"{log_entry}, Reason: {safe_reason}")
+            cls.detect_attack_pattern(client_ip)
+    
+    @staticmethod
+    def detect_attack_pattern(client_ip: str) -> None:
+        """
+        Detect potential attack patterns based on failed attempts.
+        """
+        cache_key = f"tokopedia_failed_auth_{client_ip}"
+        failure_count = cache.get(cache_key, 0) + 1
+        cache.set(cache_key, failure_count, 300)
+        
+        threshold = SECURITY_CONFIG['rate_limiting']['attack_threshold']
+        if failure_count > threshold:
             logger.critical(
-                f"SECURITY ALERT: Multiple access control failures from {client_ip}. "
-                f"Possible attack in progress. Failed attempts: {failures}"
+                f"SECURITY ALERT: Potential attack detected from {client_ip}. "
+                f"Failed attempts: {failure_count}"
             )
-            # In production: Send alert to admins, consider IP blocking
+            # Production: Alert admins, consider blocking
 
 
 # =============================================================================
 # A03:2021 – Injection Prevention
 # =============================================================================
 
-class InputValidator:
+class ValidationPipeline:
     """
-    Comprehensive input validation to prevent injection attacks.
-    Implements OWASP A03:2021 - Keep data separate from commands.
+    Functional validation pipeline for input sanitization.
+    Implements OWASP A03:2021 - Input validation and sanitization.
     """
     
-    # Whitelist patterns for common inputs
-    KEYWORD_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-_\.]+$')
-    NUMERIC_PATTERN = re.compile(r'^\d+$')
-    BOOLEAN_PATTERN = re.compile(r'^(true|false|1|0|yes|no)$', re.IGNORECASE)
+    # Compiled regex patterns for validation
+    PATTERNS = {
+        'keyword': re.compile(r'^[a-zA-Z0-9\s\-_\.]+$'),
+        'numeric': re.compile(r'^\d+$'),
+        'boolean': re.compile(r'^(true|false|1|0|yes|no)$', re.IGNORECASE)
+    }
     
-    # SQL injection detection patterns
-    SQL_INJECTION_PATTERNS = [
-        r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)",
-        r"(;|\-\-|\/\*|\*\/)",
-        r"(\bOR\b.*=.*)",
-        r"(\bAND\b.*=.*)",
-        r"(\'|\"|`)",
-    ]
-    
-    @classmethod
-    def validate_keyword(cls, keyword: str, max_length: int = 100) -> Tuple[bool, str, Optional[str]]:
-        """
-        Validate and sanitize keyword input.
-        
-        Returns:
-            Tuple of (is_valid, error_message, sanitized_value)
-        """
-        if not keyword:
-            return False, "Keyword is required", None
-        
-        # Length validation
-        if len(keyword) > max_length:
-            return False, f"Keyword exceeds maximum length of {max_length}", None
-        
-        # Strip whitespace
-        keyword = keyword.strip()
-        
-        if not keyword:
-            return False, "Keyword cannot be empty", None
-        
-        # Whitelist validation - only allow safe characters
-        if not cls.KEYWORD_PATTERN.match(keyword):
-            logger.warning(f"Invalid keyword pattern detected: {keyword}")
-            return False, "Keyword contains invalid characters. Only alphanumeric, spaces, hyphens, underscores, and periods allowed", None
-        
-        # SQL injection detection
-        if cls._detect_sql_injection(keyword):
-            logger.critical(f"SQL injection attempt detected in keyword: {keyword}")
-            return False, "Invalid keyword format", None
-        
-        # HTML sanitization (defense in depth)
-        sanitized = bleach.clean(keyword, tags=[], strip=True)
-        
-        return True, "", sanitized
-    
-    @classmethod
-    def _convert_to_integer(cls, value: Any, field_name: str) -> Tuple[bool, str, Optional[int]]:
-        """Convert value to integer with validation."""
-        if isinstance(value, int):
-            return True, "", value
-        
-        if isinstance(value, str):
-            if not cls.NUMERIC_PATTERN.match(value):
-                return False, f"{field_name} must be a valid integer", None
-            try:
-                return True, "", int(value)
-            except ValueError:
-                return False, f"{field_name} must be a valid integer", None
-        
-        return False, f"{field_name} must be an integer", None
-    
-    @classmethod
-    def _validate_range(cls, value: int, field_name: str, min_value: Optional[int], 
-                        max_value: Optional[int]) -> Tuple[bool, str]:
-        """Validate value is within specified range."""
-        if min_value is not None and value < min_value:
-            return False, f"{field_name} must be at least {min_value}"
-        if max_value is not None and value > max_value:
-            return False, f"{field_name} must be at most {max_value}"
-        return True, ""
-    
-    @classmethod
-    def validate_integer(
-        cls, 
-        value: Any, 
-        field_name: str,
-        min_value: Optional[int] = None,
-        max_value: Optional[int] = None
-    ) -> Tuple[bool, str, Optional[int]]:
-        """
-        Validate integer input with range checking.
-        """
-        if value is None:
-            return False, f"{field_name} is required", None
-        
-        # Type checking and conversion
-        is_valid, error_msg, converted_value = cls._convert_to_integer(value, field_name)
-        if not is_valid:
-            return False, error_msg, None
-        
-        # Range validation
-        is_valid, error_msg = cls._validate_range(converted_value, field_name, min_value, max_value)
-        if not is_valid:
-            return False, error_msg, None
-        
-        return True, "", converted_value
-    
-    # Boolean value mappings
-    TRUTHY_VALUES = {'true', '1', 'yes'}
-    FALSY_VALUES = {'false', '0', 'no'}
-    
-    @classmethod
-    def validate_boolean(cls, value: Any, field_name: str) -> Tuple[bool, str, Optional[bool]]:
-        """
-        Validate boolean input.
-        """
-        # Handle None and empty string
-        if value is None:
-            return True, "", None  # Return None to allow view to set default
-        if value == '':
-            return False, f"{field_name} must be a boolean value", None
-        
-        # Native boolean
-        if isinstance(value, bool):
-            return True, "", value
-        
-        # String conversion
-        if isinstance(value, str):
-            value_lower = value.lower()
-            if value_lower in cls.TRUTHY_VALUES:
-                return True, "", True
-            if value_lower in cls.FALSY_VALUES:
-                return True, "", False
-        
-        return False, f"{field_name} must be a boolean value", None
-    
-    @classmethod
-    def _detect_sql_injection(cls, value: str) -> bool:
-        """
-        Detect potential SQL injection patterns.
-        """
-        for pattern in cls.SQL_INJECTION_PATTERNS:
+    @staticmethod
+    def check_sql_injection(value: str) -> bool:
+        """Detect SQL injection patterns."""
+        for pattern in SQL_INJECTION_PATTERNS:
             if re.search(pattern, value, re.IGNORECASE):
                 return True
         return False
     
     @classmethod
-    def sanitize_for_database(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_keyword_field(
+        cls, 
+        keyword: str, 
+        max_length: int = None
+    ) -> Tuple[bool, str, Optional[str]]:
+        """
+        Validate keyword with whitelist pattern matching.
+        
+        Returns:
+            (is_valid, error_message, sanitized_value)
+        """
+        if not keyword:
+            return False, "Keyword is required", None
+        
+        max_len = max_length or SECURITY_CONFIG['validation']['max_keyword_length']
+        
+        if len(keyword) > max_len:
+            return False, f"Keyword exceeds maximum length of {max_len}", None
+        
+        keyword = keyword.strip()
+        if not keyword:
+            return False, "Keyword cannot be empty", None
+        
+        # Whitelist pattern check
+        if not cls.PATTERNS['keyword'].match(keyword):
+            logger.warning(f"Invalid keyword pattern: {keyword}")
+            return False, "Keyword contains invalid characters", None
+        
+        # SQL injection check
+        if cls.check_sql_injection(keyword):
+            logger.critical(f"SQL injection attempt: {keyword}")
+            return False, "Invalid keyword format", None
+        
+        # HTML sanitization
+        sanitized = bleach.clean(keyword, tags=[], strip=True)
+        return True, "", sanitized
+    
+    @classmethod
+    def validate_integer_field(
+        cls,
+        value: Any,
+        field_name: str,
+        min_value: Optional[int] = None,
+        max_value: Optional[int] = None
+    ) -> Tuple[bool, str, Optional[int]]:
+        """
+        Validate and convert integer with range checking.
+        """
+        if value is None:
+            return False, f"{field_name} is required", None
+        
+        # Type conversion
+        if isinstance(value, int):
+            converted = value
+        elif isinstance(value, str):
+            if not cls.PATTERNS['numeric'].match(value):
+                return False, f"{field_name} must be a valid integer", None
+            try:
+                converted = int(value)
+            except ValueError:
+                return False, f"{field_name} must be a valid integer", None
+        else:
+            return False, f"{field_name} must be an integer", None
+        
+        # Range validation
+        if min_value is not None and converted < min_value:
+            return False, f"{field_name} must be at least {min_value}", None
+        if max_value is not None and converted > max_value:
+            return False, f"{field_name} must be at most {max_value}", None
+        
+        return True, "", converted
+    
+    @classmethod
+    def validate_boolean_field(
+        cls,
+        value: Any,
+        field_name: str
+    ) -> Tuple[bool, str, Optional[bool]]:
+        """
+        Validate boolean field.
+        """
+        if value is None:
+            return True, "", None
+        
+        if value == '':
+            return False, f"{field_name} must be a boolean value", None
+        
+        if isinstance(value, bool):
+            return True, "", value
+        
+        if isinstance(value, str):
+            lower_val = value.lower()
+            if lower_val in ['true', '1', 'yes']:
+                return True, "", True
+            if lower_val in ['false', '0', 'no']:
+                return True, "", False
+        
+        return False, f"{field_name} must be a boolean value", None
+    
+    @staticmethod
+    def sanitize_for_db(data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Sanitize data before database operations.
-        Implements parameterized queries pattern.
         """
         sanitized = {}
+        max_len = SECURITY_CONFIG['validation']['max_string_length']
         
         for key, value in data.items():
             if isinstance(value, str):
-                # Remove null bytes
                 value = value.replace('\x00', '')
-                # Limit length
-                value = value[:1000]
-                # HTML escape
+                value = value[:max_len]
                 value = bleach.clean(value, tags=[], strip=True)
-            
             sanitized[key] = value
         
         return sanitized
 
 
-class DatabaseQueryValidator:
+class DatabaseSecurityValidator:
     """
-    Validates database operations to prevent SQL injection.
-    Implements OWASP A03:2021 - Use parameterized queries.
+    Database query validator using whitelist approach.
+    Implements OWASP A03:2021 - Parameterized queries.
     """
-    
-    # Whitelist constants
-    ALLOWED_TABLES = {
-        'tokopedia_products',
-        'tokopedia_locations',
-        'tokopedia_price_history'
-    }
-    
-    ALLOWED_COLUMNS = {
-        'id', 'name', 'price', 'url', 'unit', 
-        'created_at', 'updated_at', 'code'
-    }
     
     @staticmethod
-    def _validate_against_whitelist(value: str, whitelist: set, item_type: str) -> bool:
-        """Generic whitelist validator."""
-        if value not in whitelist:
-            logger.critical(f"Invalid {item_type} attempt: {value}")
+    def is_valid_table(table_name: str) -> bool:
+        """Validate table name against whitelist."""
+        if table_name not in DB_WHITELIST['tables']:
+            logger.critical(f"Invalid table access attempt: {table_name}")
             return False
         return True
     
     @staticmethod
-    def validate_table_name(table_name: str) -> bool:
-        """
-        Validate table name against whitelist.
-        Table names cannot be parameterized, so whitelist is critical.
-        """
-        return DatabaseQueryValidator._validate_against_whitelist(
-            table_name, DatabaseQueryValidator.ALLOWED_TABLES, "table name"
-        )
+    def is_valid_column(column_name: str) -> bool:
+        """Validate column name against whitelist."""
+        if column_name not in DB_WHITELIST['columns']:
+            logger.critical(f"Invalid column access attempt: {column_name}")
+            return False
+        return True
     
     @staticmethod
-    def validate_column_name(column_name: str) -> bool:
-        """
-        Validate column name against whitelist.
-        """
-        return DatabaseQueryValidator._validate_against_whitelist(
-            column_name, DatabaseQueryValidator.ALLOWED_COLUMNS, "column name"
-        )
+    def is_valid_operation(operation: str) -> bool:
+        """Validate database operation."""
+        return operation in DB_WHITELIST['operations']
     
-    ALLOWED_OPERATIONS = {'SELECT', 'INSERT', 'UPDATE', 'DELETE'}
-    
-    @staticmethod
-    def build_safe_query(
+    @classmethod
+    def construct_safe_query(
+        cls,
         operation: str,
         table: str,
-        columns: list,
+        columns: List[str],
         where_clause: Optional[Dict] = None
     ) -> Tuple[bool, str, str]:
         """
-        Build safe parameterized SQL query.
+        Construct safe parameterized query.
         
         Returns:
-            Tuple of (is_valid, error_message, query)
+            (is_valid, error_message, query)
         """
-        # Validate operation
-        if operation not in DatabaseQueryValidator.ALLOWED_OPERATIONS:
+        if not cls.is_valid_operation(operation):
             return False, "Invalid operation", ""
         
-        # Validate table name
-        if not DatabaseQueryValidator.validate_table_name(table):
+        if not cls.is_valid_table(table):
             return False, "Invalid table name", ""
         
-        # Validate all column names
         for col in columns:
-            if not DatabaseQueryValidator.validate_column_name(col):
-                return False, "Invalid column name", ""
+            if not cls.is_valid_column(col):
+                return False, f"Invalid column: {col}", ""
         
-        # Build query based on operation
+        # Build query
         if operation == 'SELECT':
             cols = ', '.join(columns)
             query = f"SELECT {cols} FROM {table}"
             if where_clause:
-                # Use parameterized where clause
                 query += " WHERE " + " AND ".join([f"{k} = %s" for k in where_clause.keys()])
-        
-        # Add more operations as needed
+        else:
+            # Add other operations as needed
+            return False, "Operation not implemented", ""
         
         return True, "", query
 
@@ -511,99 +523,98 @@ class DatabaseQueryValidator:
 # A04:2021 – Insecure Design Prevention
 # =============================================================================
 
-class SecurityDesignPatterns:
+class BusinessLogicValidator:
     """
-    Implements secure design patterns and best practices.
-    Implements OWASP A04:2021 - Use secure design patterns.
+    Business logic validation with security constraints.
+    Implements OWASP A04:2021 - Secure design patterns.
     """
     
-    @staticmethod
-    def _validate_numeric_range(value: Any, field_name: str, min_val: float, max_val: float, 
-                                log_suspicious: bool = False) -> Tuple[bool, str]:
-        """Generic numeric range validator."""
-        if not isinstance(value, (int, float)) or value < min_val:
-            return False, f"{field_name} must be positive (at least {min_val})"
-        if value > max_val:
-            if log_suspicious:
-                logger.warning(f"Suspicious {field_name} value: {value}")
-            return False, f"{field_name} exceeds maximum limit of {max_val}"
-        return True, ""
+    # SSRF Protection: Blocked hosts for URL validation
+    SSRF_BLOCKED_HOSTS = SECURITY_CONFIG['ssrf_protection']['blocked_hosts']
     
     @staticmethod
-    def _validate_string_length(value: str, field_name: str, min_len: int, max_len: int) -> Tuple[bool, str]:
-        """Generic string length validator."""
-        if len(value) > max_len:
-            return False, f"{field_name} too long (max: {max_len})"
-        if len(value) < min_len:
-            return False, f"{field_name} too short (min: {min_len})"
-        return True, ""
-    
-    @staticmethod
-    def _validate_price_field(price: Any) -> Tuple[bool, str]:
-        """Validate price field in business logic."""
-        return SecurityDesignPatterns._validate_numeric_range(
-            price, "Price", 0, 1000000000, log_suspicious=True
-        )
-    
-    @staticmethod
-    def _validate_name_field(name: str) -> Tuple[bool, str]:
-        """Validate name field in business logic."""
-        return SecurityDesignPatterns._validate_string_length(name, "Product name", 2, 500)
-    
-    @staticmethod
-    def _validate_url_field(url: str) -> Tuple[bool, str]:
-        """Validate URL field with SSRF protection."""
-        if not url.startswith('https://'):
-            return False, "URL must use HTTPS protocol for security"
+    def validate_price(price: Any) -> Tuple[bool, str]:
+        """Validate price field."""
+        max_price = SECURITY_CONFIG['business_logic']['max_price']
         
-        # Check for SSRF attempts
-        dangerous_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254']
-        if any(host in url.lower() for host in dangerous_hosts):
-            logger.critical(f"SSRF attempt detected: {url}")
-            return False, "Invalid URL"
+        if not isinstance(price, (int, float)) or price < 0:
+            return False, "Price must be a positive number"
+        
+        if price > max_price:
+            logger.warning(f"Suspicious price value: {price}")
+            return False, f"Price exceeds maximum limit of {max_price}"
+        
         return True, ""
     
     @staticmethod
-    def validate_business_logic(data: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_name(name: str) -> Tuple[bool, str]:
+        """Validate name field."""
+        min_len = SECURITY_CONFIG['business_logic']['min_name_length']
+        max_len = SECURITY_CONFIG['business_logic']['max_name_length']
+        
+        if len(name) > max_len:
+            return False, f"Name too long (max: {max_len})"
+        if len(name) < min_len:
+            return False, f"Name too short (min: {min_len})"
+        
+        return True, ""
+    
+    @classmethod
+    def validate_url(cls, url: str) -> Tuple[bool, str]:
+        """Validate URL with SSRF protection."""
+        required_protocol = SECURITY_CONFIG['ssrf_protection']['required_protocol']
+        
+        if not url.startswith(required_protocol):
+            return False, "URL must use HTTPS protocol"
+        
+        # SSRF protection
+        url_lower = url.lower()
+        for host in cls.SSRF_BLOCKED_HOSTS:
+            if host in url_lower:
+                logger.critical(f"SSRF attempt detected: {url}")
+                return False, "Invalid URL"
+        
+        return True, ""
+    
+    @classmethod
+    def validate_business_constraints(cls, data: Dict[str, Any]) -> Tuple[bool, str]:
         """
         Validate business logic constraints.
-        Implements plausibility checks.
         """
-        # Define field validators mapping
-        field_validators = {
-            'price': SecurityDesignPatterns._validate_price_field,
-            'name': SecurityDesignPatterns._validate_name_field,
-            'url': SecurityDesignPatterns._validate_url_field
+        validators = {
+            'price': cls.validate_price,
+            'name': cls.validate_name,
+            'url': cls.validate_url
         }
         
-        # Validate each field present in data
-        for field, validator in field_validators.items():
+        for field, validator in validators.items():
             if field in data:
-                is_valid, error_msg = validator(data[field])
+                is_valid, error = validator(data[field])
                 if not is_valid:
-                    return False, error_msg
+                    return False, error
         
         return True, ""
     
     @staticmethod
-    def enforce_resource_limits(request, max_page_size: int = 100) -> Tuple[bool, str]:
+    def enforce_resource_constraints(request) -> Tuple[bool, str]:
         """
         Enforce resource consumption limits.
-        Implements OWASP A04:2021 - Limit resource consumption.
         """
+        max_page = SECURITY_CONFIG['validation']['max_page_size']
+        max_params = SECURITY_CONFIG['validation']['max_query_params']
+        
         # Limit page size
         if 'limit' in request.GET:
             try:
                 limit = int(request.GET['limit'])
-                if limit > max_page_size:
-                    return False, f"Limit exceeds maximum of {max_page_size}"
+                if limit > max_page:
+                    return False, f"Limit exceeds maximum of {max_page}"
             except ValueError:
                 return False, "Invalid limit parameter"
         
         # Limit query complexity
-        query_params_count = len(request.GET)
-        if query_params_count > 20:
-            logger.warning(f"Excessive query parameters: {query_params_count}")
+        if len(request.GET) > max_params:
+            logger.warning(f"Excessive query parameters: {len(request.GET)}")
             return False, "Too many query parameters"
         
         return True, ""
@@ -616,56 +627,47 @@ class SecurityDesignPatterns:
 def require_api_token(required_permission: str = None):
     """
     Decorator for API token authentication and authorization.
-    Implements OWASP A01:2021 - Access control in trusted server-side code.
     
     Usage:
         @require_api_token(required_permission='scrape')
-        @require_http_methods(["GET"])
         def my_view(request):
             pass
     """
     def decorator(view_func):
         @wraps(view_func)
         def wrapped_view(request, *args, **kwargs):
-            # Validate token
-            is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+            access_control = TokopediaAccessControl()
+            
+            # Authenticate
+            is_valid, error_msg, token_data = access_control.authenticate_request(request)
             
             if not is_valid:
-                AccessControlManager.log_access_attempt(request, False, error_msg)
+                access_control.audit_access(request, False, error_msg)
                 return JsonResponse({'error': error_msg}, status=401)
             
-            # Check permission if required
-            if required_permission and not AccessControlManager.check_permission(
-                token_info, required_permission
-            ):
-                AccessControlManager.log_access_attempt(
-                    request, False, f"Missing permission: {required_permission}"
-                )
+            # Check permission
+            if required_permission and not access_control.has_permission(token_data, required_permission):
+                access_control.audit_access(request, False, f"Missing permission: {required_permission}")
                 return JsonResponse({
                     'error': f'Insufficient permissions. Required: {required_permission}'
                 }, status=403)
             
-            # Check rate limit
+            # Rate limiting
             client_ip = request.META.get('REMOTE_ADDR', 'unknown')
             client_id = f"{client_ip}:{request.path}"
             
-            rate_limit_config = token_info.get('rate_limit', {})
-            max_requests = rate_limit_config.get('requests', 100)
-            window = rate_limit_config.get('window', 60)
+            rate_config = token_data.get('rate_limit', {})
+            max_req = rate_config.get('requests', 100)
             
-            is_allowed, rate_error = rate_limiter.check_rate_limit(
-                client_id, max_requests, window
-            )
+            is_allowed, rate_error = _rate_tracker.evaluate_limit(client_id, max_req)
             
             if not is_allowed:
-                AccessControlManager.log_access_attempt(request, False, rate_error)
+                access_control.audit_access(request, False, rate_error)
                 return JsonResponse({'error': rate_error}, status=429)
             
-            # Log successful access
-            AccessControlManager.log_access_attempt(request, True)
-            
-            # Attach token info to request for use in view
-            request.token_info = token_info
+            # Success
+            access_control.audit_access(request, True)
+            request.token_info = token_data
             
             return view_func(request, *args, **kwargs)
         
@@ -673,8 +675,8 @@ def require_api_token(required_permission: str = None):
     return decorator
 
 
-def _get_request_data(request):
-    """Extract data source based on request method."""
+def _extract_request_data(request):
+    """Extract data from request based on method."""
     if request.method == 'GET':
         return request.GET, None
     
@@ -683,37 +685,34 @@ def _get_request_data(request):
         data = json.loads(request.body) if request.body else {}
         return data, None
     except json.JSONDecodeError:
-        return None, JsonResponse({
-            'error': 'Invalid JSON in request body'
-        }, status=400)
+        return None, JsonResponse({'error': 'Invalid JSON in request body'}, status=400)
 
 
-def _validate_fields(validators: Dict[str, callable], data_source) -> Tuple[Dict, Dict]:
-    """Validate all fields and return errors and validated data."""
+def _run_validators(validators: Dict[str, Callable], data_source) -> Tuple[Dict, Dict]:
+    """Run validation pipeline."""
     errors = {}
-    validated_data = {}
+    validated = {}
     
-    for field_name, validator_func in validators.items():
-        value = data_source.get(field_name)
-        is_valid, error_msg, sanitized_value = validator_func(value)
+    for field, validator in validators.items():
+        value = data_source.get(field)
+        is_valid, error, sanitized = validator(value)
         
         if not is_valid:
-            errors[field_name] = error_msg
-        elif sanitized_value is not None:
-            validated_data[field_name] = sanitized_value
+            errors[field] = error
+        elif sanitized is not None:
+            validated[field] = sanitized
     
-    return errors, validated_data
+    return errors, validated
 
 
-def validate_input(validators: Dict[str, callable]):
+def validate_input(validators: Dict[str, Callable]):
     """
     Decorator for input validation.
-    Implements OWASP A03:2021 - Use positive server-side input validation.
     
     Usage:
         @validate_input({
-            'keyword': lambda x: InputValidator.validate_keyword(x),
-            'page': lambda x: InputValidator.validate_integer(x, 'page', min_value=0)
+            'keyword': lambda x: ValidationPipeline.validate_keyword_field(x),
+            'page': lambda x: ValidationPipeline.validate_integer_field(x, 'page', min_value=0)
         })
         def my_view(request):
             pass
@@ -721,11 +720,11 @@ def validate_input(validators: Dict[str, callable]):
     def decorator(view_func):
         @wraps(view_func)
         def wrapped_view(request, *args, **kwargs):
-            data_source, error_response = _get_request_data(request)
-            if error_response:
-                return error_response
+            data_source, error_resp = _extract_request_data(request)
+            if error_resp:
+                return error_resp
             
-            errors, validated_data = _validate_fields(validators, data_source)
+            errors, validated = _run_validators(validators, data_source)
             
             if errors:
                 return JsonResponse({
@@ -733,7 +732,7 @@ def validate_input(validators: Dict[str, callable]):
                     'details': errors
                 }, status=400)
             
-            request.validated_data = validated_data
+            request.validated_data = validated
             return view_func(request, *args, **kwargs)
         
         return wrapped_view
@@ -743,11 +742,10 @@ def validate_input(validators: Dict[str, callable]):
 def enforce_resource_limits(view_func):
     """
     Decorator to enforce resource consumption limits.
-    Implements OWASP A04:2021 - Limit resource consumption.
     """
     @wraps(view_func)
     def wrapped_view(request, *args, **kwargs):
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, error_msg = BusinessLogicValidator.enforce_resource_constraints(request)
         
         if not is_valid:
             return JsonResponse({'error': error_msg}, status=400)
