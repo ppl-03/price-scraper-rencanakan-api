@@ -491,3 +491,139 @@ class TestPriceAnomalyService(TestCase):
             result = PriceAnomalyService.mark_as_reviewed(anomaly.id, 'approved', 'Test')
         
         self.assertFalse(result)
+    
+    def test_apply_anomaly_unknown_vendor(self):
+        """Test applying anomaly with unknown vendor"""
+        anomaly = PriceAnomaly.objects.create(
+            vendor='unknown_vendor',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='PCS',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='approved'  # Must be approved to apply
+        )
+        
+        result = PriceAnomalyService.apply_approved_price(anomaly.id)
+        
+        self.assertFalse(result['success'])
+        self.assertIn('Unknown vendor', result['message'])
+        self.assertEqual(result['updated'], 0)
+    
+    def test_apply_anomaly_not_found(self):
+        """Test applying non-existent anomaly"""
+        result = PriceAnomalyService.apply_approved_price(99999)
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['message'], 'Anomaly not found')
+        self.assertEqual(result['updated'], 0)
+    
+    def test_apply_anomaly_exception(self):
+        """Test apply anomaly with exception during execution"""
+        from unittest.mock import patch, MagicMock
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='PCS',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='approved'  # Must be approved to apply
+        )
+        
+        with patch('db_pricing.anomaly_service.PriceAnomaly.objects.get') as mock_get:
+            mock_anomaly = MagicMock()
+            mock_anomaly.status = 'approved'
+            mock_anomaly.vendor = 'mitra10'
+            mock_anomaly.new_price = 12000
+            mock_anomaly.product_url = 'https://test.com/1'
+            mock_get.return_value = mock_anomaly
+            
+            with patch('db_pricing.anomaly_service.connection.cursor') as mock_cursor:
+                mock_cursor.side_effect = Exception("Database connection error")
+                
+                result = PriceAnomalyService.apply_approved_price(anomaly.id)
+        
+        self.assertFalse(result['success'])
+        self.assertIn('Error applying price', result['message'])
+        self.assertEqual(result['updated'], 0)
+    
+    def test_reject_anomaly_already_rejected(self):
+        """Test rejecting an already rejected anomaly"""
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='PCS',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='rejected'
+        )
+        
+        result = PriceAnomalyService.reject_anomaly(anomaly.id, 'Already rejected')
+        
+        self.assertTrue(result['success'])
+        self.assertEqual(result['message'], 'Anomaly already rejected')
+    
+    def test_reject_anomaly_not_found(self):
+        """Test rejecting non-existent anomaly"""
+        result = PriceAnomalyService.reject_anomaly(99999, 'Test notes')
+        
+        self.assertFalse(result['success'])
+        self.assertEqual(result['message'], 'Anomaly not found')
+    
+    def test_reject_anomaly_exception(self):
+        """Test reject anomaly with exception"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='PCS',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        with patch.object(PriceAnomaly, 'save', side_effect=Exception("Save error")):
+            result = PriceAnomalyService.reject_anomaly(anomaly.id, 'Test notes')
+        
+        self.assertFalse(result['success'])
+        self.assertIn('Error rejecting anomaly', result['message'])
+    
+    def test_batch_apply_anomalies_mixed_results(self):
+        """Test batch apply with some successes and failures"""
+        from unittest.mock import patch
+        
+        anomaly1 = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Product 1',
+            product_url='https://test.com/1',
+            unit='PCS',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='approved'
+        )
+        
+        anomaly2 = PriceAnomaly.objects.create(
+            vendor='unknown_vendor',
+            product_name='Product 2',
+            product_url='https://test.com/2',
+            unit='PCS',
+            old_price=15000,
+            new_price=18000,
+            change_percent=20.0,
+            status='approved'
+        )
+        
+        result = PriceAnomalyService.batch_apply_approved([anomaly1.id, anomaly2.id])
+        
+        # Should have at least one failure (unknown vendor)
+        self.assertGreater(result['failed_count'], 0)
+        self.assertEqual(result['applied_count'] + result['failed_count'], 2)

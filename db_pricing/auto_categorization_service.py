@@ -1,4 +1,4 @@
-from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct
+from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct, TokopediaProduct
 from db_pricing.categorization import ProductCategorizer
 
 
@@ -9,6 +9,7 @@ class AutoCategorizationService:
         'mitra10': Mitra10Product,
         'depobangunan': DepoBangunanProduct,
         'juragan_material': JuraganMaterialProduct,
+        'tokopedia': TokopediaProduct,
     }
     
     def __init__(self):

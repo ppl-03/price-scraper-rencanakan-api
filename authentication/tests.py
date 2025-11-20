@@ -352,7 +352,7 @@ class UserModelTest(TestCase):
         )
         
         expires_at = timezone.now() + timedelta(hours=24)
-        token = user.create_api_token('expiring_token', expires_at)
+        user.create_api_token('expiring_token', expires_at)
         
         self.assertEqual(user.api_tokens[0]['expires_at'], expires_at.isoformat())
     
@@ -454,7 +454,7 @@ class UserModelTest(TestCase):
         
         # Check that send_mail was called
         mock_send_mail.assert_called_once()
-        args, kwargs = mock_send_mail.call_args
+        args, _ = mock_send_mail.call_args
         
         self.assertEqual(args[0], 'Verify your email address')
         self.assertIn(user.verification_token, args[1])

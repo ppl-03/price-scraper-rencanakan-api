@@ -525,3 +525,536 @@ class TestErrorHandling(TestCase):
         data = response.json()
         self.assertFalse(data['success'])
         self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_apply_price_anomaly_success(self):
+        """Test successfully applying a price anomaly"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='approved'
+        )
+        
+        with patch('db_pricing.views.PriceAnomalyService.apply_approved_price') as mock_apply:
+            mock_apply.return_value = {
+                'success': True,
+                'message': 'Price applied successfully',
+                'updated': 1
+            }
+            
+            response = self.client.post(f'/api/pricing/anomalies/{anomaly.id}/apply/')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['data']['anomaly_id'], anomaly.id)
+        self.assertEqual(data['data']['updated'], 1)
+    
+    def test_apply_price_anomaly_not_found(self):
+        """Test applying non-existent anomaly"""
+        from unittest.mock import patch
+        
+        with patch('db_pricing.views.PriceAnomalyService.apply_approved_price') as mock_apply:
+            mock_apply.return_value = {
+                'success': False,
+                'message': 'Anomaly not found'
+            }
+            
+            response = self.client.post('/api/pricing/anomalies/99999/apply/')
+        
+        self.assertEqual(response.status_code, 404)
+        data = response.json()
+        self.assertFalse(data['success'])
+    
+    def test_apply_price_anomaly_failure(self):
+        """Test applying anomaly with service failure"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        with patch('db_pricing.views.PriceAnomalyService.apply_approved_price') as mock_apply:
+            mock_apply.return_value = {
+                'success': False,
+                'message': 'Failed to update product'
+            }
+            
+            response = self.client.post(f'/api/pricing/anomalies/{anomaly.id}/apply/')
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+    
+    def test_apply_price_anomaly_exception(self):
+        """Test apply anomaly with exception"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        with patch('db_pricing.views.PriceAnomalyService.apply_approved_price') as mock_apply:
+            mock_apply.side_effect = Exception("Database error")
+            
+            response = self.client.post(f'/api/pricing/anomalies/{anomaly.id}/apply/')
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_reject_price_anomaly_success(self):
+        """Test successfully rejecting a price anomaly"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        payload = {'notes': 'Rejected due to data error'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark:
+            mock_mark.return_value = {
+                'success': True,
+                'message': 'Anomaly rejected successfully'
+            }
+            
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/reject/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['data']['anomaly_id'], anomaly.id)
+    
+    def test_reject_price_anomaly_not_found(self):
+        """Test rejecting non-existent anomaly"""
+        from unittest.mock import patch
+        
+        payload = {'notes': 'Test rejection'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark:
+            mock_mark.return_value = {
+                'success': False,
+                'message': 'Anomaly not found'
+            }
+            
+            response = self.client.post(
+                '/api/pricing/anomalies/99999/reject/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 404)
+        data = response.json()
+        self.assertFalse(data['success'])
+    
+    def test_reject_price_anomaly_invalid_json(self):
+        """Test rejecting with invalid JSON"""
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        response = self.client.post(
+            f'/api/pricing/anomalies/{anomaly.id}/reject/',
+            data='invalid json',
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Invalid JSON')
+    
+    def test_reject_price_anomaly_exception(self):
+        """Test reject anomaly with exception"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        payload = {'notes': 'Test'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.reject_anomaly') as mock_reject:
+            mock_reject.side_effect = Exception("Database error")
+            
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/reject/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_batch_apply_anomalies_success(self):
+        """Test successfully applying multiple anomalies"""
+        from unittest.mock import patch
+        
+        anomaly1 = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product 1',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='approved'
+        )
+        
+        anomaly2 = PriceAnomaly.objects.create(
+            vendor='gemilang',
+            product_name='Test Product 2',
+            product_url='https://test.com/2',
+            unit='box',
+            old_price=20000,
+            new_price=24000,
+            change_percent=20.0,
+            status='approved'
+        )
+        
+        payload = {'anomaly_ids': [anomaly1.id, anomaly2.id]}
+        
+        with patch('db_pricing.views.PriceAnomalyService.batch_apply_approved') as mock_batch:
+            mock_batch.return_value = {
+                'applied_count': 2,
+                'failed_count': 0,
+                'results': []
+            }
+            
+            response = self.client.post(
+                '/api/pricing/anomalies/batch-apply/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['data']['applied_count'], 2)
+        self.assertEqual(data['data']['failed_count'], 0)
+    
+    def test_batch_apply_anomalies_empty_array(self):
+        """Test batch apply with empty array"""
+        payload = {'anomaly_ids': []}
+        
+        response = self.client.post(
+            '/api/pricing/anomalies/batch-apply/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('required', data['error'])
+    
+    def test_batch_apply_anomalies_not_array(self):
+        """Test batch apply with non-array input"""
+        payload = {'anomaly_ids': 'not an array'}
+        
+        response = self.client.post(
+            '/api/pricing/anomalies/batch-apply/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('must be an array', data['error'])
+    
+    def test_batch_apply_anomalies_invalid_json(self):
+        """Test batch apply with invalid JSON"""
+        response = self.client.post(
+            '/api/pricing/anomalies/batch-apply/',
+            data='invalid json',
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Invalid JSON')
+    
+    def test_batch_apply_anomalies_exception(self):
+        """Test batch apply with exception"""
+        from unittest.mock import patch
+        
+        payload = {'anomaly_ids': [1, 2, 3]}
+        
+        with patch('db_pricing.views.PriceAnomalyService.batch_apply_approved') as mock_batch:
+            mock_batch.side_effect = Exception("Database error")
+            
+            response = self.client.post(
+                '/api/pricing/anomalies/batch-apply/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_approve_and_apply_anomaly_success(self):
+        """Test successfully approving and applying anomaly"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='pending'
+        )
+        
+        payload = {'notes': 'Approved and applied'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark, \
+             patch('db_pricing.views.PriceAnomalyService.apply_approved_price') as mock_apply:
+            
+            mock_mark.return_value = True
+            mock_apply.return_value = {
+                'success': True,
+                'message': 'Price applied',
+                'updated': 1
+            }
+            
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/approve-and-apply/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertIn('Anomaly approved and price applied', data['message'])
+    
+    def test_approve_and_apply_anomaly_not_found(self):
+        """Test approve and apply with non-existent anomaly"""
+        from unittest.mock import patch
+        
+        payload = {'notes': 'Test'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark:
+            mock_mark.return_value = False
+            
+            response = self.client.post(
+                '/api/pricing/anomalies/99999/approve-and-apply/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 404)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Anomaly not found')
+    
+    def test_approve_and_apply_anomaly_apply_failure(self):
+        """Test approve succeeds but apply fails"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0,
+            status='pending'
+        )
+        
+        payload = {'notes': 'Test'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark, \
+             patch('db_pricing.views.PriceAnomalyService.apply_approved_price') as mock_apply:
+            
+            mock_mark.return_value = True
+            mock_apply.return_value = {
+                'success': False,
+                'message': 'Failed to update product'
+            }
+            
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/approve-and-apply/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('Approved but failed to apply', data['error'])
+    
+    def test_approve_and_apply_anomaly_invalid_json(self):
+        """Test approve and apply with invalid JSON"""
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        response = self.client.post(
+            f'/api/pricing/anomalies/{anomaly.id}/approve-and-apply/',
+            data='invalid json',
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Invalid JSON')
+    
+    def test_approve_and_apply_anomaly_exception(self):
+        """Test approve and apply with exception"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        payload = {'notes': 'Test'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark:
+            mock_mark.side_effect = Exception("Database error")
+            
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/approve-and-apply/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+    
+    def test_list_anomalies_empty_page(self):
+        """Test listing anomalies with page number beyond available pages"""
+        response = self.client.get('/api/pricing/anomalies/?page=999')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        # Should return empty list or last page
+        self.assertIsInstance(data['data'], list)
+    
+    def test_review_anomaly_mark_as_reviewed_fails(self):
+        """Test review anomaly when mark_as_reviewed returns False"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        payload = {'status': 'approved', 'notes': 'Test'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.mark_as_reviewed') as mock_mark:
+            mock_mark.return_value = False
+            
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/review/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 404)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Anomaly not found')
+    
+    def test_reject_anomaly_exception_handler(self):
+        """Test reject anomaly exception handling"""
+        from unittest.mock import patch
+        
+        anomaly = PriceAnomaly.objects.create(
+            vendor='mitra10',
+            product_name='Test Product',
+            product_url='https://test.com/1',
+            unit='pcs',
+            old_price=10000,
+            new_price=12000,
+            change_percent=20.0
+        )
+        
+        payload = {'notes': 'Test rejection'}
+        
+        with patch('db_pricing.views.PriceAnomalyService.reject_anomaly') as mock_reject:
+            mock_reject.side_effect = Exception("Unexpected error")
+            
+            response = self.client.post(
+                f'/api/pricing/anomalies/{anomaly.id}/reject/',
+                data=json.dumps(payload),
+                content_type='application/json'
+            )
+        
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'Internal server error')
+

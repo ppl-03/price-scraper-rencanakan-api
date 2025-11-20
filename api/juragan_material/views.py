@@ -3,6 +3,7 @@ from django.views.decorators.http import require_http_methods
 from .factory import create_juraganmaterial_scraper
 from .database_service import JuraganMaterialDatabaseService
 from api.views_utils import validate_scraping_request, format_scraping_response, handle_scraping_exception
+from db_pricing.auto_categorization_service import AutoCategorizationService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,32 +11,50 @@ logger = logging.getLogger(__name__)
 
 def _save_products_to_database(products):
     """
-    Helper function to save products to database.
+    Helper function to save products to database and auto-categorize them.
     
     Args:
         products: List of product objects from scraping result
         
     Returns:
-        bool: True if save was successful, False otherwise
+        dict: Database operation result with categorization info
     """
     if not products:
-        return False
+        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
     
     try:
-        # Save to database
+        # Convert products to dict format if needed
+        products_data = _convert_products_to_dict(products)
+        
+        # Save to database with price update
         db_service = JuraganMaterialDatabaseService()
-        result = db_service.save(products)
+        result = db_service.save_with_price_update(products_data)
         
-        if result:
-            logger.info(f"Juragan Material: Saved {len(products)} products to database")
-        else:
-            logger.error("Juragan Material: Failed to save products to database")
+        # Auto-categorize newly inserted products
+        categorized_count = 0
+        if result.get('success') and result.get('inserted', 0) > 0:
+            try:
+                from db_pricing.models import JuraganMaterialProduct
+                
+                # Get recently inserted products (ones without category)
+                uncategorized_products = JuraganMaterialProduct.objects.filter(category='').order_by('-id')[:result['inserted']]
+                product_ids = list(uncategorized_products.values_list('id', flat=True))
+                
+                if product_ids:
+                    categorization_service = AutoCategorizationService()
+                    categorization_result = categorization_service.categorize_products('juragan_material', product_ids)
+                    categorized_count = categorization_result.get('categorized', 0)
+                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new Juragan Material products")
+            except Exception as cat_error:
+                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+                # Don't fail the entire operation if categorization fails
         
+        result['categorized'] = categorized_count
         return result
         
     except Exception as db_error:
         logger.error(f"Failed to save Juragan Material products to database: {str(db_error)}")
-        return False
+        return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
 
 
 def _perform_scraping_and_save(keyword, sort_by_price, page, save_to_db=False):
@@ -68,7 +87,16 @@ def _perform_scraping_and_save(keyword, sort_by_price, page, save_to_db=False):
     response_data = format_scraping_response(result)
     
     # Add database save information to response
-    response_data['saved_to_database'] = db_save_result
+    if db_save_result and isinstance(db_save_result, dict):
+        response_data['database'] = {
+            'saved': db_save_result.get('success', False),
+            'inserted': db_save_result.get('inserted', 0),
+            'updated': db_save_result.get('updated', 0),
+            'categorized': db_save_result.get('categorized', 0),
+            'anomalies': db_save_result.get('anomalies', [])
+        }
+    else:
+        response_data['saved_to_database'] = db_save_result
     response_data['database_save_attempted'] = save_to_db
     
     return response_data, db_save_result, save_to_db
@@ -199,7 +227,7 @@ def scrape_and_save_products(request):
         # Save to database
         db_save_result = _save_products_to_database(chosen_products)
         
-        if not db_save_result:
+        if not db_save_result or not db_save_result.get('success', False):
             return JsonResponse({
                 'success': False,
                 'error': 'Failed to save products to database',
@@ -210,6 +238,10 @@ def scrape_and_save_products(request):
             'success': True,
             'message': f'Successfully saved {len(chosen_products)} products',
             'saved': len(chosen_products),
+            'inserted': db_save_result.get('inserted', 0),
+            'updated': db_save_result.get('updated', 0),
+            'categorized': db_save_result.get('categorized', 0),
+            'anomalies': db_save_result.get('anomalies', []),
             'sort_type': sort_type,
             'url': result.url
         })

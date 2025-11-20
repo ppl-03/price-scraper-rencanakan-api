@@ -1566,29 +1566,51 @@ def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, pag
             return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
 
 
+def _scrape_batch_with_limit(scraper, keyword: str, sort_by_price: bool, limit: int) -> list:
+    products = scraper.scrape_batch([keyword])
+    
+    if len(products) >= limit:
+        return products
+    
+    if not hasattr(scraper, 'scrape_products'):
+        return products
+    
+    return _extend_products_to_limit(scraper, keyword, sort_by_price, limit, products)
+
+
+def _extend_products_to_limit(scraper, keyword: str, sort_by_price: bool, limit: int, products: list) -> list:
+    try:
+        extra_res = scraper.scrape_products(
+            keyword=keyword, 
+            sort_by_price=sort_by_price, 
+            page=1, 
+            limit=limit - len(products)
+        )
+        if getattr(extra_res, 'success', False) and getattr(extra_res, 'products', None):
+            products.extend(extra_res.products)
+    except TypeError:
+        pass  # scrape_products doesn't support limit parameter
+    
+    return products
+
+
+def _use_scrape_batch_method(scraper, keyword: str, sort_by_price: bool, limit: int | None):
+    from api.interfaces import ScrapingResult
+    
+    if limit:
+        products = _scrape_batch_with_limit(scraper, keyword, sort_by_price, limit)
+    else:
+        products = scraper.scrape_batch([keyword])
+    
+    return ScrapingResult(products=products, success=True, url="")
+
+
 def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page: int, limit: int | None = None):
-    """Handle scraping for BatchPlaywrightClient-based scrapers."""
-    from api.playwright_client import BatchPlaywrightClient
     from api.interfaces import ScrapingResult
 
     try:
-        # Try to use scrape_batch method if available (like Mitra10)
         if hasattr(scraper, 'scrape_batch'):
-            # If limit is provided and scrape_batch supports batching, attempt to collect up to limit
-            if limit and hasattr(scraper, 'scrape_batch'):
-                # scrape_batch takes a list of keywords; for a single keyword we may need paging inside the scraper
-                products = scraper.scrape_batch([keyword])
-                # If scrape_batch returned fewer than limit, and the scraper supports paginate via scrape_products, attempt to fetch more
-                if len(products) < limit and hasattr(scraper, 'scrape_products'):
-                    try:
-                        extra_res = scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=1, limit=limit - len(products))
-                        if getattr(extra_res, 'success', False) and getattr(extra_res, 'products', None):
-                            products.extend(extra_res.products)
-                    except TypeError:
-                        pass
-            else:
-                products = scraper.scrape_batch([keyword])
-            return ScrapingResult(products=products, success=True, url="")
+            return _use_scrape_batch_method(scraper, keyword, sort_by_price, limit)
         else:
             return _handle_playwright_scraper_fallback(scraper, keyword, sort_by_price, page)
     except Exception as e:

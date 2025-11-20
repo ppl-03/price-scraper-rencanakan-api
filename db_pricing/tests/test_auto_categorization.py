@@ -1,5 +1,5 @@
 from django.test import TestCase
-from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct
+from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct, TokopediaProduct
 from db_pricing.categorization import ProductCategorizer
 
 
@@ -403,6 +403,15 @@ class AutoCategorizationServiceTest(TestCase):
         self.assertEqual(result['total'], 1)
         self.assertEqual(result['categorized'], 1)
     
+    def test_categorize_products_tokopedia(self):
+        p1 = TokopediaProduct.objects.create(name="Pipa PVC 3 inch", price=85000,
+        url="https://test.com/1", unit="batang")
+        
+        result = self.service.categorize_products('tokopedia', [p1.id])
+        
+        self.assertEqual(result['total'], 1)
+        self.assertEqual(result['categorized'], 1)
+    
     def test_categorize_products_unknown_vendor(self):
         with self.assertRaises(ValueError) as context:
             self.service.categorize_products('unknown_vendor', [1, 2, 3])
@@ -427,6 +436,18 @@ class AutoCategorizationServiceTest(TestCase):
         Mitra10Product.objects.create(name="Plafon Gypsum", price=55000, url="https://test.com/2", unit="lembar")
         
         result = self.service.categorize_all_products('mitra10')
+        
+        self.assertEqual(result['total'], 2)
+        self.assertEqual(result['categorized'], 2)
+        self.assertEqual(result['uncategorized'], 0)
+    
+    def test_categorize_all_products_tokopedia(self):
+        TokopediaProduct.objects.create(name="Pipa PVC 3 inch", price=85000,
+        url="https://test.com/1", unit="batang")
+        TokopediaProduct.objects.create(name="Cat Tembok Putih", price=120000,
+        url="https://test.com/2", unit="kaleng")
+        
+        result = self.service.categorize_all_products('tokopedia')
         
         self.assertEqual(result['total'], 2)
         self.assertEqual(result['categorized'], 2)
