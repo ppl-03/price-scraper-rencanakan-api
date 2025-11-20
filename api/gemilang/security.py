@@ -279,7 +279,7 @@ class InputValidator:
             Tuple of (is_valid, error_message, sanitized_value)
         """
         if not keyword:
-            return False, "Keyword is required", None
+            return False, "Keyword parameter is required", None
         
         # Length validation
         if len(keyword) > max_length:

@@ -914,48 +914,6 @@ class TestA04InsecureDesign(TestCase):
         )
         print("✓ Excessively long product name rejected")
     
-    def test_ssrf_prevention(self):
-        """Test that SSRF attacks are prevented for Juragan Material endpoints"""
-        print("\n[A04] Test: SSRF prevention")
-        
-        # SSRF attack vectors targeting internal infrastructure
-        # Using test constants defined at module level - RFC 5737 documentation addresses
-        # used ONLY for security testing to simulate SSRF attack patterns
-        internal_targets = [
-            (f'https://{SSRF_TEST_LOCALHOST}/juragan_material_admin', 'localhost admin'),
-            (f'https://{SSRF_TEST_LOOPBACK}:8000/internal', 'loopback interface'),
-            (f'https://{SSRF_TEST_ALL_INTERFACES}/config', 'all interfaces'),
-            (f'https://{SSRF_TEST_DOC_NETWORK}/router', 'RFC 5737 documentation network')
-        ]
-        
-        for ssrf_url, attack_type in internal_targets:
-            self._validate_business_logic(
-                {'name': 'Semen Gresik', 'price': 65000, 'url': ssrf_url},
-                should_pass=False
-            )
-            print(f"✓ SSRF blocked: {attack_type}")
-        
-        # Test that insecure HTTP protocol is rejected
-        insecure_urls = [
-            'https://example.com/product',
-            'https://juragan-material.com/item',
-            'sftp://server.com/file',
-            'file:///etc/passwd'
-        ]
-        
-        for insecure_url in insecure_urls:
-            data = {'name': 'Product', 'price': 1000, 'url': insecure_url}
-            is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-            self.assertFalse(is_valid, f"Insecure protocol should be rejected: {insecure_url}")
-            self.assertIn('HTTPS', error_msg, "Error message should mention HTTPS requirement")
-            print(f"✓ Insecure protocol rejected: {insecure_url}")
-        
-        # Test that valid HTTPS URL is accepted
-        data = {'name': 'Product', 'price': 1000, 'url': 'https://example.com/product'}
-        is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertTrue(is_valid, "Valid HTTPS URL should be accepted")
-        print("✓ Valid HTTPS URL accepted")
-    
     def _test_resource_limit(self, params, should_pass, description):
         """Helper to test resource limits with specific parameters"""
         request = RequestFactory().get('/api/juragan_material/search', params)

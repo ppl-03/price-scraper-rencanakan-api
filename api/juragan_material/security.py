@@ -41,14 +41,14 @@ class InputValidator(BaseInputValidator):
         cls, 
         value: Any, 
         field_name: str,
-        min_value: Optional[int] = None,
-        max_value: Optional[int] = None
+        min_val: Optional[int] = None,
+        max_val: Optional[int] = None
     ) -> Tuple[bool, Optional[int], Optional[str]]:
         """
         Validate integer parameter (alias for validate_integer with different return order).
         Returns: (is_valid, value, error_message)
         """
-        is_valid, error_msg, validated_value = cls.validate_integer(value, field_name, min_value, max_value)
+        is_valid, error_msg, validated_value = cls.validate_integer(value, field_name, min_val, max_val)
         # Convert empty string to None for consistency with test expectations
         error_msg = error_msg if error_msg else None
         return is_valid, validated_value, error_msg
