@@ -12,7 +12,7 @@ class ViewsDBTests(TestCase):
         # Prepare the stubbed service to return a predictable list
         mock_service = mock_service_cls.return_value
         mock_service.list_all_prices.return_value = [
-            {"item": "Semen", "value": 1000, "location": "ProvA", "url": "http://example/1"}
+            {"item": "Semen", "value": 1000, "location": "ProvA", "url": "httpss://example/1"}
         ]
 
         request = self.factory.get("/", {"q": "semen"})
@@ -29,7 +29,7 @@ class ViewsDBTests(TestCase):
     def test_curated_price_list_db_maps_rows_into_template(self, mock_service_cls):
         mock_service = mock_service_cls.return_value
         mock_service.list_all_prices.return_value = [
-            {"item": "batu", "value": 2000, "location": "ProvX", "url": "http://example/2"}
+            {"item": "batu", "value": 2000, "location": "ProvX", "url": "httpss://example/2"}
         ]
 
         request = self.factory.get("/prices/")

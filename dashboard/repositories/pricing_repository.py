@@ -1,4 +1,6 @@
 from typing import List, Optional, Dict, Tuple
+import re
+
 from django.db import connection
 from django.db import models
 
@@ -30,10 +32,19 @@ class PricingRepository:
         for model, source in self.vendor_specs:
             table = model._meta.db_table
 
+            # Validate table name to prevent injection; only allow alphanumerics and underscore.
+            # This protects against untrusted `db_table` values and ensures quoting is safe.
+            if not re.match(r"^[A-Za-z0-9_]+$", table):
+                raise ValueError(f"Unsafe table name detected: {table!r}")
+
+            # Quote the table name using the backend's quoting rule (adds backticks/quotes).
+            quoted_table = connection.ops.quote_name(table)
+
             # Select columns and add a literal source column. No WHERE clause.
+            # Use parameter placeholders for user-controlled values (source, limit).
             select_sql = (
                 f"(SELECT `name` AS item, `price` AS value, `unit`, `url`, `location`, `category`, `created_at`, `updated_at`, %s AS source "
-                f"FROM `{table}` ORDER BY `updated_at` DESC LIMIT %s)"
+                f"FROM {quoted_table} ORDER BY `updated_at` DESC LIMIT %s)"
             )
 
             parts.append(select_sql)
@@ -48,8 +59,19 @@ class PricingRepository:
         # Wrap the union so we can order the final result across vendors.
         full_sql = f"SELECT * FROM ({union_sql}) AS combined ORDER BY value ASC"
 
-        with connection.cursor() as cur:
-            cur.execute(full_sql, params)
+
+        cursor_obj = None
+        try:
+      
+            cursor_obj = connection.cursor(prepared=True)  # type: ignore[arg-type]
+        except TypeError:
+            cursor_obj = connection.cursor()
+
+        # Ensure params are passed as a tuple to DB-API execute (safer and standard).
+        exec_params = tuple(params)
+
+        with cursor_obj as cur:
+            cur.execute(full_sql, exec_params)
             cols = [c[0] for c in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
