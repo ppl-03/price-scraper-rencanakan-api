@@ -1,5 +1,5 @@
 """
-Unit tests for Tokopedia profiler with comparison functionality
+Unit tests for Tokopedia profiler
 """
 
 import unittest
@@ -140,7 +140,7 @@ class TestTokopediaProfiler(unittest.TestCase):
         # Mock the scraper to avoid actual network calls
         from unittest.mock import Mock, patch
         mock_result = Mock()
-        mock_result.products = [Mock(name="Test", price=1000, url="https://test.com")]
+        mock_result.products = [Mock(name="Test", price=1000, url="http://test.com")]
         
         with patch.object(self.profiler, 'real_scraper') as mock_scraper:
             mock_scraper.scrape_products_with_filters.return_value = mock_result
@@ -286,192 +286,22 @@ class TestTokopediaProfiler(unittest.TestCase):
                 self.profiler.run_complete_profiling()
     
     def test_main_function(self):
-        """Test main entry point with comparison mode"""
+        """Test main entry point (lines 146-155)"""
         from unittest.mock import patch, Mock
-        import sys
         
         # Mock TokopediaProfiler to avoid actual profiling
         with patch('api.tokopedia.utils.tokopedia_profiler.TokopediaProfiler') as MockProfiler:
             mock_instance = Mock()
             MockProfiler.return_value = mock_instance
             
-            # Mock sys.argv to simulate command line arguments
-            with patch.object(sys, 'argv', ['tokopedia_profiler.py', '--iterations', '3']):
-                # Import and call main
-                from api.tokopedia.utils.tokopedia_profiler import main
-                
-                main()
-                
-                # Verify profiler was created and run_profiling_comparison was called
-                MockProfiler.assert_called_once()
-                mock_instance.run_profiling_comparison.assert_called_once_with(iterations=3)
-    
-    def test_run_without_profiling(self):
-        """Test running scraper without profiling"""
-        from unittest.mock import patch, Mock
-        
-        # Mock the scraper
-        with patch('api.tokopedia.utils.tokopedia_profiler.create_tokopedia_scraper') as mock_create:
-            mock_scraper = Mock()
-            mock_result = Mock()
-            mock_result.products = [Mock(name="Test", price=1000)]
-            mock_scraper.scrape_products_with_filters.return_value = mock_result
-            mock_create.return_value = mock_scraper
+            # Import and call main
+            from api.tokopedia.utils.tokopedia_profiler import main
             
-            result = self.profiler.run_without_profiling(iterations=1)
+            main()
             
-            self.assertIsNotNone(result)
-            self.assertIn('total_time', result)
-            self.assertIn('avg_time', result)
-            self.assertIn('iterations', result)
-            self.assertIn('results', result)
-            self.assertEqual(result['iterations'], 1)
-            self.assertEqual(len(result['results']), 1)
-    
-    def test_run_with_profiling(self):
-        """Test running scraper with profiling enabled"""
-        from unittest.mock import patch, Mock
-        
-        # Mock the scraper
-        with patch('api.tokopedia.utils.tokopedia_profiler.create_tokopedia_scraper') as mock_create:
-            mock_scraper = Mock()
-            mock_result = Mock()
-            mock_result.products = [Mock(name="Test", price=1000)]
-            mock_scraper.scrape_products_with_filters.return_value = mock_result
-            mock_create.return_value = mock_scraper
-            
-            result = self.profiler.run_with_profiling(iterations=1)
-            
-            self.assertIsNotNone(result)
-            self.assertIn('total_time', result)
-            self.assertIn('avg_time', result)
-            self.assertIn('iterations', result)
-            self.assertIn('results', result)
-            self.assertIn('profiling_stats', result)
-            self.assertEqual(result['iterations'], 1)
-    
-    def test_calculate_overhead(self):
-        """Test overhead calculation between profiling and non-profiling"""
-        without = {
-            'total_time': 10.0,
-            'avg_time': 5.0,
-            'iterations': 2
-        }
-        with_prof = {
-            'total_time': 12.0,
-            'avg_time': 6.0,
-            'iterations': 2
-        }
-        
-        overhead = self.profiler.calculate_overhead(without, with_prof)
-        
-        self.assertIn('time_overhead', overhead)
-        self.assertIn('overhead_percentage', overhead)
-        self.assertIn('slowdown_factor', overhead)
-        self.assertEqual(overhead['time_overhead'], 2.0)
-        self.assertEqual(overhead['overhead_percentage'], 20.0)
-        self.assertEqual(overhead['slowdown_factor'], 1.2)
-    
-    def test_save_comparison_report(self):
-        """Test saving comparison report to JSON"""
-        import tempfile
-        import json
-        from unittest.mock import patch
-        
-        without = {
-            'total_time': 10.0,
-            'avg_time': 5.0,
-            'iterations': 2,
-            'results': []
-        }
-        with_prof = {
-            'total_time': 12.0,
-            'avg_time': 6.0,
-            'iterations': 2,
-            'results': []
-        }
-        overhead = {
-            'time_overhead': 2.0,
-            'overhead_percentage': 20.0,
-            'slowdown_factor': 1.2
-        }
-        
-        # Create temporary directory for output
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            self.profiler.output_dir = temp_path
-            
-            report_file = self.profiler.save_comparison_report(without, with_prof, overhead)
-            
-            self.assertTrue(report_file.exists())
-            
-            # Read and verify JSON content
-            with open(report_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            self.assertIn('timestamp', data)
-            self.assertIn('comparison_type', data)
-            self.assertIn('results', data)
-            self.assertEqual(data['comparison_type'], 'profiling_overhead')
-    
-    def test_run_profiling_comparison(self):
-        """Test complete profiling comparison workflow"""
-        from unittest.mock import patch, Mock
-        
-        # Mock the scraper
-        with patch('api.tokopedia.utils.tokopedia_profiler.create_tokopedia_scraper') as mock_create:
-            mock_scraper = Mock()
-            mock_result = Mock()
-            mock_result.products = []
-            mock_scraper.scrape_products_with_filters.return_value = mock_result
-            mock_create.return_value = mock_scraper
-            
-            # Mock time.sleep to speed up test
-            with patch('time.sleep'):
-                self.profiler.run_profiling_comparison(iterations=1)
-                
-                # Verify scraper was called
-                self.assertGreaterEqual(mock_scraper.scrape_products_with_filters.call_count, 2)
-    
-    def test_run_without_profiling_handles_exceptions(self):
-        """Test that run_without_profiling handles exceptions gracefully"""
-        from unittest.mock import patch, Mock
-        import io
-        
-        # Mock the scraper to raise exception
-        with patch('api.tokopedia.utils.tokopedia_profiler.create_tokopedia_scraper') as mock_create:
-            mock_scraper = Mock()
-            mock_scraper.scrape_products_with_filters.side_effect = Exception("Network error")
-            mock_create.return_value = mock_scraper
-            
-            captured_output = io.StringIO()
-            with patch('sys.stdout', new=captured_output):
-                result = self.profiler.run_without_profiling(iterations=1)
-            
-            # Should still return a result with error recorded
-            self.assertIsNotNone(result)
-            self.assertEqual(len(result['results']), 1)
-            self.assertIn('error', result['results'][0])
-    
-    def test_run_with_profiling_handles_exceptions(self):
-        """Test that run_with_profiling handles exceptions gracefully"""
-        from unittest.mock import patch, Mock
-        import io
-        
-        # Mock the scraper to raise exception
-        with patch('api.tokopedia.utils.tokopedia_profiler.create_tokopedia_scraper') as mock_create:
-            mock_scraper = Mock()
-            mock_scraper.scrape_products_with_filters.side_effect = Exception("Network error")
-            mock_create.return_value = mock_scraper
-            
-            captured_output = io.StringIO()
-            with patch('sys.stdout', new=captured_output):
-                result = self.profiler.run_with_profiling(iterations=1)
-            
-            # Should still return a result with error recorded
-            self.assertIsNotNone(result)
-            self.assertEqual(len(result['results']), 1)
-            self.assertIn('error', result['results'][0])
+            # Verify profiler was created and run_complete_profiling was called
+            MockProfiler.assert_called_once()
+            mock_instance.run_complete_profiling.assert_called_once()
 
 
 class TestTokopediaScraperIntegration(unittest.TestCase):
