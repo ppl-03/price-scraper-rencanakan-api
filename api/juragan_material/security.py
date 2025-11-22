@@ -83,19 +83,22 @@ class InputValidator(BaseInputValidator):
     def sanitize_for_logging(cls, value: str) -> str:
         """
         Sanitize input for logging to prevent log injection.
-        Removes newlines and carriage returns.
+        Encodes non-alphanumeric data using base64 to prevent injection attacks.
         """
         if not value:
             return ""
         
-        # Remove newlines and carriage returns
-        sanitized = value.replace('\n', '').replace('\r', '')
-        
-        # Remove non-printable characters
-        sanitized = ''.join(c if c.isprintable() or c == ' ' else '' for c in sanitized)
-        
-        # Limit length
-        return sanitized[:500]
+        # For alphanumeric data with common safe characters, log directly (limited length)
+        if value.replace('_', '').replace('-', '').replace('.', '').replace(' ', '').isalnum():
+            # Remove newlines and carriage returns
+            sanitized = value.replace('\n', '').replace('\r', '')
+            # Remove non-printable characters
+            sanitized = ''.join(c if c.isprintable() or c == ' ' else '' for c in sanitized)
+            return sanitized[:500]
+        else:
+            # For non-alphanumeric data, use base64 encoding to prevent injection
+            import base64
+            return base64.b64encode(value.encode('UTF-8')).decode('UTF-8')[:500]
 
 
 class AccessControlManager(BaseAccessControlManager):

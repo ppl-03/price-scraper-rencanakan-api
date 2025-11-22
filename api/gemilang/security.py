@@ -369,7 +369,13 @@ class InputValidator:
             ]
             for pattern in sql_patterns:
                 if pattern in value_stripped:
-                    logger.warning(f"SQL injection attempt in boolean field '{field_name}': {value}")
+                    # Sanitize user input for logging - encode non-alphanumeric data
+                    import base64
+                    if value.replace('_', '').replace('-', '').isalnum():
+                        safe_value = value[:50]  # Limit length
+                    else:
+                        safe_value = base64.b64encode(value.encode('UTF-8')).decode('UTF-8')[:100]
+                    logger.warning(f"SQL injection attempt in boolean field '{field_name}': {safe_value}")
                     return False, f"{field_name} contains forbidden characters", None
             
             # Only accept valid boolean strings
@@ -378,7 +384,7 @@ class InputValidator:
             elif value_stripped in ['false', '0', 'no']:
                 return True, "", False
             else:
-                # Reject any other value
+                # Reject any other value - no logging of user input needed here
                 return False, f"{field_name} must be 'true', 'false', '1', '0', 'yes', or 'no'", None
         
         return False, f"{field_name} must be a boolean value", None

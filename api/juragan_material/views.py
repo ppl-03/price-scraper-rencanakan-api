@@ -195,6 +195,7 @@ def scrape_products(request):
             logger.warning(f"Invalid save_to_db parameter: {InputValidator.sanitize_for_logging(save_raw)}")
             return JsonResponse({'error': error_msg or 'Invalid save_to_db'}, status=400)
         
+        # Log validated data only - page is server-validated integer, keyword is sanitized
         logger.info(f"Scraping request validated: keyword={InputValidator.sanitize_for_logging(keyword)}, page={page}")
         
         # Perform scraping and optional saving
