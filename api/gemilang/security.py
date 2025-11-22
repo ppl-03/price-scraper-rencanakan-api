@@ -355,39 +355,55 @@ class InputValidator:
             return True, "", value
         
         if isinstance(value, str):
-            # Strip and lowercase for comparison
-            value_stripped = value.strip().lower()
-            
-            # Reject empty strings
-            if not value_stripped:
-                return False, f"{field_name} cannot be empty", None
-            
-            # Detect SQL injection patterns
-            sql_patterns = [
-                'select', 'insert', 'update', 'delete', 'drop', 'union',
-                '--', ';', '/*', '*/', 'xp_', 'sp_', 'exec', 'execute', "'", '"'
-            ]
-            for pattern in sql_patterns:
-                if pattern in value_stripped:
-                    # Sanitize user input for logging - encode non-alphanumeric data
-                    import base64
-                    if value.replace('_', '').replace('-', '').isalnum():
-                        safe_value = value[:50]  # Limit length
-                    else:
-                        safe_value = base64.b64encode(value.encode('UTF-8')).decode('UTF-8')[:100]
-                    logger.warning(f"SQL injection attempt in boolean field '{field_name}': {safe_value}")
-                    return False, f"{field_name} contains forbidden characters", None
-            
-            # Only accept valid boolean strings
-            if value_stripped in ['true', '1', 'yes']:
-                return True, "", True
-            elif value_stripped in ['false', '0', 'no']:
-                return True, "", False
-            else:
-                # Reject any other value - no logging of user input needed here
-                return False, f"{field_name} must be 'true', 'false', '1', '0', 'yes', or 'no'", None
+            return cls._validate_boolean_string(value, field_name)
         
         return False, f"{field_name} must be a boolean value", None
+    
+    @classmethod
+    def _validate_boolean_string(cls, value: str, field_name: str) -> Tuple[bool, str, Optional[bool]]:
+        """
+        Helper method to validate boolean string values.
+        Extracted to reduce cognitive complexity.
+        """
+        value_stripped = value.strip().lower()
+        
+        # Reject empty strings
+        if not value_stripped:
+            return False, f"{field_name} cannot be empty", None
+        
+        # Detect SQL injection patterns
+        if cls._contains_sql_injection_pattern(value_stripped):
+            # Don't log user-controlled data - just log field name
+            logger.warning(f"SQL injection attempt detected in boolean field '{field_name}'")
+            return False, f"{field_name} contains forbidden characters", None
+        
+        # Only accept valid boolean strings
+        return cls._parse_boolean_value(value_stripped, field_name)
+    
+    @classmethod
+    def _contains_sql_injection_pattern(cls, value: str) -> bool:
+        """
+        Check if value contains SQL injection patterns.
+        Extracted to reduce cognitive complexity.
+        """
+        sql_patterns = [
+            'select', 'insert', 'update', 'delete', 'drop', 'union',
+            '--', ';', '/*', '*/', 'xp_', 'sp_', 'exec', 'execute', "'", '"'
+        ]
+        return any(pattern in value for pattern in sql_patterns)
+    
+    @classmethod
+    def _parse_boolean_value(cls, value_stripped: str, field_name: str) -> Tuple[bool, str, Optional[bool]]:
+        """
+        Parse the boolean value from valid string representations.
+        Extracted to reduce cognitive complexity.
+        """
+        if value_stripped in ['true', '1', 'yes']:
+            return True, "", True
+        elif value_stripped in ['false', '0', 'no']:
+            return True, "", False
+        else:
+            return False, f"{field_name} must be 'true', 'false', '1', '0', 'yes', or 'no'", None
     
     @classmethod
     def _detect_sql_injection(cls, value: str) -> bool:
