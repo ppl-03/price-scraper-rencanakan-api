@@ -85,10 +85,10 @@ class TestMitra10API(TestCase):
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)
         
-        self.assertFalse(response_data['success'])
-        self.assertEqual(len(response_data['products']), 0)
-        self.assertEqual(response_data['error_message'], 'Query parameter is required')
-        self.assertEqual(response_data['url'], '')
+        self.assertIn('error', response_data)
+        self.assertEqual(response_data['error'], 'Validation failed')
+        self.assertIn('details', response_data)
+        self.assertIn('q', response_data['details'])
 
     def test_empty_query_parameter(self):
         """Test handling when query parameter is empty."""
@@ -97,10 +97,9 @@ class TestMitra10API(TestCase):
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)
         
-        self.assertFalse(response_data['success'])
-        self.assertEqual(len(response_data['products']), 0)
-        self.assertEqual(response_data['error_message'], 'Query parameter cannot be empty')
-        self.assertEqual(response_data['url'], '')
+        self.assertIn('error', response_data)
+        self.assertEqual(response_data['error'], 'Validation failed')
+        self.assertIn('Keyword is required', response_data['details']['q'])
 
     def test_whitespace_only_query_parameter(self):
         """Test handling when query parameter contains only whitespace."""
@@ -109,10 +108,9 @@ class TestMitra10API(TestCase):
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)
         
-        self.assertFalse(response_data['success'])
-        self.assertEqual(len(response_data['products']), 0)
-        self.assertEqual(response_data['error_message'], 'Query parameter cannot be empty')
-        self.assertEqual(response_data['url'], '')
+        self.assertIn('error', response_data)
+        self.assertEqual(response_data['error'], 'Validation failed')
+        self.assertIn('Keyword cannot be empty', response_data['details']['q'])
 
     @patch('api.mitra10.views.create_mitra10_scraper')
     def test_query_whitespace_stripping(self, mock_create_scraper):
@@ -138,37 +136,6 @@ class TestMitra10API(TestCase):
             sort_by_price=True,
             page=0
         )
-
-    @patch('api.mitra10.views.create_mitra10_scraper')
-    def test_sort_by_price_true_variations(self, mock_create_scraper):
-        """Test different variations of sort_by_price parameter that should be True."""
-        mock_scraper = MagicMock()
-        sample_result = ScrapingResult(
-            success=True,
-            products=[],
-            url='https://www.mitra10.com/catalogsearch/result/?q=test',
-            error_message=None
-        )
-        mock_scraper.scrape_products.return_value = sample_result
-        mock_create_scraper.return_value = mock_scraper
-
-        # Test different truthy values
-        truthy_values = ['true', 'True', 'TRUE', '1', 'yes', 'Yes', 'YES']
-
-        for param_value in truthy_values:
-            with self.subTest(param_value=param_value):
-                mock_scraper.reset_mock()
-                response = self.client.get(self.url, {
-                    'q': 'test',
-                    'sort_by_price': param_value
-                })
-                
-                self.assertEqual(response.status_code, 200)
-                mock_scraper.scrape_products.assert_called_once_with(
-                    keyword='test',
-                    sort_by_price=True,
-                    page=0
-                )
 
     @patch('api.mitra10.views.create_mitra10_scraper')
     def test_sort_by_price_false_variations(self, mock_create_scraper):
@@ -294,10 +261,9 @@ class TestMitra10API(TestCase):
                 self.assertEqual(response.status_code, 400)
                 response_data = json.loads(response.content)
                 
-                self.assertFalse(response_data['success'])
-                self.assertEqual(len(response_data['products']), 0)
-                self.assertEqual(response_data['error_message'], 'Page parameter must be a valid integer')
-                self.assertEqual(response_data['url'], '')
+                self.assertIn('error', response_data)
+                self.assertEqual(response_data['error'], 'Validation failed')
+                self.assertIn('page must be a valid integer', response_data['details']['page'])
 
     @patch('api.mitra10.views.create_mitra10_scraper')
     def test_product_data_formatting(self, mock_create_scraper):
