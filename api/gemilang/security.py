@@ -344,27 +344,42 @@ class InputValidator:
     @classmethod
     def validate_boolean(cls, value: Any, field_name: str) -> Tuple[bool, str, Optional[bool]]:
         """
-        Validate boolean input.
+        Validate boolean input with strict validation.
+        Only accepts: True, False, 'true', 'false', '1', '0', 'yes', 'no'
+        Rejects SQL injection attempts and invalid values.
         """
         if value is None:
             return True, "", None  # Return None to allow view to set default
-        
-        if value == '':
-            # Empty string defaults to False for sort_by_price compatibility
-            return True, "", False
         
         if isinstance(value, bool):
             return True, "", value
         
         if isinstance(value, str):
-            value_lower = value.lower()
-            if value_lower in ['true', '1', 'yes']:
+            # Strip and lowercase for comparison
+            value_stripped = value.strip().lower()
+            
+            # Reject empty strings
+            if not value_stripped:
+                return False, f"{field_name} cannot be empty", None
+            
+            # Detect SQL injection patterns
+            sql_patterns = [
+                'select', 'insert', 'update', 'delete', 'drop', 'union',
+                '--', ';', '/*', '*/', 'xp_', 'sp_', 'exec', 'execute', "'", '"'
+            ]
+            for pattern in sql_patterns:
+                if pattern in value_stripped:
+                    logger.warning(f"SQL injection attempt in boolean field '{field_name}': {value}")
+                    return False, f"{field_name} contains forbidden characters", None
+            
+            # Only accept valid boolean strings
+            if value_stripped in ['true', '1', 'yes']:
                 return True, "", True
-            elif value_lower in ['false', '0', 'no']:
+            elif value_stripped in ['false', '0', 'no']:
                 return True, "", False
             else:
-                # Invalid values default to False for sort_by_price compatibility
-                return True, "", False
+                # Reject any other value
+                return False, f"{field_name} must be 'true', 'false', '1', '0', 'yes', or 'no'", None
         
         return False, f"{field_name} must be a boolean value", None
     

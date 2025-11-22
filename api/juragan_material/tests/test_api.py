@@ -155,7 +155,8 @@ class TestJuraganMaterialViewsDirect(TestCase):
             page=0
         )
         # Verify response has expected structure
-        data = response.json()
+        import json
+        data = json.loads(response.content)
         self.assertIn('success', data)
         self.assertIn('products', data)
     
@@ -169,7 +170,8 @@ class TestJuraganMaterialViewsDirect(TestCase):
         response = views.scrape_products(request)
         
         self.assertEqual(response.status_code, 400)
-        data = response.json()
+        import json
+        data = json.loads(response.content)
         self.assertEqual(data['error'], 'Keyword parameter is required')
     
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')

@@ -690,10 +690,22 @@ class TestA03InjectionPrevention(TestCase):
         """Test that injection in boolean param is rejected"""
         print("\n[A03] Test: Boolean validation - Injection attempt")
         
-        is_valid, _, _ = InputValidator.validate_boolean_param("true' OR '1'='1", "flag")
-        
+        # Test SQL injection attempts are rejected
+        is_valid, error_msg, _ = InputValidator.validate_boolean("true' OR '1'='1", "flag")
         self.assertFalse(is_valid, "SQL injection in boolean should be rejected")
+        self.assertIn("forbidden", error_msg.lower())
+        
+        # Test valid boolean values are accepted
+        is_valid, _, value = InputValidator.validate_boolean("true", "flag")
+        self.assertTrue(is_valid)
+        self.assertTrue(value)
+        
+        is_valid, _, value = InputValidator.validate_boolean("false", "flag")
+        self.assertTrue(is_valid)
+        self.assertFalse(value)
+        
         print("✓ SQL injection in boolean parameter rejected")
+        print("✓ Valid boolean values accepted")
     
     def test_sort_type_whitelist(self):
         """Test that sort_type uses whitelist validation"""
