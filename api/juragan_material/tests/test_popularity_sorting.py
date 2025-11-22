@@ -7,6 +7,9 @@ from unittest.mock import patch, MagicMock, Mock
 import json
 from api.interfaces import Product, ScrapingResult
 
+# Valid API token for testing
+TEST_API_TOKEN = 'dev-token-12345'
+
 
 class JuraganMaterialPopularitySortingTests(TestCase):
     """Test suite for popularity sorting endpoints"""
@@ -70,7 +73,7 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_type': 'cheapest'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -115,7 +118,7 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_type': 'popularity'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -155,7 +158,7 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
             
             response = self.client.get(self.scrape_and_save_url, {
                 'keyword': 'semen'
-            })
+            }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
             
             self.assertEqual(response.status_code, 200)
             data = response.json()
@@ -174,7 +177,7 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_type': 'invalid'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -187,7 +190,7 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         """Test scrape-and-save requires keyword parameter"""
         response = self.client.get(self.scrape_and_save_url, {
             'sort_type': 'cheapest'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -204,7 +207,7 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_and_save_url, {
             'keyword': 'nonexistent',
             'sort_type': 'cheapest'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -228,7 +231,7 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_type': 'cheapest'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 500)
         data = response.json()
@@ -260,7 +263,7 @@ class TestScrapePopularityEndpoint(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_popularity_url, {
             'keyword': 'semen',
             'top_n': '5'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -283,7 +286,7 @@ class TestScrapePopularityEndpoint(JuraganMaterialPopularitySortingTests):
         
         response = self.client.get(self.scrape_popularity_url, {
             'keyword': 'semen'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_popularity_products.assert_called_once_with(
@@ -301,7 +304,7 @@ class TestScrapePopularityEndpoint(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_popularity_url, {
             'keyword': 'semen',
             'top_n': '10'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_popularity_products.assert_called_once_with(
@@ -316,7 +319,7 @@ class TestScrapePopularityEndpoint(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_popularity_url, {
             'keyword': 'semen',
             'top_n': 'invalid'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -325,7 +328,7 @@ class TestScrapePopularityEndpoint(JuraganMaterialPopularitySortingTests):
     
     def test_scrape_popularity_missing_keyword(self):
         """Test scrape_popularity requires keyword parameter"""
-        response = self.client.get(self.scrape_popularity_url, {})
+        response = self.client.get(self.scrape_popularity_url, {}, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -342,7 +345,7 @@ class TestScrapePopularityEndpoint(JuraganMaterialPopularitySortingTests):
             'keyword': 'semen',
             'page': '2',
             'top_n': '5'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_popularity_products.assert_called_once_with(
@@ -592,7 +595,7 @@ class TestScrapeAndSaveErrorHandling(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_type': 'cheapest'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 500)
         data = response.json()
@@ -607,7 +610,7 @@ class TestScrapeAndSaveErrorHandling(JuraganMaterialPopularitySortingTests):
             'keyword': 'semen',
             'sort_type': 'cheapest',
             'page': 'invalid'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -624,7 +627,7 @@ class TestScrapePopularityErrorHandling(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_popularity_url, {
             'keyword': 'semen',
             'page': 'invalid'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -641,7 +644,7 @@ class TestScrapePopularityErrorHandling(JuraganMaterialPopularitySortingTests):
         response = self.client.get(self.scrape_popularity_url, {
             'keyword': 'semen',
             'top_n': '5'
-        })
+        }, HTTP_X_API_TOKEN=TEST_API_TOKEN)
         
         self.assertEqual(response.status_code, 500)
         data = response.json()
