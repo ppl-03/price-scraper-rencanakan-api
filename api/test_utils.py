@@ -196,17 +196,17 @@ class BaseScraperAPITestCase(TestCase):
     def test_sort_by_price_variations(self):
         """Test various sort_by_price parameter values."""
         test_cases = [
-            ('1', True),
-            ('yes', True),
-            ('True', True),
-            ('false', False),
-            ('0', False),
-            ('no', False),
-            ('invalid', False),
-            ('', False)
+            ('1', True, 200),
+            ('yes', True, 200),
+            ('True', True, 200),
+            ('false', False, 200),
+            ('0', False, 200),
+            ('no', False, 200),
+            ('invalid', None, 400),  # Invalid values should return 400
+            ('', None, 400)  # Empty values should return 400
         ]
         
-        for sort_value, expected in test_cases:
+        for sort_value, expected, expected_status in test_cases:
             with self.subTest(sort_value=sort_value, expected=expected):
                 with patch(self.patch_path) as mock_create_scraper:
                     mock_scraper = Mock()
@@ -219,12 +219,17 @@ class BaseScraperAPITestCase(TestCase):
                         'sort_by_price': sort_value
                     })
                     
-                    self.assertEqual(response.status_code, 200)
-                    mock_scraper.scrape_products.assert_called_once_with(
-                        keyword='test',
-                        sort_by_price=expected,
-                        page=0
-                    )
+                    self.assertEqual(response.status_code, expected_status)
+                    
+                    if expected_status == 200:
+                        mock_scraper.scrape_products.assert_called_once_with(
+                            keyword='test',
+                            sort_by_price=expected,
+                            page=0
+                        )
+                    else:
+                        # For validation errors, scraper should not be called
+                        mock_scraper.scrape_products.assert_not_called()
 
     def test_keyword_with_leading_trailing_spaces(self):
         """Test keyword trimming functionality."""
