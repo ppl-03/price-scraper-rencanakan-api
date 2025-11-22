@@ -129,17 +129,13 @@ class TestJuraganMaterialViewsDirect(TestCase):
         self.factory = RequestFactory()
     
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')
-    @patch('api.juragan_material.views.validate_scraping_request')
-    @patch('api.juragan_material.views.format_scraping_response')
-    def test_scrape_products_view_success_flow(self, mock_format, mock_validate, mock_create):
+    def test_scrape_products_view_success_flow(self, mock_create):
         """Test complete success flow of scrape_products view."""
         # Setup mocks
-        mock_validate.return_value = ('test keyword', True, 0, None)
         mock_scraper = Mock()
         mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
         mock_scraper.scrape_products.return_value = mock_result
         mock_create.return_value = mock_scraper
-        mock_format.return_value = {'success': True, 'products': []}
         
         # Create request
         request = self.factory.get(
@@ -152,38 +148,35 @@ class TestJuraganMaterialViewsDirect(TestCase):
         
         # Assertions
         self.assertEqual(response.status_code, 200)
-        mock_validate.assert_called_once_with(request)
         mock_create.assert_called_once()
         mock_scraper.scrape_products.assert_called_once_with(
-            keyword='test keyword',
+            keyword='test',
             sort_by_price=True,
             page=0
         )
-        mock_format.assert_called_once_with(mock_result)
     
-    @patch('api.juragan_material.views.validate_scraping_request')
-    def test_scrape_products_view_validation_error(self, mock_validate):
+    def test_scrape_products_view_validation_error(self):
         """Test scrape_products view with validation error."""
-        from django.http import JsonResponse
-        error_response = JsonResponse({'error': 'Invalid keyword'}, status=400)
-        mock_validate.return_value = (None, None, None, error_response)
+        import json
         
+        # Test with missing keyword (should trigger validation error)
         request = self.factory.get(
             '/api/juragan_material/scrape/',
             HTTP_X_API_TOKEN=TEST_API_TOKEN
         )
         response = views.scrape_products(request)
         
-        self.assertEqual(response, error_response)
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertIn('error', data)
+        self.assertEqual(data['error'], 'Keyword parameter is required')
     
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')
-    @patch('api.juragan_material.views.validate_scraping_request')
     @patch('api.juragan_material.views.handle_scraping_exception')
-    def test_scrape_products_view_exception_handling(self, mock_handle, mock_validate, mock_create):
+    def test_scrape_products_view_exception_handling(self, mock_handle, mock_create):
         """Test scrape_products view exception handling."""
         from django.http import JsonResponse
         
-        mock_validate.return_value = ('test', True, 0, None)
         mock_scraper = Mock()
         mock_scraper.scrape_products.side_effect = Exception("Network error")
         mock_create.return_value = mock_scraper
