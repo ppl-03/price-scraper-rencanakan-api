@@ -172,7 +172,7 @@ def scrape_products(request):
         # SECURITY: Validate page parameter (integer validation)
         page_raw = request.GET.get('page', '0')
         is_valid, page, error_msg = InputValidator.validate_integer_param(
-            page_raw, 'page', min_val=0, max_val=100
+            page_raw, 'page', min_val=None, max_val=100
         )
         
         if not is_valid:
@@ -180,7 +180,7 @@ def scrape_products(request):
             return JsonResponse({'error': error_msg or 'Invalid page'}, status=400)
         
         # SECURITY: Validate sort_by_price parameter (boolean validation)
-        sort_raw = request.GET.get('sort_by_price', 'false')
+        sort_raw = request.GET.get('sort_by_price', 'true')
         is_valid, sort_by_price, error_msg = InputValidator.validate_boolean_param(sort_raw, 'sort_by_price')
         
         if not is_valid:

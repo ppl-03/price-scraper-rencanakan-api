@@ -289,7 +289,7 @@ class InputValidator:
         keyword = keyword.strip()
         
         if not keyword:
-            return False, "Keyword cannot be empty", None
+            return False, "Keyword parameter is required", None
         
         # Whitelist validation - only allow safe characters
         if not cls.KEYWORD_PATTERN.match(keyword):
@@ -318,25 +318,26 @@ class InputValidator:
         Validate integer input with range checking.
         """
         if value is None:
-            return False, f"{field_name} is required", None
+            return False, f"{field_name.capitalize()} parameter is required", None
         
         # Type checking
         if isinstance(value, str):
-            if not cls.NUMERIC_PATTERN.match(value):
-                return False, f"{field_name} must be a valid integer", None
+            # Allow negative sign for integers
+            if not value.lstrip('-').isdigit():
+                return False, f"{field_name.capitalize()} parameter must be a valid integer", None
             try:
                 value = int(value)
             except ValueError:
-                return False, f"{field_name} must be a valid integer", None
+                return False, f"{field_name.capitalize()} parameter must be a valid integer", None
         elif not isinstance(value, int):
-            return False, f"{field_name} must be an integer", None
+            return False, f"{field_name.capitalize()} parameter must be an integer", None
         
         # Range validation
         if min_value is not None and value < min_value:
-            return False, f"{field_name} must be at least {min_value}", None
+            return False, f"{field_name.capitalize()} parameter must be at least {min_value}", None
         
         if max_value is not None and value > max_value:
-            return False, f"{field_name} must be at most {max_value}", None
+            return False, f"{field_name.capitalize()} parameter must be at most {max_value}", None
         
         return True, "", value
     
@@ -349,8 +350,8 @@ class InputValidator:
             return True, "", None  # Return None to allow view to set default
         
         if value == '':
-            # Empty string is invalid, not a missing value
-            return False, f"{field_name} must be a boolean value", None
+            # Empty string defaults to False for sort_by_price compatibility
+            return True, "", False
         
         if isinstance(value, bool):
             return True, "", value
@@ -362,7 +363,8 @@ class InputValidator:
             elif value_lower in ['false', '0', 'no']:
                 return True, "", False
             else:
-                return False, f"{field_name} must be a boolean value", None
+                # Invalid values default to False for sort_by_price compatibility
+                return True, "", False
         
         return False, f"{field_name} must be a boolean value", None
     
