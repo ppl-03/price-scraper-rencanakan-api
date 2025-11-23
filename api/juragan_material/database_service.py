@@ -1,5 +1,6 @@
 from django.db import connection, transaction
 from django.utils import timezone
+from db_pricing.anomaly_service import PriceAnomalyService
 
 class JuraganMaterialDatabaseService:
     def _validate_dict_item(self, item):
@@ -36,10 +37,11 @@ class JuraganMaterialDatabaseService:
 
         now = timezone.now()
 
+        # Include category column to avoid DB errors when category has no default
         sql = """
             INSERT INTO juragan_material_products
-                (name, price, url, unit, location, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s,%s)
+                (name, price, url, unit, location, category, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         params_list = [
             self._create_product_params(item, now)
@@ -55,10 +57,13 @@ class JuraganMaterialDatabaseService:
     
     def _create_product_params(self, item, now):
         """Helper method to create product parameters for database insertion."""
+        # Provide empty string for category when not present to satisfy DB schema
         if isinstance(item, dict):
-            return (item["name"], item["price"], item["url"], item["unit"], item["location"], now, now)
+            category = item.get("category", "")
+            return (item["name"], item["price"], item["url"], item["unit"], item["location"], category, now, now)
         elif isinstance(item, object):
-            return (item.name, item.price, item.url, item.unit,item.location,now, now)
+            category = getattr(item, 'category', '')
+            return (item.name, item.price, item.url, item.unit, item.location, category, now, now)
     
     def _extract_product_identifiers(self, item):
         """Helper method to extract product identifiers (name, url, unit) from item."""
@@ -105,22 +110,46 @@ class JuraganMaterialDatabaseService:
             return self._create_anomaly_object(item, existing_price, new_price, price_diff_pct)
         return None
 
+    def _save_detected_anomalies(self, anomalies):
+        """Save detected anomalies to database for admin review"""
+        if not anomalies:
+            return
+        
+        anomaly_result = PriceAnomalyService.save_anomalies('juragan_material', anomalies)
+        if not anomaly_result['success']:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
         new_price = item["price"] if isinstance(item, dict) else item.price
         if existing_price != new_price:
             anomaly = self._check_anomaly(item, existing_price, new_price)
             if anomaly:
+                # Price change detected - save anomaly for admin approval
                 anomalies.append(anomaly)
-            cursor.execute(
-                "UPDATE juragan_material_products SET price = %s, updated_at = %s WHERE id = %s",
-                (new_price, now, existing_id)
-            )
-            return 1
+                import logging
+                logger = logging.getLogger(__name__)
+                item_name = item["name"] if isinstance(item, dict) else item.name
+                logger.warning(
+                    f"Price anomaly detected for {item_name}: "
+                    f"{existing_price} -> {new_price}. Pending admin approval."
+                )
+                # Do NOT update price - wait for admin approval
+                return 0
+            else:
+                # Small price change (< 15%) - update automatically
+                cursor.execute(
+                    "UPDATE juragan_material_products SET price = %s, updated_at = %s WHERE id = %s",
+                    (new_price, now, existing_id)
+                )
+                return 1
         return 0
 
     def _insert_new_product(self, cursor, item, now):
+        # Insert with category column (default to empty string if not provided)
         cursor.execute(
-            "INSERT INTO juragan_material_products (name, price, url, unit, location, created_at, updated_at) VALUES (%s, %s, %s, %s. %s, %s, %s)",
+            "INSERT INTO juragan_material_products (name, price, url, unit, location, category, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             self._create_product_params(item, now)
         )
         return 1
@@ -158,6 +187,9 @@ class JuraganMaterialDatabaseService:
                     updated, inserted = self._process_single_item(cursor, item, now, anomalies)
                     updated_count += updated
                     inserted_count += inserted
+
+        # Save anomalies to database for review
+        self._save_detected_anomalies(anomalies)
 
         return {
             "success": True,

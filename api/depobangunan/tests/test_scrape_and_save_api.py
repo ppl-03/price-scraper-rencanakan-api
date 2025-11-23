@@ -37,12 +37,18 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         # start patches once per test, stop via addCleanup
         self.p_create_scraper = patch('api.depobangunan.views.create_depo_scraper')
         self.p_db_service_cls = patch('api.depobangunan.views.DepoBangunanDatabaseService')
+        self.p_security_validate = patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
 
         self.mock_create_scraper = self.p_create_scraper.start()
         self.mock_db_service_cls = self.p_db_service_cls.start()
+        self.mock_security_validate = self.p_security_validate.start()
+        
+        # By default, security validation passes
+        self.mock_security_validate.return_value = (True, "")
 
         self.addCleanup(self.p_create_scraper.stop)
         self.addCleanup(self.p_db_service_cls.stop)
+        self.addCleanup(self.p_security_validate.stop)
 
         # by default, create_scraper returns a mock with a stubbed scrape_products attr
         self.mock_scraper = MagicMock()

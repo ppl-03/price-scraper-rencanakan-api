@@ -233,10 +233,14 @@ class TestScrapePopularityEndpoint(DepoBangunanPopularitySortingTests):
 class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
     """Tests for scrape_and_save endpoint with sort_type"""
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
     @patch('api.depobangunan.views.create_depo_scraper')
-    def test_scrape_and_save_cheapest(self, mock_create_scraper, mock_db_service):
+    def test_scrape_and_save_cheapest(self, mock_create_scraper, mock_db_service, mock_security_validate):
         """Test scrape and save with cheapest sort type"""
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
+        
         products = [
             self.create_mock_product('Product A', 10000, '/a', sold_count=5),
             self.create_mock_product('Product B', 20000, '/b', sold_count=10),
@@ -262,10 +266,14 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
         # Should save all products for cheapest
         self.assertEqual(len(mock_db.save.call_args[0][0]), 2)
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
     @patch('api.depobangunan.views.create_depo_scraper')
-    def test_scrape_and_save_popularity_filters_top_5(self, mock_create_scraper, mock_db_service):
+    def test_scrape_and_save_popularity_filters_top_5(self, mock_create_scraper, mock_db_service, mock_security_validate):
         """Test scrape and save popularity only saves top 5"""
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
+        
         # Create 10 products with different sold counts
         products = [
             self.create_mock_product(f'Product {i}', 10000 + i, f'/p{i}', sold_count=100 - i)
@@ -293,10 +301,14 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
         saved_products = mock_db.save.call_args[0][0]
         self.assertEqual(len(saved_products), 5)
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
     @patch('api.depobangunan.views.create_depo_scraper')
-    def test_scrape_and_save_popularity_sorts_by_sold_count(self, mock_create_scraper, mock_db_service):
+    def test_scrape_and_save_popularity_sorts_by_sold_count(self, mock_create_scraper, mock_db_service, mock_security_validate):
         """Test that popularity sorting actually sorts by sold_count"""
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
+        
         products = [
             self.create_mock_product('Low Sales', 10000, '/a', sold_count=5),
             self.create_mock_product('High Sales', 20000, '/b', sold_count=100),
@@ -319,10 +331,29 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
         # We can't directly check the order, but we saved 3 products
         self.assertEqual(mock_db.save.call_args[0][0][0]['name'], 'High Sales')
     
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
+    @patch('db_pricing.models.DepoBangunanProduct')
+    @patch('api.depobangunan.views.AutoCategorizationService')
     @patch('api.depobangunan.views.DepoBangunanDatabaseService')
     @patch('api.depobangunan.views.create_depo_scraper')
-    def test_scrape_and_save_with_price_update(self, mock_create_scraper, mock_db_service):
+    def test_scrape_and_save_with_price_update(self, mock_create_scraper, mock_db_service, mock_cat_service_cls, mock_model, mock_security_validate):
         """Test scrape and save with price update mode"""
+        # Mock security validation
+        mock_security_validate.return_value = (True, "")
+        
+        # Mock categorization service (for price_update mode)
+        mock_cat_service = mock_cat_service_cls.return_value
+        mock_cat_service.categorize_products.return_value = {
+            'total': 0,
+            'categorized': 0,
+            'uncategorized': 0
+        }
+        
+        # Mock DepoBangunanProduct.objects (for price_update mode)
+        mock_products = MagicMock()
+        mock_products.values_list.return_value = []
+        mock_model.objects.filter.return_value.order_by.return_value.__getitem__.return_value = mock_products
+        
         products = [
             self.create_mock_product('Product A', 10000, '/a'),
         ]
