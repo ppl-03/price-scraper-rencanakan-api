@@ -947,7 +947,7 @@ class TestDatabaseQueryValidatorCoverage(unittest.TestCase):
         """Test query validation with unknown operator (line 366)"""
         query = {'field': 'name', 'operator': 'unknown_op', 'value': 'test'}
         
-        is_valid, error_msg = DatabaseQueryValidator.validate_query(query)
+        is_valid, _ = DatabaseQueryValidator.validate_query(query)
         
         # Should return True for unknown operators (permissive)
         self.assertTrue(is_valid)

@@ -137,9 +137,8 @@ class AccessControlManager:
         token_info = cls.API_TOKENS[token]
         client_ip = get_client_ip(request)
         
-        if token_info.get('expires'):
-            if datetime.now() > token_info['expires']:
-                return False, 'Token expired', None
+        if token_info.get('expires') and datetime.now() > token_info['expires']:
+            return False, 'Token expired', None
         
         allowed_ips = token_info.get('allowed_ips', [])
         if allowed_ips and client_ip not in allowed_ips:
@@ -166,7 +165,6 @@ class AccessControlManager:
     @classmethod
     def log_access_attempt(cls, request, success: bool, reason: str = ''):
         client_ip = get_client_ip(request)
-        user_agent = sanitize_string(request.META.get('HTTP_USER_AGENT', 'unknown'))
         path = sanitize_string(request.path)
         method = request.method
         safe_reason = sanitize_string(str(reason), 100) if reason else 'unknown'
@@ -504,7 +502,7 @@ def validate_input(validators: dict):
                         data_source = {**request.GET.dict(), **json.loads(request.body)}
                     else:
                         data_source = {**request.GET.dict(), **request.POST.dict()}
-                except (ValueError, TypeError, json.JSONDecodeError, AttributeError) as e:
+                except (ValueError, TypeError, json.JSONDecodeError) as e:
                     logger.warning(f"Failed to parse request body: {str(e)}")
                     data_source = {**request.GET.dict(), **request.POST.dict()}
             else:
