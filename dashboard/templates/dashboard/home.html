@@ -26,6 +26,28 @@
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
     .table td{ vertical-align: middle; border-color:#f1f3f5; }
+    
+    /* Fixed column widths for consistent table layout */
+    .table { table-layout: fixed; width: 100%; }
+    .table th:nth-child(1), .table td:nth-child(1) { width: 35%; } /* Nama Produk */
+    .table th:nth-child(2), .table td:nth-child(2) { width: 12%; } /* Kategori */
+    .table th:nth-child(3), .table td:nth-child(3) { width: 12%; } /* Vendor */
+    .table th:nth-child(4), .table td:nth-child(4) { width: 10%; } /* Harga */
+    .table th:nth-child(5), .table td:nth-child(5) { width: 8%; }  /* Unit */
+    .table th:nth-child(6), .table td:nth-child(6) { width: 20%; } /* Lokasi */
+    
+    /* Text overflow handling */
+    .table td { 
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    /* Allow wrapping for product names only */
+    .table td.c-item {
+      white-space: normal;
+      word-wrap: break-word;
+    }
 
     /* Sort indicators */
     .th-sort { position:relative; padding-right:18px; }
@@ -284,7 +306,7 @@
               <th style="width:5%">No.</th>
               <th class="th-sort" data-key="item" style="width:28%">Nama Produk</th>
               <th class="th-sort" data-key="category" style="width:13%">Kategori</th>
-              <th class="th-sort price-align-right" data-key="price" style="width:12%">Harga</th>
+              <th class="th-sort " data-key="price" style="width:10%">Harga</th>
               <th style="width:7%">Unit</th>
               <th class="th-sort" data-key="vendor" style="width:13%">Vendor</th>
               <th class="th-sort" data-key="location" style="width:22%">Lokasi</th>
@@ -623,7 +645,7 @@
     }
 
     // ---------- Filtering + Sorting + Pagination ----------
-    const perPage = 10;
+    const perPage = 15;
     const pagination = document.getElementById("pagination");
     const tbody = document.getElementById("tableBody");
     const filterInput = document.getElementById("filterInput");
