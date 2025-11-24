@@ -24,7 +24,7 @@ class TestMitra10AnomalyIntegration(MySQLTestCase):
             {
                 "name": "Mitra10 Test Product",
                 "price": 10000,
-                "url": "https://mitra10.com/test",
+                "url": "https://www.mitra10.com/test",
                 "unit": "PCS"
             }
         ]
@@ -35,7 +35,7 @@ class TestMitra10AnomalyIntegration(MySQLTestCase):
             {
                 "name": "Mitra10 Test Product",
                 "price": 12000,
-                "url": "https://mitra10.com/test",
+                "url": "https://www.mitra10.com/test",
                 "unit": "PCS"
             }
         ]
@@ -62,7 +62,7 @@ class TestMitra10AnomalyIntegration(MySQLTestCase):
             {
                 "name": "Mitra10 Product",
                 "price": 10000,
-                "url": "https://mitra10.com/test",
+                "url": "https://www.mitra10.com/test",
                 "unit": "PCS"
             }
         ]
@@ -73,7 +73,7 @@ class TestMitra10AnomalyIntegration(MySQLTestCase):
             {
                 "name": "Mitra10 Product",
                 "price": 11000,
-                "url": "https://mitra10.com/test",
+                "url": "https://www.mitra10.com/test",
                 "unit": "PCS"
             }
         ]

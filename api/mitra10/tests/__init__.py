@@ -12,7 +12,6 @@ from .test_profiler import TestMitra10Profiler, TestProfilerIntegration, TestPro
 from .test_scraper import TestMitra10PriceScraper, TestMitra10PriceScraperPopularity
 from .test_urls import TestMitra10URLs
 from .test_views import TestMitra10Views
-from .test_mitra10_handshake import TestMitra10HandshakeTest
 from .test_unit_parser import (
     TestMitra10UnitPatternRepository,
     TestMitra10AreaPatternStrategy,

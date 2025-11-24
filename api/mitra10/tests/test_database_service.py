@@ -364,3 +364,38 @@ class TestMitra10DatabaseService(TestCase):
         self.assertEqual(result["inserted"], 1)
         product = Mitra10Product.objects.first()
         self.assertEqual(product.location, "Bandung")
+
+    def test_save_anomalies_failure_logs_error(self):
+        """Test that anomaly save failures are logged (lines 117-119)"""
+        from unittest.mock import patch
+        
+        # Create initial product
+        Mitra10Product.objects.create(
+            name='Test Product',
+            price=10000,
+            url='https://www.mitra10.com/test',
+            unit='PCS'
+        )
+        
+        # Mock anomaly service to return failure
+        with patch('api.mitra10.database_service.PriceAnomalyService.save_anomalies') as mock_save:
+            mock_save.return_value = {
+                'success': False,
+                'saved': 0,
+                'errors': ['Database connection failed']
+            }
+            
+            # Update with price change to trigger anomaly
+            updated_data = [{
+                'name': 'Test Product',
+                'price': 12000,  # 20% increase
+                'url': 'https://www.mitra10.com/test',
+                'unit': 'PCS'
+            }]
+            
+            # This should trigger the error logging path
+            with self.assertLogs('api.mitra10.database_service', level='ERROR') as log:
+                service = Mitra10DatabaseService()
+                result = service.save_with_price_update(updated_data)
+                # Should log the error but continue
+                self.assertIn('Failed to save some anomalies', log.output[0])

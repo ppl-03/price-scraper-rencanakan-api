@@ -944,3 +944,80 @@ class TestMitra10Views(TestCase):
         # Verify products were saved with empty location
         call_args = mock_service_instance.save_with_price_update.call_args[0][0]
         self.assertEqual(call_args[0]['location'], '')
+
+    def test_validate_api_token_logging_exception_invalid_token(self):
+        """Test exception handling in logging for invalid token (lines 43-45)"""
+        from api.mitra10.views import _validate_api_token
+        
+        request = self.factory.get('/test/')
+        request.headers = {'X-API-Token': 'invalid-token'}
+        request.META = {'REMOTE_ADDR': '127.0.0.1'}
+        
+        # Mock logger to raise exception
+        with patch('api.mitra10.views.logger.warning', side_effect=Exception("Logging failed")):
+            is_valid, error_msg = _validate_api_token(request)
+            
+            # Should still return False without crashing
+            self.assertFalse(is_valid)
+            self.assertEqual(error_msg, 'Invalid API token')
+    
+    def test_validate_api_token_logging_exception_ip_not_allowed(self):
+        """Test exception handling in logging for IP not allowed (lines 54-55)"""
+        from api.mitra10.views import _validate_api_token
+        
+        request = self.factory.get('/test/')
+        request.headers = {'X-API-Token': 'dev-token-12345'}
+        request.META = {'REMOTE_ADDR': '192.168.1.1'}
+        
+        # Mock API_TOKENS with IP whitelist
+        with patch('api.mitra10.views.API_TOKENS', {
+            'dev-token-12345': {
+                'name': 'Test Token',
+                'allowed_ips': ['10.0.0.1'],  # Different IP
+                'created': '2024-01-01',
+                'expires': None
+            }
+        }):
+            with patch('api.mitra10.views.logger.warning', side_effect=Exception("Logging failed")):
+                is_valid, error_msg = _validate_api_token(request)
+                
+                # Should still return False without crashing
+                self.assertFalse(is_valid)
+                self.assertEqual(error_msg, 'IP not authorized')
+    
+    def test_validate_api_token_logging_exception_success(self):
+        """Test exception handling in logging for successful auth (lines 60-62)"""
+        from api.mitra10.views import _validate_api_token
+        
+        request = self.factory.get('/test/')
+        request.headers = {'X-API-Token': 'dev-token-12345'}
+        request.META = {'REMOTE_ADDR': '127.0.0.1'}
+        
+        # Mock logger.info to raise exception
+        with patch('api.mitra10.views.logger.info', side_effect=Exception("Logging failed")):
+            is_valid, error_msg = _validate_api_token(request)
+            
+            # Should still return True without crashing
+            self.assertTrue(is_valid)
+            self.assertEqual(error_msg, '')
+    
+    def test_validate_api_token_with_ip_whitelist_allowed(self):
+        """Test IP whitelist allowing specific IP (lines 51-52)"""
+        from api.mitra10.views import _validate_api_token
+        
+        request = self.factory.get('/test/')
+        request.headers = {'X-API-Token': 'dev-token-12345'}
+        request.META = {'REMOTE_ADDR': '10.0.0.1'}
+        
+        with patch('api.mitra10.views.API_TOKENS', {
+            'dev-token-12345': {
+                'name': 'Test Token',
+                'allowed_ips': ['10.0.0.1'],
+                'created': '2024-01-01',
+                'expires': None
+            }
+        }):
+            is_valid, error_msg = _validate_api_token(request)
+            
+            self.assertTrue(is_valid)
+            self.assertEqual(error_msg, '')

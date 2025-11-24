@@ -30,7 +30,7 @@ class TestRateLimiter(unittest.TestCase):
         client_id = "test_client_1"
         
         # Make requests within limit
-        for i in range(5):
+        for _ in range(5):
             is_allowed, error = self.limiter.check_rate_limit(
                 client_id, max_requests=10, window_seconds=60
             )
@@ -43,7 +43,7 @@ class TestRateLimiter(unittest.TestCase):
         max_requests = 5
         
         # Make requests up to limit
-        for i in range(max_requests):
+        for _ in range(max_requests):
             is_allowed, error = self.limiter.check_rate_limit(
                 client_id, max_requests=max_requests, window_seconds=60
             )
@@ -62,7 +62,7 @@ class TestRateLimiter(unittest.TestCase):
         client_id = "test_client_3"
         
         # Exceed rate limit
-        for i in range(6):
+        for _ in range(6):
             self.limiter.check_rate_limit(
                 client_id, max_requests=5, window_seconds=60
             )
@@ -210,7 +210,7 @@ class TestInputValidator(unittest.TestCase):
         ]
         
         for malicious_input in malicious_inputs:
-            is_valid, error_msg, sanitized = InputValidator.validate_keyword(malicious_input)
+            is_valid, _, sanitized = InputValidator.validate_keyword(malicious_input)
             
             self.assertFalse(is_valid, f"Failed to detect SQL injection: {malicious_input}")
             self.assertIsNone(sanitized)
@@ -224,7 +224,7 @@ class TestInputValidator(unittest.TestCase):
         ]
         
         for invalid_input in invalid_inputs:
-            is_valid, error_msg, sanitized = InputValidator.validate_keyword(invalid_input)
+            is_valid, _, _ = InputValidator.validate_keyword(invalid_input)
             
             self.assertFalse(is_valid, f"Failed to detect invalid characters: {invalid_input}")
     
@@ -238,7 +238,7 @@ class TestInputValidator(unittest.TestCase):
     
     def test_validate_integer_string(self):
         """Test validation of integer as string"""
-        is_valid, error_msg, value = InputValidator.validate_integer("5", 'page', min_value=0, max_value=10)
+        is_valid, _, value = InputValidator.validate_integer("5", 'page', min_value=0, max_value=10)
         
         self.assertTrue(is_valid)
         self.assertEqual(value, 5)
@@ -273,7 +273,7 @@ class TestInputValidator(unittest.TestCase):
         ]
         
         for input_value, expected in test_cases:
-            is_valid, error_msg, value = InputValidator.validate_boolean(input_value, 'location')
+            is_valid, _, value = InputValidator.validate_boolean(input_value, 'location')
             
             self.assertTrue(is_valid, f"Failed for input: {input_value}")
             self.assertEqual(value, expected)
@@ -357,7 +357,7 @@ class TestDatabaseQueryValidator(unittest.TestCase):
     
     def test_build_safe_query_invalid_operation(self):
         """Test query building fails for invalid operation"""
-        is_valid, error_msg, query = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, _ = DatabaseQueryValidator.build_safe_query(
             'DROP',
             'mitra10_products',
             ['id']
@@ -368,7 +368,7 @@ class TestDatabaseQueryValidator(unittest.TestCase):
     
     def test_build_safe_query_invalid_table(self):
         """Test query building fails for invalid table"""
-        is_valid, error_msg, query = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, _ = DatabaseQueryValidator.build_safe_query(
             'SELECT',
             'users',  # Not in whitelist
             ['id']
@@ -379,7 +379,7 @@ class TestDatabaseQueryValidator(unittest.TestCase):
     
     def test_build_safe_query_invalid_column(self):
         """Test query building fails for invalid column"""
-        is_valid, error_msg, query = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, _ = DatabaseQueryValidator.build_safe_query(
             'SELECT',
             'mitra10_products',
             ['password']  # Not in whitelist
@@ -394,50 +394,50 @@ class TestSecurityDesignPatterns(unittest.TestCase):
     
     def test_validate_price_field_valid(self):
         """Test validation of valid price"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_price_field(100.50)
+        is_valid, error_msg = SecurityDesignPatterns._validate_field('price', 100.50)
         self.assertTrue(is_valid)
         self.assertEqual(error_msg, "")
     
     def test_validate_price_field_negative(self):
         """Test validation fails for negative price"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_price_field(-10)
+        is_valid, error_msg = SecurityDesignPatterns._validate_field('price', -10)
         self.assertFalse(is_valid)
         self.assertIn("positive number", error_msg)
     
     def test_validate_price_field_excessive(self):
         """Test validation fails for excessive price"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_price_field(2000000000)
+        is_valid, error_msg = SecurityDesignPatterns._validate_field('price', 2000000000)
         self.assertFalse(is_valid)
         self.assertIn("exceeds reasonable limit", error_msg)
     
     def test_validate_name_field_valid(self):
         """Test validation of valid name"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_name_field("Product Name")
+        is_valid, _ = SecurityDesignPatterns._validate_field('name', "Product Name")
         self.assertTrue(is_valid)
     
     def test_validate_name_field_too_long(self):
         """Test validation fails for too long name"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_name_field("a" * 501)
+        is_valid, error_msg = SecurityDesignPatterns._validate_field('name', "a" * 501)
         self.assertFalse(is_valid)
         self.assertIn("too long", error_msg)
     
     def test_validate_name_field_too_short(self):
         """Test validation fails for too short name"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_name_field("a")
+        is_valid, error_msg = SecurityDesignPatterns._validate_field('name', "a")
         self.assertFalse(is_valid)
         self.assertIn("too short", error_msg)
     
     def test_validate_url_field_valid(self):
         """Test validation of valid Mitra10 URL"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_url_field(
-            "https://www.mitra10.com/product/cement"
+        is_valid, _ = SecurityDesignPatterns._validate_field(
+            'url', "https://www.mitra10.com/product/cement"
         )
         self.assertTrue(is_valid)
     
     def test_validate_url_field_wrong_domain(self):
         """Test validation fails for wrong domain"""
-        is_valid, error_msg = SecurityDesignPatterns._validate_url_field(
-            "https://example.com/product"
+        is_valid, error_msg = SecurityDesignPatterns._validate_field(
+            'url', "https://example.com/product"
         )
         self.assertFalse(is_valid)
         self.assertIn("mitra10.com domain", error_msg)
@@ -450,7 +450,7 @@ class TestSecurityDesignPatterns(unittest.TestCase):
         ]
         
         for url in ssrf_urls:
-            is_valid, error_msg = SecurityDesignPatterns._validate_url_field(url)
+            is_valid, _ = SecurityDesignPatterns._validate_field('url', url)
             self.assertFalse(is_valid, f"Failed to detect SSRF: {url}")
     
     def test_validate_business_logic(self):
@@ -461,7 +461,7 @@ class TestSecurityDesignPatterns(unittest.TestCase):
             'url': 'https://www.mitra10.com/product/test'
         }
         
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(valid_data)
+        is_valid, _ = SecurityDesignPatterns.validate_business_logic(valid_data)
         self.assertTrue(is_valid)
 
 
@@ -580,8 +580,11 @@ class TestSecurityDecorators(TestCase):
 
 
 class TestEdgeCases(unittest.TestCase):
-    TEST_IP_1 = '192.168.1.100'  
-    TEST_IP_2 = '192.168.1.101'  
+    # NOSONAR - Using RFC 1918 private IP addresses for testing only
+    # These IPs (192.168.x.x) are reserved for private networks and cannot be routed on the internet
+    # Safe for unit tests as they will never conflict with real client IPs
+    TEST_IP_1 = '192.168.1.100'  # NOSONAR - Private IP for testing only
+    TEST_IP_2 = '192.168.1.101'  # NOSONAR - Private IP for testing only
     
     def setUp(self):
         self.rate_limiter = RateLimiter()
@@ -602,7 +605,7 @@ class TestEdgeCases(unittest.TestCase):
     def test_rate_limit_without_blocking(self):
         ip = self.TEST_IP_2
         for i in range(15):
-            result, error = self.rate_limiter.check_rate_limit(ip, max_requests=10, window_seconds=60, block_on_violation=False)
+            result, _ = self.rate_limiter.check_rate_limit(ip, max_requests=10, window_seconds=60, block_on_violation=False)
             if i < 10:
                 self.assertTrue(result)
             else:
@@ -613,7 +616,7 @@ class TestEdgeCases(unittest.TestCase):
         request.headers = {'X-API-Token': 'invalid-expired-token'}
         request.META = {'REMOTE_ADDR': '127.0.0.1'}
         
-        is_valid, error_msg, token_info = self.access_manager.validate_token(request)
+        is_valid, _, _ = self.access_manager.validate_token(request)
         self.assertFalse(is_valid)
     
     def test_ip_whitelist_validation(self):
@@ -621,7 +624,7 @@ class TestEdgeCases(unittest.TestCase):
         request.META = {'REMOTE_ADDR': '127.0.0.1'}
         request.headers = {'X-API-Token': 'mitra10-dev-token-12345'}
         
-        is_valid, error_msg, token_info = self.access_manager.validate_token(request)
+        is_valid, _, _ = self.access_manager.validate_token(request)
         self.assertTrue(is_valid)
     
     def test_price_validation_invalid(self):
@@ -631,7 +634,7 @@ class TestEdgeCases(unittest.TestCase):
         ]
         
         for price in invalid_prices:
-            is_valid, error_msg = self.design_patterns._validate_price_field(price)
+            is_valid, _ = self.design_patterns._validate_field('price', price)
             self.assertFalse(is_valid)
     
     def test_product_name_validation_invalid(self):
@@ -642,7 +645,7 @@ class TestEdgeCases(unittest.TestCase):
         ]
         
         for name in invalid_names:
-            is_valid, error_msg = self.design_patterns._validate_name_field(name)
+            is_valid, _ = self.design_patterns._validate_field('name', name)
             self.assertFalse(is_valid)
     
     def test_url_validation_invalid(self):
@@ -652,11 +655,11 @@ class TestEdgeCases(unittest.TestCase):
         ]
         
         for url in invalid_urls:
-            is_valid, error_msg = self.design_patterns._validate_url_field(url)
+            is_valid, _ = self.design_patterns._validate_field('url', url)
             self.assertFalse(is_valid)
     
     def test_business_logic_validation_missing_fields(self):
-        is_valid, error_msg = self.design_patterns.validate_business_logic({
+        is_valid, _ = self.design_patterns.validate_business_logic({
             'name': 'Test Product',
             'price': 50000,
             'url': 'https://www.mitra10.com/product/test'
@@ -664,7 +667,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertTrue(is_valid)
     
     def test_db_validator_build_safe_query(self):
-        is_valid, error_msg, query = self.db_validator.build_safe_query(
+        is_valid, _, query = self.db_validator.build_safe_query(
             'SELECT',
             'mitra10_products',
             ['id', 'name', 'price'],
@@ -690,7 +693,7 @@ class TestEdgeCases(unittest.TestCase):
     
     def test_resource_limits_valid(self):
         request = self.factory.get('/api/mitra10/scrape/?limit=50&keyword=cement')
-        is_valid, error_msg = self.design_patterns.enforce_resource_limits(request)
+        is_valid, _ = self.design_patterns.enforce_resource_limits(request)
         self.assertTrue(is_valid)
 
 
@@ -832,6 +835,203 @@ class TestDecoratorIntegration(unittest.TestCase):
         
         response = test_view(request)
         self.assertEqual(response.status_code, 401)
+
+
+class TestSecurityCoverageExtended(unittest.TestCase):
+    """Additional tests to achieve 100% coverage in security.py"""
+    
+    def test_rate_limiter_blocked_remaining_time(self):
+        """Test remaining time calculation when blocked (lines 70-71)"""
+        limiter = RateLimiter()
+        client_id = "test_client"
+        
+        # Block the client
+        limiter.block_client(client_id, duration_seconds=10)
+        
+        # Check rate limit while blocked (lines 70-71)
+        is_allowed, error_msg = limiter.check_rate_limit(client_id)
+        
+        self.assertFalse(is_allowed)
+        self.assertIn("Blocked for", error_msg)
+        self.assertIn("seconds", error_msg)
+
+
+class TestAccessControlCoverage(TestCase):
+    """Additional tests for AccessControlManager coverage"""
+    
+    def test_token_expiration_check(self):
+        """Test token expiration validation (lines 141-142)"""
+        from datetime import datetime, timedelta
+        from django.test import RequestFactory
+        
+        factory = RequestFactory()
+        request = factory.get('/test/')
+        
+        # Create expired token
+        with patch.object(AccessControlManager, 'API_TOKENS', {
+            'expired-token': {
+                'name': 'Expired Token',
+                'permissions': ['read'],
+                'allowed_ips': [],
+                'expires': datetime.now() - timedelta(days=1)  # Expired yesterday
+            }
+        }):
+            request.headers = {'X-API-Token': 'expired-token'}
+            request.META = {'REMOTE_ADDR': '127.0.0.1'}
+            
+            is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+            
+            self.assertFalse(is_valid)
+            self.assertEqual(error_msg, 'Token expired')
+            self.assertIsNone(token_info)
+
+
+class TestInputValidatorCoverageExtended(unittest.TestCase):
+    """Additional tests for InputValidator coverage"""
+    
+    def test_validate_keyword_sql_injection_detected(self):
+        """Test SQL injection detection and critical logging (lines 242-243)"""
+        with self.assertLogs('api.mitra10.security', level='CRITICAL') as log:
+            is_valid, error_msg, value = InputValidator.validate_keyword("'; DROP TABLE users;--")
+            
+            self.assertFalse(is_valid)
+            self.assertEqual(error_msg, "Invalid keyword format")
+            self.assertIsNone(value)
+            self.assertIn("SQL injection attempt detected", log.output[0])
+    
+    def test_validate_integer_with_none(self):
+        """Test integer validation with None value (line 258)"""
+        is_valid, error_msg, value = InputValidator.validate_integer(None, 'test_field')
+        
+        self.assertFalse(is_valid)
+        self.assertIn("is required", error_msg)
+        self.assertIsNone(value)
+    
+    def test_validate_integer_with_invalid_type(self):
+        """Test integer validation with invalid type (lines 265-266)"""
+        is_valid, error_msg, value = InputValidator.validate_integer([1, 2, 3], 'test_field')
+        
+        self.assertFalse(is_valid)
+        self.assertIn("must be an integer", error_msg)
+        self.assertIsNone(value)
+    
+    def test_validate_integer_below_min(self):
+        """Test integer validation below minimum (line 271)"""
+        is_valid, error_msg, value = InputValidator.validate_integer(-5, 'page', min_value=0)
+        
+        self.assertFalse(is_valid)
+        self.assertIn("must be at least 0", error_msg)
+        self.assertIsNone(value)
+    
+    def test_validate_boolean_with_empty_string(self):
+        """Test boolean validation with empty string (line 281)"""
+        is_valid, error_msg, value = InputValidator.validate_boolean('', 'test_field')
+        
+        self.assertFalse(is_valid)
+        self.assertIn("must be a boolean value", error_msg)
+        self.assertIsNone(value)
+    
+    def test_validate_boolean_with_bool_type(self):
+        """Test boolean validation with actual bool (line 284)"""
+        is_valid, error_msg, value = InputValidator.validate_boolean(True, 'test_field')
+        
+        self.assertTrue(is_valid)
+        self.assertEqual(error_msg, "")
+        self.assertTrue(value)
+
+
+class TestDatabaseQueryValidatorCoverage(unittest.TestCase):
+    """Additional tests for DatabaseQueryValidator coverage"""
+    
+    def test_validate_query_unknown_operator(self):
+        """Test query validation with unknown operator (line 366)"""
+        query = {'field': 'name', 'operator': 'unknown_op', 'value': 'test'}
+        
+        is_valid, error_msg = DatabaseQueryValidator.validate_query(query)
+        
+        # Should return True for unknown operators (permissive)
+        self.assertTrue(is_valid)
+
+
+class TestSecurityDesignPatternsCoverageExtended(unittest.TestCase):
+    """Additional tests for SecurityDesignPatterns coverage"""
+    
+    def test_validate_field_unknown_field(self):
+        """Test _validate_field with unknown field returns True (line 413)"""
+        is_valid, error_msg = SecurityDesignPatterns._validate_field('unknown_field', 'some_value')
+        
+        self.assertTrue(is_valid)
+        self.assertEqual(error_msg, "")
+    
+    def test_enforce_resource_limits_invalid_limit_value(self):
+        """Test resource limits with invalid limit value (lines 431-432)"""
+        from django.test import RequestFactory
+        
+        factory = RequestFactory()
+        request = factory.get('/test/?limit=invalid')
+        
+        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        
+        self.assertFalse(is_valid)
+        self.assertEqual(error_msg, "Invalid limit parameter")
+
+
+class TestValidateInputDecoratorCoverage(TestCase):
+    """Additional tests for validate_input decorator coverage"""
+    
+    def test_validate_input_post_with_json_body(self):
+        """Test validate_input with POST and JSON content type (lines 504, 507-509)"""
+        from django.test import RequestFactory
+        from django.http import JsonResponse
+        
+        factory = RequestFactory()
+        
+        @validate_input({
+            'name': lambda v: InputValidator.validate_keyword(v or '', max_length=100)
+        })
+        def test_view(request):
+            return JsonResponse({'validated': request.validated_data})
+        
+        # Test with valid JSON (line 507)
+        request = factory.post(
+            '/test/',
+            data='{"name": "test"}',
+            content_type='application/json'
+        )
+        response = test_view(request)
+        self.assertEqual(response.status_code, 200)
+        
+        # Test with invalid JSON to trigger exception handler (lines 508-509)
+        request = factory.post(
+            '/test/',
+            data='invalid json{',
+            content_type='application/json'
+        )
+        # Should fall back to GET/POST dict
+        response = test_view(request)
+        # Will fail validation because no 'name' in GET/POST
+        self.assertEqual(response.status_code, 400)
+    
+    def test_validate_input_post_with_form_data(self):
+        """Test validate_input with POST form data (line 509)"""
+        from django.test import RequestFactory
+        from django.http import JsonResponse
+        
+        factory = RequestFactory()
+        
+        @validate_input({
+            'name': lambda v: InputValidator.validate_keyword(v or '', max_length=100)
+        })
+        def test_view(request):
+            return JsonResponse({'validated': request.validated_data})
+        
+        request = factory.post(
+            '/test/',
+            data={'name': 'test'},
+            content_type='application/x-www-form-urlencoded'
+        )
+        response = test_view(request)
+        self.assertEqual(response.status_code, 200)
 
 
 if __name__ == '__main__':
