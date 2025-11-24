@@ -206,9 +206,9 @@ class CategoryUpdateRequestValidator:
         if not product_url.strip():
             return {"valid": False, "error": "Product URL cannot be empty"}
         
-        # Validate URL format (basic check)
-        if not (product_url.startswith("http://") or product_url.startswith("https://")):
-            return {"valid": False, "error": "Product URL must be a valid HTTP/HTTPS URL"}
+        # Validate URL format - only accept HTTPS for security
+        if not product_url.startswith("https://"):
+            return {"valid": False, "error": "Product URL must be a valid HTTPS URL"}
         
         # Validate new_category using the category validator
         if new_category is None:
