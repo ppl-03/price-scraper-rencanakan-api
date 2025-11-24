@@ -432,40 +432,44 @@ class TestA04InsecureDesign(TestCase):
         print("✓ Unreasonably high price rejected (plausibility check)")
     
     def test_business_logic_name_validation(self):
-        """Test that business logic validates product names"""
+        """Verify product name validation enforces length constraints"""
         print("\n[A04] Test: Business logic - Name validation")
         
-        # Name too short
-        data = {'name': 'A', 'price': 1000, 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertFalse(is_valid)
-        self.assertIn('too short', error_msg)
-        print("✓ Too short name rejected")
+        # Test boundary: single character name (below minimum)
+        product_data = {'name': 'X', 'price': 2500, 'url': 'https://depobangunan.example.com'}
+        validation_result, validation_error = SecurityDesignPatterns.validate_business_logic(product_data)
+        self.assertFalse(validation_result, "Single character name should fail validation")
+        self.assertIn('too short', validation_error, "Error should mention length constraint")
+        print("✓ Minimum length constraint enforced")
         
-        # Name too long
-        data = {'name': 'A' * 501, 'price': 1000, 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
-        self.assertFalse(is_valid)
-        self.assertIn('too long', error_msg)
-        print("✓ Too long name rejected")
+        # Test boundary: excessive length name (above maximum)
+        excessive_name = 'B' * 501
+        product_data = {'name': excessive_name, 'price': 2500, 'url': 'https://depobangunan.example.com'}
+        validation_result, validation_error = SecurityDesignPatterns.validate_business_logic(product_data)
+        self.assertFalse(validation_result, "Excessively long name should fail validation")
+        self.assertIn('too long', validation_error, "Error should indicate length violation")
+        print("✓ Maximum length constraint enforced")
     
     def test_ssrf_prevention(self):
-        """Test that SSRF attacks are prevented"""
-        print("\n[A04] Test: SSRF prevention")
+        """Verify SSRF attack prevention for internal network targets"""
+        print("\n[A04] Test: SSRF prevention mechanisms")
         
         # Test URLs intentionally use HTTP for SSRF attack simulation
         # These are test patterns to verify security controls block internal access
-        ssrf_attempts = [
-            'https://localhost/admin',
-            'https://127.0.0.1/secret',
-            'https://0.0.0.0/internal'
+        internal_targets = [
+            ('https://localhost/admin', 'localhost admin endpoint'),
+            ('https://127.0.0.1/secret', 'loopback interface'),
+            ('https://0.0.0.0/internal', 'all-interfaces binding')
         ]
         
-        for ssrf_url in ssrf_attempts:
-            data = {'url': ssrf_url, 'name': 'Product', 'price': 1000}
-            is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
-            self.assertFalse(is_valid, f"SSRF attempt should be blocked: {ssrf_url}")
-            print(f"✓ SSRF blocked: {ssrf_url}")
+        for target_url, description in internal_targets:
+            product_data = {'url': target_url, 'name': 'Depobangunan Product', 'price': 1500}
+            validation_result, _ = SecurityDesignPatterns.validate_business_logic(product_data)
+            self.assertFalse(
+                validation_result,
+                f"SSRF attack targeting {description} must be blocked"
+            )
+            print(f"✓ Blocked SSRF to {description}: {target_url}")
     
     def test_resource_limit_page_size(self):
         """Test that resource limits are enforced"""

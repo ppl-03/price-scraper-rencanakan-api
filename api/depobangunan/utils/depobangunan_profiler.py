@@ -48,7 +48,7 @@ class DepoBangunanProfiler(BaseProfiler):
     def _create_scraper(self):
         return create_depo_scraper()
     
-    def _run_profiled_iterations(self, scraper, iterations: int, profiler: cProfile.Profile):
+    def _run_profiled_iterations(self, scraper, iterations: int):
         """Helper method to run profiled iterations and reduce duplication."""
         for i in range(iterations):
             keyword = self.test_keywords[i % len(self.test_keywords)]
@@ -80,7 +80,7 @@ class DepoBangunanProfiler(BaseProfiler):
         profiler = cProfile.Profile()
         
         profiler.enable()
-        self._run_profiled_iterations(scraper, iterations, profiler)
+        self._run_profiled_iterations(scraper, iterations)
         profiler.disable()
         
         stats = pstats.Stats(profiler)

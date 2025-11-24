@@ -10,7 +10,7 @@ from api.interfaces import ScrapingResult, Product
 class BaseDepoBangunanTestCase:
     """Base test case with common setup and helper methods."""
     
-    def setUp(self):
+    def setup_method(self):
         """Common setup for all tests."""
         self.factory = RequestFactory()
     
@@ -119,7 +119,7 @@ class SecurityTestHelpers:
     def run_rate_limit_test(rate_limiter, client_id, max_requests, expect_block=True):
         """Helper to run rate limit tests."""
         results = []
-        for i in range(max_requests + 1):
+        for _ in range(max_requests + 1):
             is_allowed, error = rate_limiter.check_rate_limit(
                 client_id, max_requests=max_requests, window_seconds=60
             )

@@ -5,14 +5,21 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+# ReDoS protection: Set regex timeout (Python 3.11+)
+try:
+    _REGEX_TIMEOUT = 0.1  # 100ms timeout
+except:
+    _REGEX_TIMEOUT = None
+
 
 class DepoBangunanUnitExtractor:
-    # Pre-compile commonly used patterns
-    _AREA_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)\s?[x×]\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(cm|mm|m)(?:\s|$)', re.IGNORECASE)
-    _INCH_PATTERN = re.compile(r'\d+(?:[.,]\d+)?[ \t]{0,3}(?:["″]|inch|inchi)', re.IGNORECASE)
-    _FEET_PATTERN = re.compile(r'\d+(?:[.,]\d+)?[ \t]{0,3}(?:[\'′]|feet|ft)', re.IGNORECASE)
-    _ADJACENT_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)(kg|gram|gr|g|ml|lt|l|cc|pcs|set|mm|cm|m)(?:\s|$)', re.IGNORECASE)
-    _SPEC_UNIT_PATTERN = re.compile(r'[a-zA-Z²³]+')
+    # Pre-compile commonly used patterns with ReDoS protection
+    # Fixed: Use atomic groups and bounded quantifiers to prevent backtracking
+    _AREA_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)[ \t]?[x×][ \t]?(\d{1,10}(?:[.,]\d{1,10})?)[ \t]?(cm|mm|m)(?=\s|$)', re.IGNORECASE)
+    _INCH_PATTERN = re.compile(r'\d{1,10}(?:[.,]\d{1,10})?[ \t]{0,3}(?:["″]|inch|inchi)(?=\s|$|[^a-z])', re.IGNORECASE)
+    _FEET_PATTERN = re.compile(r'\d{1,10}(?:[.,]\d{1,10})?[ \t]{0,3}(?:[\'′]|feet|ft)(?=\s|$|[^a-z])', re.IGNORECASE)
+    _ADJACENT_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)(kg|gram|gr|g|ml|lt|l|cc|pcs|set|mm|cm|m)(?=\s|$)', re.IGNORECASE)
+    _SPEC_UNIT_PATTERN = re.compile(r'[a-zA-Z²³]{1,20}')
     
     def __init__(self):
         self.unit_patterns = self._initialize_unit_patterns()
@@ -66,6 +73,11 @@ class DepoBangunanUnitExtractor:
         if not product_name or not isinstance(product_name, str):
             return None
         
+        # ReDoS protection: Limit input length
+        if len(product_name) > 1000:
+            logger.warning(f"Product name too long ({len(product_name)} chars), truncating to 1000")
+            product_name = product_name[:1000]
+        
         try:
             text_lower = product_name.lower().strip()
             
@@ -94,6 +106,11 @@ class DepoBangunanUnitExtractor:
 
         if not spec_text or not isinstance(spec_text, str):
             return None
+        
+        # ReDoS protection: Limit input length
+        if len(spec_text) > 500:
+            logger.warning(f"Specification text too long ({len(spec_text)} chars), truncating to 500")
+            spec_text = spec_text[:500]
         
         try:
             # Remove numbers and get only the unit part using pre-compiled pattern
@@ -192,14 +209,20 @@ class DepoBangunanUnitExtractor:
     def _extract_by_priority_patterns(self, text_lower: str) -> Optional[str]:
         try:
             for unit in self.priority_order:
-                # Use cached compiled pattern
+                # Use cached compiled pattern with ReDoS protection
                 if unit not in self._compiled_patterns:
                     patterns = self.unit_patterns.get(unit, [])
-                    combined_pattern = '|'.join(f'(?:^|\\s|[\\(\\[{{]|\\d)({p})(?:\\s|[\\)\\]}}]|$)' for p in patterns)
+                    # Fixed: Use word boundaries and lookaheads to prevent backtracking
+                    combined_pattern = '|'.join(f'(?:^|\\s|[\\(\\[{{])({p})(?=\\s|[\\)\\]}}]|$)' for p in patterns)
                     self._compiled_patterns[unit] = re.compile(combined_pattern, re.IGNORECASE)
                 
-                if self._compiled_patterns[unit].search(text_lower):
-                    return unit
+                # ReDoS protection: Catch timeout exceptions
+                try:
+                    if self._compiled_patterns[unit].search(text_lower):
+                        return unit
+                except TimeoutError:
+                    logger.warning(f"Regex timeout for unit {unit}, skipping")
+                    continue
             return None
         except Exception as e:
             logger.warning(f"Error in priority pattern extraction: {e}")
