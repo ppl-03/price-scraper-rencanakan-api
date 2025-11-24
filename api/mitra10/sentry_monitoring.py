@@ -48,6 +48,20 @@ class Mitra10SentryMonitor:
         )
     
     @staticmethod
+    def _capture_scraping_message(success: bool, products_count: int, errors_count: int):
+        """Capture a message based on scraping success or failure."""
+        if success:
+            capture_message(
+                f"Mitra10 scraping completed: {products_count} products found",
+                level="info"
+            )
+        else:
+            capture_message(
+                f"Mitra10 scraping failed with {errors_count} errors",
+                level="warning"
+            )
+    
+    @staticmethod
     def track_scraping_result(result: Dict[str, Any]):
         """Track the result of a scraping operation."""
         products_count = result.get('products_count', 0)
@@ -68,16 +82,7 @@ class Mitra10SentryMonitor:
         })
         
         # Log to Sentry
-        if success:
-            capture_message(
-                f"Mitra10 scraping completed: {products_count} products found",
-                level="info"
-            )
-        else:
-            capture_message(
-                f"Mitra10 scraping failed with {errors_count} errors",
-                level="warning"
-            )
+        Mitra10SentryMonitor._capture_scraping_message(success, products_count, errors_count)
 
 
 def monitor_mitra10_function(operation_name: str, component: str = Mitra10SentryMonitor.COMPONENT_SCRAPER):
