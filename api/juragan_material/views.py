@@ -38,7 +38,7 @@ def _save_products_to_database(products):
     # Add breadcrumb for database save operation
     JuraganMaterialSentryMonitor.add_breadcrumb(
         f"Starting database save for {len(products)} products",
-        category="juragan_material.database",
+        category=CATEGORY_DATABASE,
         level="info",
         data={"products_count": len(products)}
     )
@@ -56,7 +56,7 @@ def _save_products_to_database(products):
         # Track database operation
         JuraganMaterialSentryMonitor.add_breadcrumb(
             f"Database save completed in {save_time:.2f}s",
-            category="juragan_material.database",
+            category=CATEGORY_DATABASE,
             level="info" if result.get('success') else "error",
             data={
                 "duration": save_time,
@@ -120,7 +120,7 @@ def _save_products_to_database(products):
         logger.error(f"Failed to save Juragan Material products to database: {str(db_error)}")
         JuraganMaterialSentryMonitor.add_breadcrumb(
             f"Database save failed: {str(db_error)}",
-            category="juragan_material.database",
+            category=CATEGORY_DATABASE,
             level="error"
         )
         return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
