@@ -4,7 +4,6 @@ Uses cached HTML and mocks to reduce test execution time.
 """
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
-from django.contrib.auth.models import User
 from unittest.mock import patch, MagicMock
 from db_pricing.models import Mitra10Product
 import json
@@ -37,11 +36,6 @@ class CategoryEditFrontendTest(TestCase):
         # Only fetch HTML once for all tests in this class
         if CategoryEditFrontendTest._cached_html is None:
             self.client = Client()
-            self.user = User.objects.create_user(
-                username='testuser',
-                password='testpass123'
-            )
-            self.client.login(username='testuser', password='testpass123')
             
             # Create minimal test data
             Mitra10Product.objects.create(
@@ -194,11 +188,6 @@ class CategoryEditAPIIntegrationTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
         
         self.mitra10_item = Mitra10Product.objects.create(
             url='https://example.com/product1',
@@ -316,11 +305,6 @@ class CategoryEditAccessibilityTest(TestCase):
         """Set up test fixtures."""
         if CategoryEditAccessibilityTest._cached_html is None:
             self.client = Client()
-            self.user = User.objects.create_user(
-                username='testuser',
-                password='testpass123'
-            )
-            self.client.login(username='testuser', password='testpass123')
             
             response = self.client.get(reverse('dashboard:dashboard_home_db'))
             CategoryEditAccessibilityTest._cached_html = response.content.decode('utf-8')
@@ -373,11 +357,6 @@ class CategoryEditResponsivenessTest(TestCase):
         """Set up test fixtures."""
         if CategoryEditResponsivenessTest._cached_html is None:
             self.client = Client()
-            self.user = User.objects.create_user(
-                username='testuser',
-                password='testpass123'
-            )
-            self.client.login(username='testuser', password='testpass123')
             
             response = self.client.get(reverse('dashboard:dashboard_home_db'))
             CategoryEditResponsivenessTest._cached_html = response.content.decode('utf-8')
