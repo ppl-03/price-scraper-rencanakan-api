@@ -117,7 +117,7 @@ class SecurityDesignPatternsValidateURLTests(TestCase):
     def test_http_url_rejected(self):
         """Test that HTTP URLs are rejected"""
         is_valid, error_msg = SecurityDesignPatterns._validate_url_field(
-            "http://example.com/product"  # NOSONAR: intentionally insecure for rejection test
+            "http://example.com/product"
         )
         self.assertFalse(is_valid)
         self.assertEqual(error_msg, "URL must use HTTPS protocol for security")
@@ -189,7 +189,7 @@ class SecurityDesignPatternsValidateBusinessLogicTests(TestCase):
         data = {
             'name': 'Cement Bag 50kg',
             'price': 75000,
-            'url': 'http://depobangunan.com/product/cement',  # NOSONAR: test ensures HTTP is rejected
+            'url': 'http://depobangunan.com/product/cement', 
         }
         is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
         self.assertFalse(is_valid)
@@ -226,7 +226,7 @@ class SecurityDesignPatternsValidateBusinessLogicTests(TestCase):
         data = {
             'price': -100,
             'name': 'A',
-            'url': 'http://example.com',  # NOSONAR: intentionally insecure for validation test
+            'url': 'http://example.com', 
         }
         is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
         self.assertFalse(is_valid)
