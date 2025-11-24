@@ -1,5 +1,6 @@
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
 from bs4 import BeautifulSoup
 from api.interfaces import Location, HtmlParserError
 from api.gemilang.location_parser import GemilangLocationParser
@@ -815,5 +816,99 @@ class TestGemilangLocationParser(TestCase):
         items = [MockItem()]
         locations = parser._extract_locations_from_items(items)
         
+        self.assertEqual(len(locations), 0)
+
+    def test_lines_207_209_extract_location_from_item_exception(self):
+        """
+        Cover lines 207-209: Exception in _extract_location_from_item.
+        Need to make extract_store_name or extract_address raise an exception.
+        """
+        from unittest.mock import Mock, patch
+        from api.gemilang.location_parser import TextCleaner, HtmlElementExtractor, ParserConfiguration
+        
+        text_cleaner = TextCleaner()
+        element_extractor = HtmlElementExtractor(text_cleaner)
+        parser_config = ParserConfiguration()
+        parser = GemilangLocationParser(text_cleaner, element_extractor, parser_config)
+        
+        # Create a mock item that will cause extract_store_name to raise exception
+        mock_item = Mock()
+        
+        # Make extract_store_name raise an exception - hits lines 207-209
+        with patch.object(element_extractor, 'extract_store_name', side_effect=RuntimeError("Extraction error")):
+            result = parser._extract_location_from_item(mock_item)
+            
+            # Exception caught at lines 207-209, returns None
+            self.assertIsNone(result)
+    
+    def test_lines_207_209_extract_address_raises_exception(self):
+        """
+        Alternative path to cover lines 207-209: exception in extract_address.
+        """
+        from unittest.mock import Mock, patch
+        from api.gemilang.location_parser import TextCleaner, HtmlElementExtractor, ParserConfiguration
+        
+        text_cleaner = TextCleaner()
+        element_extractor = HtmlElementExtractor(text_cleaner)
+        parser_config = ParserConfiguration()
+        parser = GemilangLocationParser(text_cleaner, element_extractor, parser_config)
+        
+        mock_item = Mock()
+        
+        # extract_store_name succeeds but extract_address raises exception
+        with patch.object(element_extractor, 'extract_store_name', return_value="Test Store"), \
+             patch.object(element_extractor, 'extract_address', side_effect=AttributeError("Address extraction error")):
+            result = parser._extract_location_from_item(mock_item)
+            
+            # Exception caught at lines 207-209, returns None
+            self.assertIsNone(result)
+    
+    def test_lines_207_209_create_location_raises_exception(self):
+        """
+        Another path to cover lines 207-209: exception in _create_location call.
+        """
+        from unittest.mock import Mock, patch
+        from api.gemilang.location_parser import TextCleaner, HtmlElementExtractor, ParserConfiguration
+        
+        text_cleaner = TextCleaner()
+        element_extractor = HtmlElementExtractor(text_cleaner)
+        parser_config = ParserConfiguration()
+        parser = GemilangLocationParser(text_cleaner, element_extractor, parser_config)
+        
+        mock_item = Mock()
+        
+        # Both extractions succeed but _create_location raises exception
+        with patch.object(element_extractor, 'extract_store_name', return_value="Test Store"), \
+             patch.object(element_extractor, 'extract_address', return_value="Test Address"), \
+             patch.object(parser, '_create_location', side_effect=TypeError("Location creation failed")):
+            result = parser._extract_location_from_item(mock_item)
+            
+            # Exception caught at lines 207-209, returns None
+            self.assertIsNone(result)
+
+    def test_extract_locations_from_items_create_location_exception(self):
+        """Test lines 188-190: Exception during location creation in loop"""
+        parser = GemilangLocationParser()
+        
+        # Create mock items that will cause _create_location to fail
+        mock_html = """
+        <div class="store-locator">
+            <div class="info-store">
+                <div class="store-name"><a data-id="1">Store 1</a></div>
+                <div class="address">Address 1</div>
+            </div>
+            <div class="info-store">
+                <div class="store-name"><a data-id="2">Store 2</a></div>
+                <div class="address">Address 2</div>
+            </div>
+        </div>
+        """
+        soup = BeautifulSoup(mock_html, 'html.parser')
+        items = soup.find_all("div", class_="info-store")
+        
+        with patch.object(parser, '_create_location', side_effect=ValueError("Error")):
+            locations = parser._extract_locations_from_items(items)
+            
+        # Both locations fail due to exception (lines 188-190)
         self.assertEqual(len(locations), 0)
 

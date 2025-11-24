@@ -334,4 +334,61 @@ class TestGemilangLocationScraper(TestCase):
         
         with self.assertRaises(HttpClientError):
             scraper._fetch_html_content("https://test.com", 30)
+    
+    def test_scrape_locations_with_none_html_content(self):
+        """Test scrape_locations when HTTP client returns None - line 106"""
+        from api.gemilang.location_parser import GemilangLocationParser
+        
+        # Create instances with proper dependencies
+        location_parser = GemilangLocationParser()
+        
+        # Create a mock http_client that returns None HTML
+        mock_http_client = Mock()
+        mock_http_client.get.return_value = None
+        
+        scraper = GemilangLocationScraper(
+            http_client=mock_http_client,
+            location_parser=location_parser
+        )
+        
+        result = scraper.scrape_locations(timeout=60)
+        
+        self.assertFalse(result.success)
+        self.assertEqual(result.locations, [])
+        self.assertIn('None', result.error_message or '')
+
+    def test_scrape_locations_batch(self):
+        """Test line 106: scrape_locations_batch method"""
+        mock_html = "<html>test</html>"
+        self.mock_http_client.get.return_value = mock_html
+        
+        expected_locations = [Location("Store 1", "Address 1")]
+        self.mock_location_parser.parse_locations.return_value = expected_locations
+
+        result = self.scraper.scrape_locations_batch(timeout=30)
+
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.locations), 1)
+        # Verify it calls scrape_locations with the provided timeout
+        self.mock_http_client.get.assert_called_once_with(
+            "https://gemilang-store.com/pusat/store-locations", 
+            timeout=30
+        )
+
+    def test_scrape_locations_batch_default_timeout(self):
+        """Test line 106: scrape_locations_batch with default timeout"""
+        mock_html = "<html>test</html>"
+        self.mock_http_client.get.return_value = mock_html
+        expected_locations = [Location("Store 1", "Address 1")]
+        self.mock_location_parser.parse_locations.return_value = expected_locations
+
+        # Call with None to test the default timeout path
+        result = self.scraper.scrape_locations_batch(timeout=None)
+
+        self.assertTrue(result.success)
+        # Should use 60 as default when None is passed
+        self.mock_http_client.get.assert_called_once_with(
+            "https://gemilang-store.com/pusat/store-locations", 
+            timeout=60
+        )
 

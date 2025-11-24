@@ -262,3 +262,88 @@ class TestTableValidatorGetAllRecords(MySQLTestCase):
         self.assertIn('unit', first_record)
         self.assertIn('created_at', first_record)
         self.assertIn('updated_at', first_record)
+
+
+class TestTableValidatorMySQLPaths(MySQLTestCase):
+    """Test MySQL-specific code paths"""
+    
+    @patch('api.gemilang.table_validator.connection')
+    @patch('django.conf.settings')
+    def test_check_table_exists_with_mysql(self, mock_settings, mock_connection):
+        """Test check_table_exists with MySQL engine"""
+        mock_settings.DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.mysql'
+            }
+        }
+        
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = ('gemilang_products',)
+        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+        
+        validator = GemilangTableValidator()
+        result = validator.check_table_exists()
+        
+        self.assertTrue(result)
+        mock_cursor.execute.assert_called()
+        call_args = mock_cursor.execute.call_args[0][0]
+        self.assertIn("SHOW TABLES", call_args)
+    
+    @patch('api.gemilang.table_validator.connection')
+    @patch('django.conf.settings')
+    def test_get_table_schema_with_mysql(self, mock_settings, mock_connection):
+        """Test get_table_schema with MySQL engine"""
+        mock_settings.DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.mysql'
+            }
+        }
+        
+        mock_cursor = MagicMock()
+        # MySQL DESCRIBE returns: Field, Type, Null, Key, Default, Extra
+        mock_cursor.fetchall.return_value = [
+            ('id', 'int(11)', 'NO', 'PRI', None, 'auto_increment'),
+            ('name', 'varchar(500)', 'NO', '', None, ''),
+            ('price', 'int(11)', 'NO', '', None, ''),
+        ]
+        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+        
+        validator = GemilangTableValidator()
+        schema = validator.get_table_schema()
+        
+        self.assertIsInstance(schema, dict)
+        self.assertIn('id', schema)
+        self.assertIn('name', schema)
+        self.assertIn('price', schema)
+        self.assertTrue(schema['id']['primary_key'])
+        self.assertTrue(schema['id']['not_null'])
+        mock_cursor.execute.assert_called()
+        call_args = mock_cursor.execute.call_args[0][0]
+        self.assertIn("DESCRIBE", call_args)
+    
+    @patch('api.gemilang.table_validator.connection')
+    @patch('django.conf.settings')
+    def test_get_all_tables_with_mysql(self, mock_settings, mock_connection):
+        """Test get_all_tables with MySQL engine"""
+        mock_settings.DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.mysql'
+            }
+        }
+        
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = [
+            ('gemilang_products',),
+            ('auth_user',),
+            ('django_session',),
+        ]
+        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+        
+        validator = GemilangTableValidator()
+        tables = validator.get_all_tables()
+        
+        self.assertIsInstance(tables, list)
+        self.assertIn('gemilang_products', tables)
+        mock_cursor.execute.assert_called()
+        call_args = mock_cursor.execute.call_args[0][0]
+        self.assertIn("SHOW TABLES", call_args)

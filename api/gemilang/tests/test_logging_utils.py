@@ -39,3 +39,18 @@ def test_logger_operation_context(caplog):
     message = caplog.records[0].message
     assert "[op=save]" in message
     assert "Insert failed" in message
+
+
+def test_logger_with_extra_dict(caplog):
+    """Test line 18: Logger with extra dict passed to __init__"""
+    logger = get_gemilang_logger("test_component", extra={"custom_key": "custom_value"})
+
+    with caplog.at_level(logging.INFO):
+        logger.info("Test message")
+
+    record = caplog.records[0]
+    assert record.name == "api.gemilang"
+    assert "[component=test_component]" in record.message
+    # The extra dict is merged with component
+    assert hasattr(record, "custom_key")
+    assert record.custom_key == "custom_value"

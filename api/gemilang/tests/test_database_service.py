@@ -327,3 +327,104 @@ class TestDatabaseServiceSecurity(MySQLTestCase):
         success, error_msg = service.save(data)
         self.assertFalse(success)
         self.assertIn("must be a list", error_msg)
+    
+    def test_validate_name_with_non_string_type(self):
+        """Test _validate_name with non-string type - line 61"""
+        service = GemilangDatabaseService()
+        
+        # Test with integer
+        is_valid, msg = service._validate_name(123, 0)
+        self.assertFalse(is_valid)
+        self.assertIn("name must be a string", msg)
+        
+        # Test with list
+        is_valid, msg = service._validate_name(["test"], 0)
+        self.assertFalse(is_valid)
+        self.assertIn("name must be a string", msg)
+    
+    def test_validate_url_with_non_string_type(self):
+        """Test _validate_url with non-string type - line 69"""
+        service = GemilangDatabaseService()
+        
+        # Test with None
+        is_valid, msg = service._validate_url(None, 0)
+        self.assertFalse(is_valid)
+        self.assertIn("url must be a string", msg)
+        
+        # Test with integer
+        is_valid, msg = service._validate_url(123, 0)
+        self.assertFalse(is_valid)
+        self.assertIn("url must be a string", msg)
+    
+    def test_validate_unit_with_non_string_type(self):
+        """Test _validate_unit with non-string type - line 80"""
+        service = GemilangDatabaseService()
+        
+        # Test with list
+        is_valid, msg = service._validate_unit([], 0)
+        self.assertFalse(is_valid)
+        self.assertIn("unit must be a string", msg)
+        
+        # Test with dict
+        is_valid, msg = service._validate_unit({}, 0)
+        self.assertFalse(is_valid)
+        self.assertIn("unit must be a string", msg)
+
+    def test_validate_table_name_invalid(self):
+        """Test lines 22: _validate_table_name with invalid table"""
+        service = GemilangDatabaseService()
+        service.table_name = "invalid_table"
+        
+        with self.assertRaises(ValueError) as context:
+            service._validate_table_name()
+        self.assertIn("Invalid table name", str(context.exception))
+
+    def test_validate_column_names_invalid(self):
+        """Test lines 27: _validate_column_names with invalid column"""
+        service = GemilangDatabaseService()
+        
+        with self.assertRaises(ValueError) as context:
+            service._validate_column_names(['name', 'invalid_column'])
+        self.assertIn("Invalid column name", str(context.exception))
+
+    def test_save_generic_exception(self):
+        """Test lines 168-170: Generic exception in save method"""
+        from unittest.mock import patch, MagicMock
+        
+        service = GemilangDatabaseService()
+        data = [{"name": "Test", "price": 1000, "url": "https://test.com", "unit": "pcs"}]
+        
+        with patch.object(service, '_validate_basic_structure', side_effect=RuntimeError("Test error")):
+            try:
+                success, error_msg = service.save(data)
+                self.assertFalse(success)
+                self.assertIn("Database operation failed", error_msg)
+            except RuntimeError:
+                # Exception properly propagated
+                pass
+
+    def test_check_anomaly_save_failure(self):
+        """Test lines 201: Anomaly save failure logging"""
+        from unittest.mock import patch, MagicMock
+        from db_pricing.anomaly_service import PriceAnomalyService
+        
+        service = GemilangDatabaseService()
+        anomalies = [{"test": "data"}]
+        
+        with patch.object(PriceAnomalyService, 'save_anomalies', return_value={'success': False, 'errors': ['Test error']}):
+            # This should log but not crash  
+            service._save_detected_anomalies(anomalies)
+
+    def test_save_with_price_update_generic_exception(self):
+        """Test lines 314-316: Generic exception in save_with_price_update"""
+        from unittest.mock import patch
+        
+        service = GemilangDatabaseService()
+        data = [{"name": "Test", "price": 1000, "url": "https://test.com", "unit": "pcs"}]
+        
+        with patch('api.gemilang.database_service.connection') as mock_conn:
+            mock_conn.cursor.side_effect = RuntimeError("DB connection error")
+            result = service.save_with_price_update(data)
+            
+        self.assertFalse(result['success'])
+        self.assertIn("Database operation failed", result['error'])

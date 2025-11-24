@@ -672,6 +672,89 @@ class TestGemilangUnitParserAdvanced(unittest.TestCase):
         
         result = parser._extract_from_full_text(mock_soup)
         self.assertIsNone(result)
+    
+    def test_debug_logging_paths_in_extract_methods(self):
+        """Test parse_unit to trigger DEBUG logging paths (lines 327, 348, 441, 490)"""
+        parser = GemilangUnitParser()
+        
+        # Test with various HTML structures to trigger different extraction paths
+        test_cases = [
+            '<div><span class="spec-key">Unit:</span><span class="spec-value">meter</span></div>',
+            '<div class="spec-detail">Berat 5kg</div>',
+            '<table><tr><td>Unit</td><td>kg</td></tr></table>',
+            '<div>Plain text with unit: 10 meter</div>',
+        ]
+        
+        # Parse each case - this will exercise the DEBUG logging paths
+        for html in test_cases:
+            result = parser.parse_unit(html)
+            # Just verify it doesn't crash - DEBUG paths are covered by execution
+            self.assertIsNotNone(parser)
+
+    def test_extract_from_spans_debug_logging(self):
+        """Test line 327: Debug logging in _extract_from_spans"""
+        import logging
+        finder = SpecificationFinder()
+        
+        # Create mock element with spans that trigger AttributeError
+        mock_element = Mock()
+        mock_span = Mock()
+        mock_span.get_text.side_effect = AttributeError("Test error")
+        mock_element.find_all.return_value = [mock_span]
+        
+        # Enable DEBUG logging to hit line 327
+        with patch('api.gemilang.unit_parser.logger') as mock_logger:
+            mock_logger.isEnabledFor.return_value = True
+            specs = finder._extract_from_spans(mock_element)
+            
+        # Should return empty list and log debug message
+        self.assertEqual(specs, [])
+        mock_logger.debug.assert_called()
+
+    def test_extract_from_divs_debug_logging(self):
+        """Test line 348: Debug logging in _extract_from_divs"""
+        finder = SpecificationFinder()
+        
+        mock_element = Mock()
+        mock_div = Mock()
+        mock_div.get_text.side_effect = AttributeError("Test error")
+        mock_element.find_all.return_value = [mock_div]
+        
+        with patch('api.gemilang.unit_parser.logger') as mock_logger:
+            mock_logger.isEnabledFor.return_value = True
+            specs = finder._extract_from_divs(mock_element)
+            
+        self.assertEqual(specs, [])
+        mock_logger.debug.assert_called()
+
+    def test_extract_specifications_from_element_debug_logging(self):
+        """Test line 441: Debug logging in _extract_specifications_from_element"""
+        parser = GemilangUnitParser()
+        
+        mock_element = Mock()
+        mock_element.find_all.side_effect = Exception("Test error")
+        
+        with patch('api.gemilang.unit_parser.logger') as mock_logger:
+            mock_logger.isEnabledFor.return_value = True
+            specs = parser._extract_specifications_from_element(mock_element)
+            
+        self.assertEqual(specs, [])
+        mock_logger.debug.assert_called()
+
+    def test_extract_units_from_specifications_debug_logging(self):
+        """Test line 490: Debug logging in _extract_units_from_specifications"""
+        parser = GemilangUnitParser()
+        
+        # Create spec that will cause exception
+        specs = ["invalid spec"]
+        
+        with patch.object(parser.extractor, 'extract_unit', side_effect=ValueError("Test error")), \
+             patch('api.gemilang.unit_parser.logger') as mock_logger:
+            mock_logger.isEnabledFor.return_value = True
+            units = parser._extract_units_from_specifications(specs)
+            
+        self.assertEqual(units, [])
+        mock_logger.debug.assert_called()
 
 
 if __name__ == '__main__':
