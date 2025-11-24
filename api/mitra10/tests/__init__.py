@@ -12,7 +12,6 @@ from .test_profiler import TestMitra10Profiler, TestProfilerIntegration, TestPro
 from .test_scraper import TestMitra10PriceScraper, TestMitra10PriceScraperPopularity
 from .test_urls import TestMitra10URLs
 from .test_views import TestMitra10Views
-from .test_mitra10_handshake import TestMitra10HandshakeTest
 from .test_unit_parser import (
     TestMitra10UnitPatternRepository,
     TestMitra10AreaPatternStrategy,
@@ -31,6 +30,16 @@ from .test_unit_parser import (
 from .test_database_service import TestMitra10DatabaseService
 from .test_table_validator import TestMitra10TableValidator
 from .test_price_update import TestSaveWithPriceUpdate
+from .test_owasp_compliance import (
+    TestRateLimiter,
+    TestAccessControlManager,
+    TestInputValidator,
+    TestDatabaseQueryValidator,
+    TestSecurityDesignPatterns,
+    TestSecurityDecorators,
+    TestEdgeCases,
+    TestDecoratorIntegration,
+)
 
 __all__ = [
     "TestMitra10PriceCleaner",
@@ -66,4 +75,12 @@ __all__ = [
     "TestMitra10DatabaseService",
     "TestMitra10TableValidator",
     "TestSaveWithPriceUpdate",
+    "TestRateLimiter",
+    "TestAccessControlManager",
+    "TestInputValidator",
+    "TestDatabaseQueryValidator",
+    "TestSecurityDesignPatterns",
+    "TestSecurityDecorators",
+    "TestEdgeCases",
+    "TestDecoratorIntegration",
 ]
