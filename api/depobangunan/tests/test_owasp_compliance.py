@@ -35,6 +35,33 @@ from api.depobangunan.security import (
 )
 
 
+class SecurityTestHelpers:
+    """Helper methods for security tests."""
+    
+    @staticmethod
+    def create_test_token_info(permissions=None, allowed_ips=None):
+        if permissions is None:
+            permissions = ['read', 'write']
+        if allowed_ips is None:
+            allowed_ips = []
+        return {
+            'name': 'Test Token',
+            'permissions': permissions,
+            'allowed_ips': allowed_ips,
+            'rate_limit': {'requests': 100, 'window': 60}
+        }
+    
+    @staticmethod
+    def run_rate_limit_test(rate_limiter, client_id, max_requests, expect_block=True):
+        results = []
+        for i in range(max_requests + 1):
+            is_allowed, error = rate_limiter.check_rate_limit(
+                client_id, max_requests=max_requests, window_seconds=60
+            )
+            results.append((is_allowed, error))
+        return results
+
+
 class TestA01BrokenAccessControl(TestCase):
     """
     Test suite for OWASP A01:2021 - Broken Access Control
@@ -52,45 +79,42 @@ class TestA01BrokenAccessControl(TestCase):
         self.factory = RequestFactory()
         cache.clear()
     
+    def _test_token_validation(self, token, expected_valid, expected_error=''):
+        """Helper to test token validation."""
+        request = self.factory.get('/api/depobangunan/scrape/')
+        if token:
+            request.META['HTTP_X_API_TOKEN'] = token
+        request.META['REMOTE_ADDR'] = '127.0.0.1'
+        
+        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
+        
+        if expected_valid:
+            self.assertTrue(is_valid)
+            self.assertEqual(error_msg, '')
+            self.assertIsNotNone(token_info)
+        else:
+            self.assertFalse(is_valid)
+            self.assertEqual(error_msg, expected_error)
+            self.assertIsNone(token_info)
+        
+        return is_valid, error_msg, token_info
+    
     def test_deny_by_default_no_token(self):
         """Test that access is denied by default without token"""
         print("\n[A01] Test: Deny by default - No token provided")
-        
-        request = self.factory.get('/api/depobangunan/scrape/')
-        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
-        
-        self.assertFalse(is_valid, "Access should be denied without token")
-        self.assertEqual(error_msg, 'API token required')
-        self.assertIsNone(token_info)
+        self._test_token_validation(None, False, 'API token required')
         print("✓ Access denied without token")
     
     def test_deny_invalid_token(self):
         """Test that invalid tokens are rejected"""
         print("\n[A01] Test: Deny invalid token")
-        
-        request = self.factory.get(
-            '/api/depobangunan/scrape/',
-            HTTP_X_API_TOKEN='invalid-token-xyz'
-        )
-        is_valid, error_msg, _ = AccessControlManager.validate_token(request)
-        
-        self.assertFalse(is_valid, "Invalid token should be rejected")
-        self.assertEqual(error_msg, 'Invalid API token')
+        self._test_token_validation('invalid-token-xyz', False, 'Invalid API token')
         print("✓ Invalid token rejected")
     
     def test_valid_token_accepted(self):
         """Test that valid tokens are accepted"""
         print("\n[A01] Test: Valid token accepted")
-        
-        request = self.factory.get(
-            '/api/depobangunan/scrape/',
-            HTTP_X_API_TOKEN='dev-token-12345'
-        )
-        is_valid, error_msg, token_info = AccessControlManager.validate_token(request)
-        
-        self.assertTrue(is_valid, "Valid token should be accepted")
-        self.assertEqual(error_msg, '')
-        self.assertIsNotNone(token_info)
+        _, _, token_info = self._test_token_validation('dev-token-12345', True)
         self.assertEqual(token_info['name'], 'Development Token')
         print("✓ Valid token accepted")
     
@@ -98,18 +122,12 @@ class TestA01BrokenAccessControl(TestCase):
         """Test that permissions are enforced (principle of least privilege)"""
         print("\n[A01] Test: Permission enforcement")
         
-        # Token with read-only permission
-        token_info = {
-            'name': 'Read Only Token',
-            'permissions': ['read']
-        }
+        token_info = SecurityTestHelpers.create_test_token_info(permissions=['read'])
         
-        # Should have read permission
         has_read = AccessControlManager.check_permission(token_info, 'read')
         self.assertTrue(has_read, "Should have read permission")
         print("✓ Read permission granted")
         
-        # Should NOT have write permission
         has_write = AccessControlManager.check_permission(token_info, 'write')
         self.assertFalse(has_write, "Should not have write permission")
         print("✓ Write permission denied (principle of least privilege)")
@@ -120,22 +138,18 @@ class TestA01BrokenAccessControl(TestCase):
         
         rate_limiter = RateLimiter()
         client_id = "test_client_123"
+        max_requests = 10
         
-        # Should allow first 10 requests
-        for i in range(10):
-            is_allowed, error = rate_limiter.check_rate_limit(
-                client_id, max_requests=10, window_seconds=60
-            )
-            self.assertTrue(is_allowed, f"Request {i+1} should be allowed")
+        results = SecurityTestHelpers.run_rate_limit_test(rate_limiter, client_id, max_requests)
         
+        # First 10 should succeed
+        for i in range(max_requests):
+            self.assertTrue(results[i][0], f"Request {i+1} should be allowed")
         print("✓ First 10 requests allowed")
         
-        # 11th request should be blocked
-        is_allowed, error = rate_limiter.check_rate_limit(
-            client_id, max_requests=10, window_seconds=60
-        )
-        self.assertFalse(is_allowed, "11th request should be blocked")
-        self.assertIn("Rate limit exceeded", error)
+        # 11th should be blocked
+        self.assertFalse(results[max_requests][0], "11th request should be blocked")
+        self.assertIn("Rate limit exceeded", results[max_requests][1])
         print("✓ 11th request blocked (rate limit enforced)")
     
     def test_rate_limiting_blocks_client(self):
@@ -175,7 +189,7 @@ class TestA01BrokenAccessControl(TestCase):
         )
         
         with self.assertLogs('api.depobangunan.security', level='WARNING') as cm:
-            is_valid, error_msg, _ = AccessControlManager.validate_token(request)
+            _, _, _ = AccessControlManager.validate_token(request)
             AccessControlManager.log_access_attempt(request, False, 'Test denial')
         
         # Verify log contains relevant information
@@ -202,7 +216,7 @@ class TestA01BrokenAccessControl(TestCase):
             HTTP_X_API_TOKEN='restricted-token',
             REMOTE_ADDR=TEST_IP_ALLOWED
         )
-        is_valid, error_msg, _ = AccessControlManager.validate_token(request_allowed)
+        is_valid, _, _ = AccessControlManager.validate_token(request_allowed)
         self.assertTrue(is_valid, "Request from whitelisted IP should be allowed")
         print("✓ Whitelisted IP allowed")
         
@@ -243,7 +257,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for injection_attempt in sql_injection_attempts:
-            is_valid, error_msg, _ = InputValidator.validate_keyword(injection_attempt)
+            is_valid, _, _ = InputValidator.validate_keyword(injection_attempt)
             self.assertFalse(is_valid, f"SQL injection should be detected: {injection_attempt}")
             print(f"✓ SQL injection blocked: {injection_attempt[:30]}...")
     
@@ -275,7 +289,7 @@ class TestA03InjectionPrevention(TestCase):
         # Valid inputs
         valid_inputs = ["cement", "batu bata", "cat-tembok", "semen_gresik"]
         for valid_input in valid_inputs:
-            is_valid, error_msg, sanitized = InputValidator.validate_keyword(valid_input)
+            is_valid, _, _ = InputValidator.validate_keyword(valid_input)
             self.assertTrue(is_valid, f"Valid input should be accepted: {valid_input}")
         
         # Invalid inputs
@@ -296,24 +310,24 @@ class TestA03InjectionPrevention(TestCase):
         print("\n[A03] Test: Integer input validation")
         
         # Valid integers
-        is_valid, error_msg, value = InputValidator.validate_integer(5, 'page', 0, 100)
+        is_valid, _, value = InputValidator.validate_integer(5, 'page', 0, 100)
         self.assertTrue(is_valid)
         self.assertEqual(value, 5)
         print("✓ Valid integer accepted: 5")
         
         # Boundary test
-        is_valid, error_msg, value = InputValidator.validate_integer(0, 'page', 0, 100)
+        is_valid, _, _ = InputValidator.validate_integer(0, 'page', 0, 100)
         self.assertTrue(is_valid)
         print("✓ Boundary value accepted: 0")
         
         # Out of range
-        is_valid, error_msg, value = InputValidator.validate_integer(-1, 'page', 0, 100)
+        is_valid, error_msg, _ = InputValidator.validate_integer(-1, 'page', 0, 100)
         self.assertFalse(is_valid)
         self.assertIn('at least', error_msg)
         print("✓ Out of range rejected: -1")
         
         # SQL injection in string
-        is_valid, error_msg, value = InputValidator.validate_integer("1; DROP TABLE", 'page')
+        is_valid, _, _ = InputValidator.validate_integer("1; DROP TABLE", 'page')
         self.assertFalse(is_valid)
         print("✓ SQL injection in integer rejected")
     
@@ -373,7 +387,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for xss_attempt in xss_attempts:
-            is_valid, error_msg, sanitized = InputValidator.validate_keyword(xss_attempt)
+            is_valid, _, _ = InputValidator.validate_keyword(xss_attempt)
             self.assertFalse(is_valid, f"XSS attempt should be blocked: {xss_attempt}")
             print(f"✓ XSS attempt blocked: {xss_attempt[:30]}...")
 
@@ -396,7 +410,7 @@ class TestA04InsecureDesign(TestCase):
         
         # Valid price
         data = {'price': 50000, 'name': 'Product', 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
         self.assertTrue(is_valid, "Valid price should be accepted")
         print("✓ Valid price accepted: 50000")
         
@@ -409,7 +423,7 @@ class TestA04InsecureDesign(TestCase):
         
         # Unreasonably high price (plausibility check)
         data = {'price': 2000000000, 'name': 'Product', 'url': 'https://example.com'}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
         self.assertFalse(is_valid, "Unreasonably high price should be rejected")
         print("✓ Unreasonably high price rejected (plausibility check)")
     
@@ -445,7 +459,7 @@ class TestA04InsecureDesign(TestCase):
         
         for ssrf_url in ssrf_attempts:
             data = {'url': ssrf_url, 'name': 'Product', 'price': 1000}
-            is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+            is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
             self.assertFalse(is_valid, f"SSRF attempt should be blocked: {ssrf_url}")
             print(f"✓ SSRF blocked: {ssrf_url}")
     
@@ -457,7 +471,7 @@ class TestA04InsecureDesign(TestCase):
         
         # Valid limit
         request = factory.get('/api/products?limit=50')
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request)
         self.assertTrue(is_valid)
         print("✓ Valid limit accepted: 50")
         
@@ -493,15 +507,13 @@ class TestIntegratedSecurityScenarios(TestCase):
         """Test detection and blocking of brute force attacks"""
         print("\n[Integration] Test: Brute force attack scenario")
         
-        factory = RequestFactory()
         rate_limiter = RateLimiter()
         
         # Simulate repeated login attempts
         for i in range(15):
-            request = factory.get('/api/login', REMOTE_ADDR=TEST_IP_ATTACKER)
             client_id = f"{TEST_IP_ATTACKER}:/api/login"
             
-            is_allowed, error = rate_limiter.check_rate_limit(
+            is_allowed, _ = rate_limiter.check_rate_limit(
                 client_id, max_requests=10, window_seconds=60
             )
             
@@ -541,12 +553,10 @@ class TestIntegratedSecurityScenarios(TestCase):
         }
         
         # Should not have write permission
-        has_write = AccessControlManager.check_permission(token_info, 'write')
-        self.assertFalse(has_write)
+        self.assertFalse(AccessControlManager.check_permission(token_info, 'write'))
         
         # Should not have admin permission
-        has_admin = AccessControlManager.check_permission(token_info, 'admin')
-        self.assertFalse(has_admin)
+        self.assertFalse(AccessControlManager.check_permission(token_info, 'admin'))
         
         print("✓ Privilege escalation prevented")
     
@@ -558,14 +568,12 @@ class TestIntegratedSecurityScenarios(TestCase):
         
         # Attempt 1: Excessive page size
         request = factory.get('/api/products?limit=10000')
-        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request)
-        self.assertFalse(is_valid)
+        self.assertFalse(SecurityDesignPatterns.enforce_resource_limits(request)[0])
         
         # Attempt 2: Excessive query parameters
         params = '&'.join([f'p{i}=v{i}' for i in range(50)])
         request = factory.get(f'/api/products?{params}')
-        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request)
-        self.assertFalse(is_valid)
+        self.assertFalse(SecurityDesignPatterns.enforce_resource_limits(request)[0])
         
         print("✓ Resource exhaustion attempts blocked")
 
@@ -649,7 +657,7 @@ class TestSecurityCoverageExtended(TestCase):
         request.META['HTTP_AUTHORIZATION'] = 'dev-token-12345'
         
         # This tests the expiration check code path (currently a pass statement)
-        is_valid, msg, token_info = AccessControlManager.validate_token(request)
+        is_valid, _, _ = AccessControlManager.validate_token(request)
         self.assertTrue(is_valid)
     
     def test_access_control_ip_whitelist_restriction(self):
@@ -668,7 +676,7 @@ class TestSecurityCoverageExtended(TestCase):
             request.META['HTTP_AUTHORIZATION'] = 'ip-restricted-token'
             request.META['REMOTE_ADDR'] = '192.168.1.200'  # Different IP
             
-            is_valid, msg, token_info = AccessControlManager.validate_token(request)
+            is_valid, msg, _ = AccessControlManager.validate_token(request)
             self.assertFalse(is_valid)
             self.assertIn('IP not authorized', msg)
     
@@ -687,7 +695,7 @@ class TestSecurityCoverageExtended(TestCase):
             request.META['HTTP_AUTHORIZATION'] = 'ip-restricted-token'
             request.META['REMOTE_ADDR'] = '192.168.1.100'  # Matching IP
             
-            is_valid, msg, token_info = AccessControlManager.validate_token(request)
+            is_valid, _, _ = AccessControlManager.validate_token(request)
             self.assertTrue(is_valid)
     
     def test_access_control_multiple_failures_alert(self):
@@ -700,78 +708,67 @@ class TestSecurityCoverageExtended(TestCase):
             AccessControlManager.log_access_attempt(request, success=False, reason='Test failure')
         
         # Check cache for failure count (using correct cache key from implementation)
-        cache_key = f"failed_access_192.168.1.250"
+        cache_key = "failed_access_192.168.1.250"
         failures = cache.get(cache_key, 0)
         self.assertGreater(failures, 10)
     
     def test_input_validator_keyword_too_long(self):
         """Test keyword exceeding max length"""
-        validator = InputValidator()
         long_keyword = 'a' * 101
-        is_valid, msg, sanitized = validator.validate_keyword(long_keyword, max_length=100)
+        is_valid, msg, _ = InputValidator.validate_keyword(long_keyword, max_length=100)
         self.assertFalse(is_valid)
         self.assertIn('exceeds maximum length', msg)
     
     def test_input_validator_keyword_empty_after_strip(self):
         """Test keyword that is empty after stripping whitespace"""
-        validator = InputValidator()
-        is_valid, msg, sanitized = validator.validate_keyword('   ', max_length=100)
+        is_valid, msg, _ = InputValidator.validate_keyword('   ', max_length=100)
         self.assertFalse(is_valid)
         self.assertIn('cannot be empty', msg)
     
     def test_input_validator_integer_string_invalid_format(self):
         """Test integer validation with invalid string format"""
-        validator = InputValidator()
-        is_valid, msg, value = validator.validate_integer('abc123', 'test_field')
+        is_valid, msg, _ = InputValidator.validate_integer('abc123', 'test_field')
         self.assertFalse(is_valid)
         self.assertIn('must be a valid integer', msg)
     
     def test_input_validator_integer_min_value(self):
         """Test integer validation with min value constraint"""
-        validator = InputValidator()
-        is_valid, msg, value = validator.validate_integer(5, 'test_field', min_value=10)
+        is_valid, msg, _ = InputValidator.validate_integer(5, 'test_field', min_value=10)
         self.assertFalse(is_valid)
         self.assertIn('must be at least 10', msg)
     
     def test_input_validator_integer_max_value(self):
         """Test integer validation with max value constraint"""
-        validator = InputValidator()
-        is_valid, msg, value = validator.validate_integer(100, 'test_field', max_value=50)
+        is_valid, msg, _ = InputValidator.validate_integer(100, 'test_field', max_value=50)
         self.assertFalse(is_valid)
         self.assertIn('must be at most 50', msg)
     
     def test_input_validator_boolean_empty_string(self):
         """Test boolean validation with empty string"""
-        validator = InputValidator()
-        is_valid, msg, value = validator.validate_boolean('', 'test_field')
+        is_valid, msg, _ = InputValidator.validate_boolean('', 'test_field')
         self.assertFalse(is_valid)
         self.assertIn('must be a boolean', msg)
     
     def test_input_validator_boolean_invalid_string(self):
         """Test boolean validation with invalid string"""
-        validator = InputValidator()
-        is_valid, msg, value = validator.validate_boolean('maybe', 'test_field')
+        is_valid, msg, _ = InputValidator.validate_boolean('maybe', 'test_field')
         self.assertFalse(is_valid)
         self.assertIn('must be a boolean', msg)
     
     def test_database_validator_invalid_table(self):
         """Test database query validator with invalid table name"""
-        validator = DatabaseQueryValidator()
-        is_valid = validator.validate_table_name('malicious_table; DROP TABLE users;')
+        is_valid = DatabaseQueryValidator.validate_table_name('malicious_table; DROP TABLE users;')
         self.assertFalse(is_valid)
     
     def test_database_validator_invalid_column(self):
         """Test database query validator with invalid column name"""
-        validator = DatabaseQueryValidator()
-        is_valid = validator.validate_column_name('column; DELETE FROM users')
+        is_valid = DatabaseQueryValidator.validate_column_name('column; DELETE FROM users')
         self.assertFalse(is_valid)
     
     def test_database_validator_safe_query_with_invalid_params(self):
         """Test safe query building with invalid parameters"""
-        validator = DatabaseQueryValidator()
-        
         # Invalid table - build_safe_query returns (is_valid, error_msg, query)
-        is_valid, error, query = validator.build_safe_query(
+        is_valid, error, query = DatabaseQueryValidator.build_safe_query(
             'SELECT',
             'invalid_table',
             ['name']
@@ -818,7 +815,6 @@ class TestSecurityCoverageExtended(TestCase):
         request.META['REMOTE_ADDR'] = '127.0.0.1'
         
         response = test_view(request)
-        data = response.json() if hasattr(response, 'json') else {}
         
         # Should reject limit > 100
         self.assertEqual(response.status_code, 400)

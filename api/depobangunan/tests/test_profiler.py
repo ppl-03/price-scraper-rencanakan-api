@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock, patch, MagicMock
 from api.depobangunan.utils.depobangunan_profiler import DepoBangunanProfiler
+from .test_helpers import ProfilerTestHelpers
 
 
 class TestDepoBangunanProfiler(TestCase):
@@ -12,23 +13,31 @@ class TestDepoBangunanProfiler(TestCase):
         """Set up test fixtures."""
         self.profiler = DepoBangunanProfiler()
     
+    def _assert_profiler_components(self, profiler):
+        """Helper to assert profiler components are initialized."""
+        self.assertIsNotNone(profiler.real_scraper)
+        self.assertIsNotNone(profiler.html_parser)
+        self.assertIsNotNone(profiler.price_cleaner)
+        self.assertIsNotNone(profiler.url_builder)
+    
+    def _assert_list_property(self, items, expected_items=None):
+        """Helper to assert list properties."""
+        self.assertIsInstance(items, list)
+        self.assertGreater(len(items), 0)
+        if expected_items:
+            for item in expected_items:
+                self.assertIn(item, items)
+    
     def test_profiler_initialization(self):
         """Test profiler initializes with correct vendor name."""
         self.assertEqual(self.profiler.vendor_name, 'depobangunan')
-        self.assertIsNotNone(self.profiler.real_scraper)
-        self.assertIsNotNone(self.profiler.html_parser)
-        self.assertIsNotNone(self.profiler.price_cleaner)
-        self.assertIsNotNone(self.profiler.url_builder)
+        self._assert_profiler_components(self.profiler)
     
     def test_setup_vendor_specific(self):
         """Test vendor-specific setup."""
         self.profiler._setup_vendor_specific()
-        self.assertIsNotNone(self.profiler.real_scraper)
-        self.assertIsNotNone(self.profiler.html_parser)
-        self.assertIsNotNone(self.profiler.price_cleaner)
-        self.assertIsNotNone(self.profiler.url_builder)
-        self.assertIsInstance(self.profiler.test_keywords, list)
-        self.assertGreater(len(self.profiler.test_keywords), 0)
+        self._assert_profiler_components(self.profiler)
+        self._assert_list_property(self.profiler.test_keywords)
     
     def test_get_fallback_html_with_fixture(self):
         """Test fallback HTML retrieval when fixture exists."""
@@ -46,21 +55,12 @@ class TestDepoBangunanProfiler(TestCase):
     def test_get_test_prices(self):
         """Test get test prices returns list of price strings."""
         prices = self.profiler._get_test_prices()
-        self.assertIsInstance(prices, list)
-        self.assertGreater(len(prices), 0)
-        self.assertIn("Rp 3.600", prices)
-        self.assertIn("Rp 125.000", prices)
-        self.assertIn("Rp 1.500.000", prices)
-        self.assertIn(None, prices)
-        self.assertIn("Invalid price", prices)
+        self._assert_list_property(prices, ["Rp 3.600", "Rp 125.000", "Rp 1.500.000", None, "Invalid price"])
     
     def test_get_test_keywords(self):
         """Test get test keywords returns list of keywords."""
         keywords = self.profiler._get_test_keywords()
-        self.assertIsInstance(keywords, list)
-        self.assertGreater(len(keywords), 0)
-        self.assertIn("semen portland", keywords)
-        self.assertIn("cat tembok", keywords)
+        self._assert_list_property(keywords, ["semen portland", "cat tembok"])
     
     def test_create_scraper(self):
         """Test create scraper returns a scraper instance."""
@@ -79,12 +79,10 @@ class TestDepoBangunanProfiler(TestCase):
         ]
         mock_create_scraper.return_value = mock_scraper
         
-        # Override ENV to ensure it uses value from patch.dict
         self.profiler.ENV['PROFILING_ITERATIONS_SCRAPER'] = '2'
         result = self.profiler.profile_complete_scraper()
         
-        self.assertIsInstance(result, dict)
-        self.assertIn('component', result)
+        ProfilerTestHelpers.assert_profiler_result_structure(self, result)
         self.assertEqual(result['component'], 'complete_scraper')
         self.assertEqual(result['iterations'], 2)
     
@@ -144,25 +142,22 @@ class TestDepoBangunanProfiler(TestCase):
     
     def test_test_keywords_attribute(self):
         """Test test_keywords attribute is set correctly."""
-        self.assertIsInstance(self.profiler.test_keywords, list)
-        self.assertTrue(len(self.profiler.test_keywords) > 0)
-        # Verify actual keywords from profiler
-        self.assertIn("cat", self.profiler.test_keywords)
-        self.assertIn("semen", self.profiler.test_keywords)
-        self.assertIn("paku", self.profiler.test_keywords)
-        self.assertIn("keramik", self.profiler.test_keywords)
+        self._assert_list_property(self.profiler.test_keywords, ["cat", "semen", "paku", "keramik"])
     
     def test_profiler_components_initialized(self):
         """Test all profiler components are properly initialized."""
-        self.assertTrue(hasattr(self.profiler, 'html_parser'))
-        self.assertTrue(hasattr(self.profiler, 'price_cleaner'))
-        self.assertTrue(hasattr(self.profiler, 'url_builder'))
-        self.assertTrue(hasattr(self.profiler, 'real_scraper'))
+        components = ['html_parser', 'price_cleaner', 'url_builder', 'real_scraper']
+        methods = {
+            'html_parser': 'parse_products',
+            'price_cleaner': 'clean_price',
+            'url_builder': 'build_search_url'
+        }
         
-        # Test components have required methods
-        self.assertTrue(hasattr(self.profiler.html_parser, 'parse_products'))
-        self.assertTrue(hasattr(self.profiler.price_cleaner, 'clean_price'))
-        self.assertTrue(hasattr(self.profiler.url_builder, 'build_search_url'))
+        for component in components:
+            self.assertTrue(hasattr(self.profiler, component))
+        
+        for component, method in methods.items():
+            self.assertTrue(hasattr(getattr(self.profiler, component), method))
     
     def test_fallback_html_contains_product_data(self):
         """Test fallback HTML contains valid product data."""

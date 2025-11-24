@@ -48,14 +48,8 @@ class DepoBangunanProfiler(BaseProfiler):
     def _create_scraper(self):
         return create_depo_scraper()
     
-    def profile_complete_scraper(self) -> Dict[str, Any]:
-        iterations = int(self.ENV.get('PROFILING_ITERATIONS_SCRAPER', '3'))
-        scraper = create_depo_scraper()
-        
-        print(f"Profiling complete scraper with real website ({iterations} iterations)...")
-        profiler = cProfile.Profile()
-        
-        profiler.enable()
+    def _run_profiled_iterations(self, scraper, iterations: int, profiler: cProfile.Profile):
+        """Helper method to run profiled iterations and reduce duplication."""
         for i in range(iterations):
             keyword = self.test_keywords[i % len(self.test_keywords)]
             try:
@@ -67,17 +61,32 @@ class DepoBangunanProfiler(BaseProfiler):
                 print(f"  Scraped {len(result)} products for '{keyword}'")
             except Exception as e:
                 print(f"  Error scraping '{keyword}': {e}")
-        profiler.disable()
-        
-        stats = pstats.Stats(profiler)
-        stats.sort_stats('cumulative')
-        
-        stats_file = self.output_dir / "complete_scraper_profile.txt"
+    
+    def _save_profiler_stats(self, stats: pstats.Stats, component_name: str) -> Path:
+        """Helper method to save profiler stats to file."""
+        stats_file = self.output_dir / f"{component_name}_profile.txt"
         with open(stats_file, 'w') as f:
             old_stdout = sys.stdout
             sys.stdout = f
             stats.print_stats()
             sys.stdout = old_stdout
+        return stats_file
+    
+    def profile_complete_scraper(self) -> Dict[str, Any]:
+        iterations = int(self.ENV.get('PROFILING_ITERATIONS_SCRAPER', '3'))
+        scraper = create_depo_scraper()
+        
+        print(f"Profiling complete scraper with real website ({iterations} iterations)...")
+        profiler = cProfile.Profile()
+        
+        profiler.enable()
+        self._run_profiled_iterations(scraper, iterations, profiler)
+        profiler.disable()
+        
+        stats = pstats.Stats(profiler)
+        stats.sort_stats('cumulative')
+        
+        stats_file = self._save_profiler_stats(stats, "complete_scraper")
         
         result = {
             'component': 'complete_scraper',
@@ -90,6 +99,16 @@ class DepoBangunanProfiler(BaseProfiler):
         self.results['complete_scraper'] = result
         return result
     
+    def _execute_profiling_workflow(self):
+        """Execute the complete profiling workflow."""
+        self.profile_complete_scraper()
+        print(f"Complete Scraper: {self.results['complete_scraper']['total_time']:.4f}s")
+        
+        report_file = self.generate_performance_report()
+        print(f"Report saved to: {report_file}")
+        
+        self.print_performance_summary()
+    
     def run_complete_profiling(self):
         self.run_basic_profiling()
         
@@ -97,15 +116,7 @@ class DepoBangunanProfiler(BaseProfiler):
             return
             
         try:
-            # Add Depobangunan-specific complete scraper profiling
-            self.profile_complete_scraper()
-            print(f"Complete Scraper: {self.results['complete_scraper']['total_time']:.4f}s")
-            
-            report_file = self.generate_performance_report()
-            print(f"Report saved to: {report_file}")
-            
-            self.print_performance_summary()
-            
+            self._execute_profiling_workflow()
         except Exception as e:
             print(f"Profiling failed: {e}")
             raise

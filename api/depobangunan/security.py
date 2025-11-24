@@ -481,6 +481,31 @@ class SecurityDesignPatterns:
     """
     
     @staticmethod
+    def _validate_field(field_name: str, value: Any, validation_rules: Dict[str, Any]) -> Tuple[bool, str]:
+        """Generic field validation based on rules."""
+        for rule_name, rule_config in validation_rules.items():
+            if rule_name == 'type_check':
+                if not isinstance(value, rule_config['types']):
+                    return False, rule_config['error']
+            elif rule_name == 'range_check':
+                if value < rule_config.get('min', float('-inf')):
+                    return False, rule_config.get('min_error', rule_config['error'])
+                if value > rule_config.get('max', float('inf')):
+                    logger.warning(f"Suspicious {field_name} value: {value}")
+                    return False, rule_config.get('max_error', rule_config['error'])
+            elif rule_name == 'length_check':
+                if len(value) < rule_config.get('min', 0):
+                    return False, rule_config.get('min_error', rule_config['error'])
+                if len(value) > rule_config.get('max', float('inf')):
+                    return False, rule_config.get('max_error', rule_config['error'])
+            elif rule_name == 'pattern_check':
+                if not rule_config['condition'](value):
+                    if rule_config.get('critical'):
+                        logger.critical(f"{field_name} validation failed: {value}")
+                    return False, rule_config['error']
+        return True, ""
+    
+    @staticmethod
     def _validate_price_field(price: Any) -> Tuple[bool, str]:
         """Validate price field in business logic."""
         if not isinstance(price, (int, float)) or price < 0:
@@ -515,20 +540,17 @@ class SecurityDesignPatterns:
         Validate business logic constraints.
         Implements plausibility checks.
         """
-        if 'price' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_price_field(data['price'])
-            if not is_valid:
-                return False, error_msg
+        validators = {
+            'price': SecurityDesignPatterns._validate_price_field,
+            'name': SecurityDesignPatterns._validate_name_field,
+            'url': SecurityDesignPatterns._validate_url_field
+        }
         
-        if 'name' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_name_field(data['name'])
-            if not is_valid:
-                return False, error_msg
-        
-        if 'url' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_url_field(data['url'])
-            if not is_valid:
-                return False, error_msg
+        for field, validator in validators.items():
+            if field in data:
+                is_valid, error_msg = validator(data[field])
+                if not is_valid:
+                    return False, error_msg
         
         return True, ""
     
