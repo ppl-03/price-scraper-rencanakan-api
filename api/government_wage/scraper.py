@@ -171,11 +171,7 @@ def create_government_wage_scraper(headless: bool = True, browser_type: str = "c
 
 
 # ==================== FILE CACHING FUNCTIONS ====================
-# These functions help you save/load data from local JSON files
-# so you don't have to scrape the website repeatedly!
-
 def get_cache_directory() -> str:
-    """Get or create the cache directory for storing scraped data"""
     # Store cache files in: api/government_wage/cache/
     cache_dir = os.path.join(os.path.dirname(__file__), 'cache')
     os.makedirs(cache_dir, exist_ok=True)
@@ -183,24 +179,12 @@ def get_cache_directory() -> str:
 
 
 def get_cache_filename(region: str, year: str = "2025") -> str:
-    """Generate cache filename for a region and year"""
     # Clean region name for filename (remove spaces, special chars)
     safe_region = region.replace(" ", "_").replace(".", "")
     return f"hspk_{year}_{safe_region}.json"
 
 
 def save_to_local_file(items: List[GovernmentWageItem], region: str, year: str = "2025") -> str:
-    """
-    Save scraped data to a local JSON file
-    
-    Args:
-        items: List of scraped wage items
-        region: Region name (e.g., "Kab. Cilacap")
-        year: Year of the data (default: "2025")
-    
-    Returns:
-        Path to the saved file
-    """
     try:
         cache_dir = get_cache_directory()
         filename = get_cache_filename(region, year)
@@ -222,16 +206,6 @@ def save_to_local_file(items: List[GovernmentWageItem], region: str, year: str =
 
 
 def load_from_local_file(region: str, year: str = "2025") -> Optional[List[GovernmentWageItem]]:
-    """
-    Load data from a local JSON file (NO website scraping!)
-    
-    Args:
-        region: Region name (e.g., "Kab. Cilacap")
-        year: Year of the data (default: "2025")
-    
-    Returns:
-        List of wage items if file exists, None otherwise
-    """
     try:
         cache_dir = get_cache_directory()
         filename = get_cache_filename(region, year)
@@ -258,18 +232,6 @@ def load_from_local_file(region: str, year: str = "2025") -> Optional[List[Gover
 
 
 def scrape_and_cache(region: str, year: str = "2025", headless: bool = True) -> List[GovernmentWageItem]:
-    """
-    Scrape website and save to local file
-    Use this function ONCE to get fresh data from the website
-    
-    Args:
-        region: Region name (e.g., "Kab. Cilacap")
-        year: Year of the data (default: "2025")
-        headless: Run browser in headless mode
-    
-    Returns:
-        List of scraped wage items
-    """
     logger.info(f"Scraping fresh data from website for {region} ({year})")
     
     scraper = create_government_wage_scraper(headless=headless)
@@ -283,17 +245,6 @@ def scrape_and_cache(region: str, year: str = "2025", headless: bool = True) -> 
 
 
 def get_cached_or_scrape(region: str, year: str = "2025", force_refresh: bool = False) -> List[GovernmentWageItem]:
-    """
-    Smart function: Try to load from file first, scrape only if needed
-    
-    Args:
-        region: Region name (e.g., "Kab. Cilacap")
-        year: Year of the data (default: "2025")
-        force_refresh: If True, ignore cache and scrape fresh data
-    
-    Returns:
-        List of wage items
-    """
     # If force refresh, skip cache
     if force_refresh:
         logger.info(f"Force refresh requested for {region}")
