@@ -16,9 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.views.decorators.http import require_http_methods
 from db_pricing import views as db_views
 
+
+@require_http_methods(["GET"])
+def trigger_error(request):
+    return 1 / 0
+
+
 urlpatterns = [
+    path('sentry-debug/', trigger_error),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('api/gemilang/', include('api.gemilang.urls')),
