@@ -109,6 +109,7 @@ class TestGemilangProductModel(MySQLTestCase):
         self.assertIn("Semen", semen_products.first().name)
     
     def test_update_product(self):
+        import time
         product = GemilangProduct.objects.create(
             name="Original Name",
             price=10000,
@@ -117,6 +118,9 @@ class TestGemilangProductModel(MySQLTestCase):
         )
         
         original_created_at = product.created_at
+        
+        # Add small delay to ensure updated_at timestamp is different
+        time.sleep(0.01)
         
         product.name = "Updated Name"
         product.price = 20000
@@ -127,7 +131,7 @@ class TestGemilangProductModel(MySQLTestCase):
         self.assertEqual(updated_product.name, "Updated Name")
         self.assertEqual(updated_product.price, 20000)
         self.assertEqual(updated_product.created_at, original_created_at)
-        self.assertNotEqual(updated_product.updated_at, updated_product.created_at)
+        self.assertGreater(updated_product.updated_at, updated_product.created_at)
     
     def test_delete_product(self):
         product = GemilangProduct.objects.create(
