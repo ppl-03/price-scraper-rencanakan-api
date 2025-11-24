@@ -51,3 +51,10 @@ def curated_price_list_db(request):
         )
 
     return render(request, "dashboard/curated_price_list.html", {"rows": rows})
+
+@require_GET
+def price_anomalies(request):
+    """
+    Display price anomalies page
+    """
+    return render(request, "dashboard/price_anomalies.html")
