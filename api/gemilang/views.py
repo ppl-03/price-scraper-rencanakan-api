@@ -16,6 +16,19 @@ from .security import (
 logger = get_gemilang_logger("views")
 
 
+def _validate_api_token(request):
+    """
+    Validate API token from request.
+    Returns tuple of (is_valid: bool, error_message: str or None)
+    """
+    from .security import AccessControlManager
+    
+    access_manager = AccessControlManager()
+    is_valid, error_msg = access_manager.validate_token(request)
+    
+    return (is_valid, error_msg)
+
+
 def _clean_location_name(location_name: str) -> str:
     if location_name.startswith('GEMILANG - '):
         return location_name.replace('GEMILANG - ', '', 1)
