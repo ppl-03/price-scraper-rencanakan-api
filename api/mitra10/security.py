@@ -5,13 +5,28 @@ import json
 from functools import wraps
 from typing import Optional, Dict, Any, Tuple
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.db import connection
 import bleach
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Common Utility Functions
+# =============================================================================
+
+def get_client_ip(request) -> str:
+    """Extract client IP address from request."""
+    return request.META.get('REMOTE_ADDR', 'unknown')
+
+
+def sanitize_string(value: str, max_length: int = 200) -> str:
+    """Sanitize string by removing non-printable characters and limiting length."""
+    truncated = value[:max_length]
+    return ''.join(c if c.isprintable() else '' for c in truncated)
 
 
 # =============================================================================
@@ -115,15 +130,16 @@ class AccessControlManager:
             return False, 'API token required', None
         
         if token not in cls.API_TOKENS:
-            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            client_ip = get_client_ip(request)
             logger.warning(f"Invalid API token attempt from {client_ip}")
             return False, 'Invalid API token', None
         
         token_info = cls.API_TOKENS[token]
-        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        client_ip = get_client_ip(request)
         
         if token_info.get('expires'):
-            pass
+            if datetime.now() > token_info['expires']:
+                return False, 'Token expired', None
         
         allowed_ips = token_info.get('allowed_ips', [])
         if allowed_ips and client_ip not in allowed_ips:
@@ -149,14 +165,11 @@ class AccessControlManager:
     
     @classmethod
     def log_access_attempt(cls, request, success: bool, reason: str = ''):
-        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-        user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')[:200]
-        user_agent = ''.join(c if c.isprintable() else '' for c in user_agent)
-        path = request.path[:200]
-        path = ''.join(c if c.isprintable() else '' for c in path)
+        client_ip = get_client_ip(request)
+        user_agent = sanitize_string(request.META.get('HTTP_USER_AGENT', 'unknown'))
+        path = sanitize_string(request.path)
         method = request.method
-        safe_reason = str(reason)[:100] if reason else 'unknown'
-        safe_reason = ''.join(c if c.isprintable() else '' for c in safe_reason)
+        safe_reason = sanitize_string(str(reason), 100) if reason else 'unknown'
         
         timestamp = datetime.now().isoformat()
         
@@ -203,6 +216,11 @@ class InputValidator:
         r"(\'|\"|`)",
     ]
     
+    @staticmethod
+    def _create_validation_error(field_name: str, message: str) -> Tuple[bool, str, None]:
+        """Helper to create consistent validation error responses."""
+        return False, f"{field_name} {message}" if field_name else message, None
+    
     @classmethod
     def validate_keyword(cls, keyword: str, max_length: int = 100) -> Tuple[bool, str, Optional[str]]:
         if not keyword:
@@ -237,23 +255,23 @@ class InputValidator:
         max_value: Optional[int] = None
     ) -> Tuple[bool, str, Optional[int]]:
         if value is None:
-            return False, f"{field_name} is required", None
+            return cls._create_validation_error(field_name, "is required")
         
         if isinstance(value, str):
             if not cls.NUMERIC_PATTERN.match(value):
-                return False, f"{field_name} must be a valid integer", None
+                return cls._create_validation_error(field_name, "must be a valid integer")
             try:
                 value = int(value)
             except ValueError:
-                return False, f"{field_name} must be a valid integer", None
+                return cls._create_validation_error(field_name, "must be a valid integer")
         elif not isinstance(value, int):
-            return False, f"{field_name} must be an integer", None
+            return cls._create_validation_error(field_name, "must be an integer")
         
         if min_value is not None and value < min_value:
-            return False, f"{field_name} must be at least {min_value}", None
+            return cls._create_validation_error(field_name, f"must be at least {min_value}")
         
         if max_value is not None and value > max_value:
-            return False, f"{field_name} must be at most {max_value}", None
+            return cls._create_validation_error(field_name, f"must be at most {max_value}")
         
         return True, "", value
     
@@ -263,7 +281,7 @@ class InputValidator:
             return True, "", None
         
         if value == '':
-            return False, f"{field_name} must be a boolean value", None
+            return cls._create_validation_error(field_name, "must be a boolean value")
         
         if isinstance(value, bool):
             return True, "", value
@@ -274,10 +292,8 @@ class InputValidator:
                 return True, "", True
             elif value_lower in ['false', '0', 'no']:
                 return True, "", False
-            else:
-                return False, f"{field_name} must be a boolean value", None
         
-        return False, f"{field_name} must be a boolean value", None
+        return cls._create_validation_error(field_name, "must be a boolean value")
     
     @classmethod
     def _detect_sql_injection(cls, value: str) -> bool:
@@ -358,48 +374,51 @@ class DatabaseQueryValidator:
 
 class SecurityDesignPatterns:
     @staticmethod
-    def _validate_price_field(price: Any) -> Tuple[bool, str]:
+    def _validate_price_lambda(price):
         if not isinstance(price, (int, float)) or price < 0:
-            return False, "Price must be a positive number"
+            return (False, "Price must be a positive number")
         if price > 1000000000:
             logger.warning(f"Suspicious price value: {price}")
-            return False, "Price value exceeds reasonable limit"
-        return True, ""
+            return (False, "Price value exceeds reasonable limit")
+        return (True, "")
     
     @staticmethod
-    def _validate_name_field(name: str) -> Tuple[bool, str]:
+    def _validate_name_lambda(name):
         if len(name) > 500:
-            return False, "Product name too long"
+            return (False, "Product name too long")
         if len(name) < 2:
-            return False, "Product name too short"
-        return True, ""
+            return (False, "Product name too short")
+        return (True, "")
     
     @staticmethod
-    def _validate_url_field(url: str) -> Tuple[bool, str]:
+    def _validate_url_lambda(url):
         if not url.startswith('https://www.mitra10.com'):
-            return False, "URL must be from mitra10.com domain"
+            return (False, "URL must be from mitra10.com domain")
         if 'localhost' in url or '127.0.0.1' in url or '0.0.0.0' in url:
             logger.critical(f"SSRF attempt detected: {url}")
-            return False, "Invalid URL"
+            return (False, "Invalid URL")
+        return (True, "")
+    
+    FIELD_VALIDATORS = {
+        'price': lambda price: SecurityDesignPatterns._validate_price_lambda(price),
+        'name': lambda name: SecurityDesignPatterns._validate_name_lambda(name),
+        'url': lambda url: SecurityDesignPatterns._validate_url_lambda(url)
+    }
+    
+    @staticmethod
+    def _validate_field(field_name: str, value: Any) -> Tuple[bool, str]:
+        """Generic field validation using registered validators."""
+        if field_name in SecurityDesignPatterns.FIELD_VALIDATORS:
+            return SecurityDesignPatterns.FIELD_VALIDATORS[field_name](value)
         return True, ""
     
     @staticmethod
     def validate_business_logic(data: Dict[str, Any]) -> Tuple[bool, str]:
-        if 'price' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_price_field(data['price'])
-            if not is_valid:
-                return False, error_msg
-        
-        if 'name' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_name_field(data['name'])
-            if not is_valid:
-                return False, error_msg
-        
-        if 'url' in data:
-            is_valid, error_msg = SecurityDesignPatterns._validate_url_field(data['url'])
-            if not is_valid:
-                return False, error_msg
-        
+        for field_name in ['price', 'name', 'url']:
+            if field_name in data:
+                is_valid, error_msg = SecurityDesignPatterns._validate_field(field_name, data[field_name])
+                if not is_valid:
+                    return False, error_msg
         return True, ""
     
     @staticmethod
@@ -446,7 +465,7 @@ def require_api_token(required_permission: str = 'read'):
                     'code': 'AUTHORIZATION_FAILED'
                 }, status=403)
             
-            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            client_ip = get_client_ip(request)
             endpoint = request.path
             client_id = f"{client_ip}:{endpoint}"
             
@@ -485,7 +504,8 @@ def validate_input(validators: dict):
                         data_source = {**request.GET.dict(), **json.loads(request.body)}
                     else:
                         data_source = {**request.GET.dict(), **request.POST.dict()}
-                except:
+                except (ValueError, TypeError, json.JSONDecodeError, AttributeError) as e:
+                    logger.warning(f"Failed to parse request body: {str(e)}")
                     data_source = {**request.GET.dict(), **request.POST.dict()}
             else:
                 data_source = request.GET
