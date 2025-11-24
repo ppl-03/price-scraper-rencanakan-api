@@ -114,6 +114,17 @@ else:
     # Determine test database name - don't add prefix if already present
     test_db_name = db_name if db_name.startswith('test_') else f'test_{db_name}'
     
+    options = {
+    'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+    'charset': 'utf8mb4',
+    }
+    # Only require SSL if explicitly requested (e.g., production Azure)
+    if env.bool("DB_REQUIRE_SSL", default=False):
+        options["ssl"] = {
+            "ssl": True,
+            "ssl_mode": "REQUIRED",
+        }
+    
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
@@ -122,14 +133,7 @@ else:
             'PASSWORD': db_password,
             'HOST': db_host,
             'PORT': db_port,
-            'OPTIONS': {
-                'ssl': {
-                    'ssl': True,
-                    'ssl_mode': 'REQUIRED',
-                },
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-                'charset': 'utf8mb4',
-            },
+            'OPTIONS': options,
             'TEST': {
                 'NAME': test_db_name,
             }
