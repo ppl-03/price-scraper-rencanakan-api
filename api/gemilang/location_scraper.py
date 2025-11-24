@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional
 from abc import ABC, abstractmethod
 
@@ -6,8 +5,9 @@ from api.interfaces import (
     IHttpClient, ILocationParser, ILocationScraper,
     LocationScrapingResult, Location, HttpClientError, HtmlParserError
 )
+from .logging_utils import get_gemilang_logger
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("location_scraper")
 
 
 class LocationScraperConfiguration:
@@ -56,17 +56,17 @@ class ErrorHandler:
     
     @staticmethod
     def handle_http_error(error: HttpClientError) -> LocationScrapingResult:
-        logger.error(f"HTTP client error during location scraping: {str(error)}")
+        logger.error("HTTP client error during location scraping: %s", error)
         return ScrapingResultBuilder().with_error(str(error)).build()
     
     @staticmethod
     def handle_parser_error(error: HtmlParserError) -> LocationScrapingResult:
-        logger.error(f"HTML parser error during location scraping: {str(error)}")
+        logger.error("HTML parser error during location scraping: %s", error)
         return ScrapingResultBuilder().with_error(str(error)).build()
     
     @staticmethod
     def handle_generic_error(error: Exception) -> LocationScrapingResult:
-        logger.error(f"Unexpected error during location scraping: {str(error)}")
+        logger.error("Unexpected error during location scraping: %s", error)
         return ScrapingResultBuilder().with_error(str(error)).build()
 
 
