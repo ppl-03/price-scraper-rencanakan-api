@@ -1,7 +1,7 @@
 # Price Scraper Rencanakan API
 
-[![Django Tests](https://github.com/ppl-03/price-scraper-rencanakan-api/actions/workflows/django.yml/badge.svg)](https://github.com/ppl-03/price-scraper-rencanakan-api/actions/workflows/django.yml)
-[![Coverage](https://ppl-03.github.io/price-scraper-rencanakan-api/badges/coverage.svg)](https://github.com/ppl-03/price-scraper-rencanakan-api/actions)
+[![CI CD](https://github.com/ppl-03/price-scraper-rencanakan-api/actions/workflows/django.yml/badge.svg)](https://github.com/ppl-03/price-scraper-rencanakan-api/actions/workflows/django.yml)
+![Coverage](https://raw.githubusercontent.com/ppl-03/price-scraper-rencanakan-api/refs/heads/main/coverage.svg)
 
 A Django-based API for scraping and managing product prices from various vendors.
 
