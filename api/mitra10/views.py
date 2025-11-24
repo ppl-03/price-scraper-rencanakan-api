@@ -21,6 +21,12 @@ ERROR_QUERY_REQUIRED = 'Query parameter is required'
 ERROR_QUERY_EMPTY = 'Query parameter cannot be empty'
 ERROR_PAGE_INVALID = 'Page parameter must be a valid integer'
 
+# Sentry breadcrumb category constants
+BREADCRUMB_CATEGORY_SCRAPER = 'mitra10.scraper'
+BREADCRUMB_CATEGORY_ERROR = 'mitra10.error'
+BREADCRUMB_CATEGORY_LOCATION = 'mitra10.location'
+BREADCRUMB_CATEGORY_DATABASE = 'mitra10.database'
+
 API_TOKENS = {
     'dev-token-12345': {
         'name': 'Development Token',
@@ -112,7 +118,7 @@ def scrape_products(request):
             # Track scraping start
             Mitra10SentryMonitor.add_breadcrumb(
                 f"Starting product scraping for keyword: {query}",
-                category="mitra10.scraper",
+                category=BREADCRUMB_CATEGORY_SCRAPER,
                 level="info"
             )
             
@@ -167,7 +173,7 @@ def scrape_products(request):
             # Track error in Sentry
             Mitra10SentryMonitor.add_breadcrumb(
                 f"Fatal error in scrape_products: {str(e)}",
-                category="mitra10.error",
+                category=BREADCRUMB_CATEGORY_ERROR,
                 level="error"
             )
             
@@ -307,6 +313,74 @@ def _auto_categorize_new_products(save_result):
     return 0
 
 
+def _handle_scraping_phase(query, params, task):
+    """Handle the scraping phase and return result or error response."""
+    Mitra10SentryMonitor.add_breadcrumb(
+        f"Starting scraping phase for: {query}",
+        category=BREADCRUMB_CATEGORY_SCRAPER,
+        level="info"
+    )
+    
+    try:
+        scraping_start_time = time.time()
+        result = _perform_scraping(query, params)
+        scraping_time = time.time() - scraping_start_time
+        
+        Mitra10SentryMonitor.add_breadcrumb(
+            f"Scraping completed in {scraping_time:.2f}s - Found: {len(result.products) if result.success else 0}",
+            category=BREADCRUMB_CATEGORY_SCRAPER,
+            level="info" if result.success else "warning",
+            data={"scraping_time": scraping_time, "products_count": len(result.products) if result.success else 0}
+        )
+        return result, None
+    except Exception as e:
+        logger.error(f"Scraping error: {str(e)}")
+        Mitra10SentryMonitor.add_breadcrumb(
+            f"Scraping failed: {str(e)}",
+            category=BREADCRUMB_CATEGORY_ERROR,
+            level="error"
+        )
+        task.complete(success=False)
+        return None, _create_error_response(f'Scraping failed: {str(e)}', status_code=500)
+
+
+def _handle_database_save(products_data, task):
+    """Handle database save phase and return result or error response."""
+    Mitra10SentryMonitor.add_breadcrumb(
+        "Starting database save",
+        category=BREADCRUMB_CATEGORY_DATABASE,
+        level="info"
+    )
+    
+    try:
+        db_start_time = time.time()
+        service = Mitra10DatabaseService()
+        save_result = service.save_with_price_update(products_data)
+        db_time = time.time() - db_start_time
+        
+        Mitra10SentryMonitor.add_breadcrumb(
+            f"Database save completed in {db_time:.2f}s - Inserted: {save_result.get('inserted', 0)}, Updated: {save_result.get('updated', 0)}",
+            category=BREADCRUMB_CATEGORY_DATABASE,
+            level="info",
+            data={
+                "db_time": db_time,
+                "inserted": save_result.get('inserted', 0),
+                "updated": save_result.get('updated', 0),
+                "anomalies": len(save_result.get('anomalies', []))
+            }
+        )
+        return save_result, None
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        Mitra10SentryMonitor.add_breadcrumb(
+            f"Database save failed: {str(e)}",
+            category=BREADCRUMB_CATEGORY_ERROR,
+            level="error"
+        )
+        task.complete(success=False)
+        return None, _create_error_response(f'Database error: {str(e)}', status_code=500)
+
+
 @require_http_methods(["POST"])
 @require_api_token('write')
 @validate_input({
@@ -344,33 +418,10 @@ def scrape_and_save_products(request):
                 'page': page
             }
             
-            # Track scraping phase
-            Mitra10SentryMonitor.add_breadcrumb(
-                f"Starting scraping phase for: {query}",
-                category="mitra10.scraper",
-                level="info"
-            )
-            
-            try:
-                scraping_start_time = time.time()
-                result = _perform_scraping(query, params)
-                scraping_time = time.time() - scraping_start_time
-                
-                Mitra10SentryMonitor.add_breadcrumb(
-                    f"Scraping completed in {scraping_time:.2f}s - Found: {len(result.products) if result.success else 0}",
-                    category="mitra10.scraper",
-                    level="info" if result.success else "warning",
-                    data={"scraping_time": scraping_time, "products_count": len(result.products) if result.success else 0}
-                )
-            except Exception as e:
-                logger.error(f"Scraping error: {str(e)}")
-                Mitra10SentryMonitor.add_breadcrumb(
-                    f"Scraping failed: {str(e)}",
-                    category="mitra10.error",
-                    level="error"
-                )
-                task.complete(success=False)
-                return _create_error_response(f'Scraping failed: {str(e)}', status_code=500)
+            # Handle scraping phase
+            result, error_response = _handle_scraping_phase(query, params, task)
+            if error_response:
+                return error_response
         
             if not result.success:
                 task.complete(success=False)
@@ -382,7 +433,7 @@ def scrape_and_save_products(request):
             # Track location scraping
             Mitra10SentryMonitor.add_breadcrumb(
                 "Starting location scraping",
-                category="mitra10.location",
+                category=BREADCRUMB_CATEGORY_LOCATION,
                 level="info"
             )
             
@@ -392,7 +443,7 @@ def scrape_and_save_products(request):
             
             Mitra10SentryMonitor.add_breadcrumb(
                 f"Location scraping completed in {location_time:.2f}s",
-                category="mitra10.location",
+                category=BREADCRUMB_CATEGORY_LOCATION,
                 level="info",
                 data={"location_time": location_time}
             )
@@ -402,39 +453,10 @@ def scrape_and_save_products(request):
             # Update task progress
             task.record_progress(2, 3, "Saving to database...")
             
-            # Track database save
-            Mitra10SentryMonitor.add_breadcrumb(
-                "Starting database save",
-                category="mitra10.database",
-                level="info"
-            )
-            
-            try:
-                db_start_time = time.time()
-                service = Mitra10DatabaseService()
-                save_result = service.save_with_price_update(products_data)
-                db_time = time.time() - db_start_time
-                
-                Mitra10SentryMonitor.add_breadcrumb(
-                    f"Database save completed in {db_time:.2f}s - Inserted: {save_result.get('inserted', 0)}, Updated: {save_result.get('updated', 0)}",
-                    category="mitra10.database",
-                    level="info",
-                    data={
-                        "db_time": db_time,
-                        "inserted": save_result.get('inserted', 0),
-                        "updated": save_result.get('updated', 0),
-                        "anomalies": len(save_result.get('anomalies', []))
-                    }
-                )
-            except Exception as e:
-                logger.error(f"Database error: {str(e)}")
-                Mitra10SentryMonitor.add_breadcrumb(
-                    f"Database save failed: {str(e)}",
-                    category="mitra10.error",
-                    level="error"
-                )
-                task.complete(success=False)
-                return _create_error_response(f'Database error: {str(e)}', status_code=500)
+            # Handle database save
+            save_result, error_response = _handle_database_save(products_data, task)
+            if error_response:
+                return error_response
             
             # Update task progress
             task.record_progress(3, 3, "Finalizing...")
@@ -472,7 +494,7 @@ def scrape_and_save_products(request):
             # Track error in Sentry
             Mitra10SentryMonitor.add_breadcrumb(
                 f"Fatal error in scrape_and_save_products: {str(e)}",
-                category="mitra10.error",
+                category=BREADCRUMB_CATEGORY_ERROR,
                 level="error"
             )
             
