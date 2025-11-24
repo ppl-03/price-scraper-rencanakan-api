@@ -103,7 +103,11 @@ class GovernmentWagePlaywrightClient(IHttpClient):
 
             await self.page.wait_for_selector("table.dataTable tbody tr", timeout=60000)
 
-            await self.page.wait_for_function(timeout=60000)
+            # Wait for table to be populated with data
+            await self.page.wait_for_function(
+                "() => document.querySelectorAll('table.dataTable tbody tr').length > 0",
+                timeout=60000
+            )
 
             await self.page.wait_for_load_state("networkidle", timeout=15000)
 
