@@ -1,7 +1,10 @@
 from django.shortcuts import render
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.conf import settings
-from .services import VendorPricingService
+from django.http import JsonResponse
+import json
+
+from .services import VendorPricingService, CategoryUpdateService
 
 
 @require_GET
@@ -51,3 +54,120 @@ def curated_price_list_db(request):
         )
 
     return render(request, "dashboard/curated_price_list.html", {"rows": rows})
+
+
+@require_POST
+def update_product_category(request):
+    """API endpoint to update a product's category.
+    
+    Expected JSON payload:
+    {
+        "source": "Gemilang Store",
+        "product_url": "https://example.com/product",
+        "new_category": "New Category Name"
+    }
+    
+    Returns:
+        JsonResponse with success status and updated product information
+    """
+    try:
+        # Parse JSON body
+        data = json.loads(request.body)
+        
+        source = data.get("source")
+        product_url = data.get("product_url")
+        new_category = data.get("new_category")
+        
+        # Use the CategoryUpdateService to handle the update
+        service = CategoryUpdateService()
+        result = service.update_category(source, product_url, new_category)
+        
+        if result.get("success"):
+            return JsonResponse(result, status=200)
+        else:
+            return JsonResponse(result, status=400)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON payload"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }, status=500)
+
+
+@require_POST
+def bulk_update_categories(request):
+    """API endpoint to update multiple product categories at once.
+    
+    Expected JSON payload:
+    {
+        "updates": [
+            {
+                "source": "Gemilang Store",
+                "product_url": "https://example.com/product1",
+                "new_category": "Category A"
+            },
+            {
+                "source": "Mitra10",
+                "product_url": "https://example.com/product2",
+                "new_category": "Category B"
+            }
+        ]
+    }
+    
+    Returns:
+        JsonResponse with bulk update results
+    """
+    try:
+        # Parse JSON body
+        data = json.loads(request.body)
+        updates = data.get("updates", [])
+        
+        if not isinstance(updates, list):
+            return JsonResponse({
+                "success": False,
+                "error": "updates must be a list"
+            }, status=400)
+        
+        # Use the CategoryUpdateService to handle bulk updates
+        service = CategoryUpdateService()
+        result = service.bulk_update_categories(updates)
+        
+        return JsonResponse(result, status=200)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON payload"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }, status=500)
+
+
+@require_GET
+def get_available_vendors(request):
+    """API endpoint to get list of available vendor sources.
+    
+    Returns:
+        JsonResponse with list of vendor names
+    """
+    try:
+        service = CategoryUpdateService()
+        vendors = service.get_available_vendors()
+        
+        return JsonResponse({
+            "success": True,
+            "vendors": vendors
+        }, status=200)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }, status=500)
