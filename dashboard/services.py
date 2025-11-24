@@ -12,6 +12,7 @@ from db_pricing.models import (
 )
 
 from .repositories.pricing_repository import PricingRepository
+from .category_validators import CategoryUpdateRequestValidator
 
 
 class VendorPricingService:
@@ -132,3 +133,139 @@ class VendorPricingService:
 
         uniq.sort(key=lambda x: x.get("value") or 0)
         return uniq
+
+
+class CategoryUpdateService:
+    """Service responsible for updating product categories across vendor models.
+    
+    This service follows the Single Responsibility Principle by focusing solely on
+    category update operations. It handles validation, model lookup, and update logic
+    in a clean, testable way.
+    """
+
+    # Map source names to their respective models
+    VENDOR_MODEL_MAP = {
+        "Gemilang Store": GemilangProduct,
+        "Depo Bangunan": DepoBangunanProduct,
+        "Juragan Material": JuraganMaterialProduct,
+        "Mitra10": Mitra10Product,
+        "Tokopedia": TokopediaProduct,
+    }
+
+    def __init__(self, validator: Optional[CategoryUpdateRequestValidator] = None):
+        """Initialize the category update service.
+        
+        Args:
+            validator: Optional custom validator instance (for testing/customization)
+        """
+        self.validator = validator or CategoryUpdateRequestValidator()
+
+    def update_category(self, source: str, product_url: str, new_category: str) -> Dict:
+        """Update the category of a specific product.
+        
+        Args:
+            source: The vendor source name (e.g., "Gemilang Store")
+            product_url: The URL of the product to update
+            new_category: The new category value to set
+            
+        Returns:
+            Dict containing success status and message, or error information
+            
+        Raises:
+            ValueError: If source is invalid or product not found
+        """
+        # Validate inputs using the validator
+        validation_result = self.validator.validate_update_request(
+            source, product_url, new_category
+        )
+        
+        if not validation_result.get("valid"):
+            return {
+                "success": False,
+                "error": validation_result.get("error", "Validation failed")
+            }
+        
+        # Get the model for this vendor
+        model = self.VENDOR_MODEL_MAP.get(source)
+        if not model:
+            return {
+                "success": False,
+                "error": f"Invalid vendor source: {source}"
+            }
+        
+        # Find the product by URL (unique identifier across vendors)
+        try:
+            product = model.objects.get(url=product_url)
+        except model.DoesNotExist:
+            return {
+                "success": False,
+                "error": f"Product not found with URL: {product_url}"
+            }
+        
+        # Store old category for logging/auditing
+        old_category = product.category
+        
+        # Update the category
+        product.category = new_category.strip()
+        product.save(update_fields=['category', 'updated_at'])
+        
+        return {
+            "success": True,
+            "message": "Category updated successfully",
+            "product_name": product.name,
+            "old_category": old_category,
+            "new_category": product.category,
+            "vendor": source,
+            "updated_at": product.updated_at.isoformat()
+        }
+    
+    def bulk_update_categories(self, updates: List[Dict]) -> Dict:
+        """Update multiple product categories in a single operation.
+        
+        Args:
+            updates: List of dicts with keys: source, product_url, new_category
+            
+        Returns:
+            Dict with success count, failure count, and detailed results
+        """
+        # Validate the entire bulk request first
+        bulk_validation = self.validator.validate_bulk_request(updates)
+        
+        if not bulk_validation.get("valid"):
+            return {
+                "success": False,
+                "error": bulk_validation.get("error"),
+                "validation_errors": bulk_validation.get("errors", []),
+                "success_count": 0,
+                "failure_count": len(updates)
+            }
+        
+        results = {
+            "success_count": 0,
+            "failure_count": 0,
+            "updates": []
+        }
+        
+        for update_data in updates:
+            source = update_data.get("source")
+            product_url = update_data.get("product_url")
+            new_category = update_data.get("new_category")
+            
+            result = self.update_category(source, product_url, new_category)
+            
+            if result.get("success"):
+                results["success_count"] += 1
+            else:
+                results["failure_count"] += 1
+            
+            results["updates"].append(result)
+        
+        return results
+    
+    def get_available_vendors(self) -> List[str]:
+        """Get list of available vendor sources.
+        
+        Returns:
+            List of vendor source names
+        """
+        return list(self.VENDOR_MODEL_MAP.keys())
