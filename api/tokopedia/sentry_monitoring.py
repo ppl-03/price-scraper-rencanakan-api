@@ -18,6 +18,14 @@ class TokopediaSentryMonitor:
     COMPONENT_URL_BUILDER = "url_builder"
     
     @staticmethod
+    def _set_context_and_tags(context_name: str, context_data: Dict[str, Any], tags: Optional[Dict[str, str]] = None):
+        """Helper to set context and tags atomically."""
+        sentry_sdk.set_context(context_name, context_data)
+        if tags:
+            for key, value in tags.items():
+                sentry_sdk.set_tag(key, value)
+    
+    @staticmethod
     def set_scraping_context(keyword: str, page: int = 0, additional_data: Optional[Dict] = None):
         """Set context for the current scraping operation."""
         context = {
@@ -30,12 +38,13 @@ class TokopediaSentryMonitor:
         if additional_data:
             context.update(additional_data)
         
-        sentry_sdk.set_context("scraping_context", context)
+        tags = {
+            "vendor": TokopediaSentryMonitor.VENDOR,
+            "search_keyword": keyword,
+            "page_number": str(page)
+        }
         
-        # Add tags for filtering in Sentry
-        sentry_sdk.set_tag("vendor", TokopediaSentryMonitor.VENDOR)
-        sentry_sdk.set_tag("search_keyword", keyword)
-        sentry_sdk.set_tag("page_number", str(page))
+        TokopediaSentryMonitor._set_context_and_tags("scraping_context", context, tags)
     
     @staticmethod
     def add_breadcrumb(message: str, category: str = "scraping", level: str = "info", data: Optional[Dict] = None):
@@ -48,6 +57,19 @@ class TokopediaSentryMonitor:
         )
     
     @staticmethod
+    def _set_measurements(measurements: Dict[str, float]):
+        """Helper to set multiple measurements at once."""
+        for key, value in measurements.items():
+            sentry_sdk.set_measurement(key, value)
+    
+    @staticmethod
+    def _capture_result_message(success: bool, success_msg: str, failure_msg: str):
+        """Helper to capture appropriate message based on success."""
+        level = "info" if success else "warning"
+        message = success_msg if success else failure_msg
+        capture_message(message, level=level)
+    
+    @staticmethod
     def track_scraping_result(result: Dict[str, Any]):
         """Track the result of a scraping operation."""
         products_count = result.get('products_count', 0)
@@ -55,29 +77,26 @@ class TokopediaSentryMonitor:
         errors_count = result.get('errors_count', 0)
         
         # Set metrics
+        measurements = {
+            "products_scraped": products_count,
+            "scraping_errors": errors_count
+        }
+        TokopediaSentryMonitor._set_measurements(measurements)
         sentry_sdk.set_tag("scraping_success", str(success))
-        sentry_sdk.set_measurement("products_scraped", products_count)
-        sentry_sdk.set_measurement("scraping_errors", errors_count)
         
         # Add context
-        sentry_sdk.set_context("scraping_result", {
+        context = {
             "products_found": products_count,
             "success": success,
             "errors": errors_count,
             "timestamp": time.time()
-        })
+        }
+        sentry_sdk.set_context("scraping_result", context)
         
         # Log to Sentry
-        if success:
-            capture_message(
-                f"Tokopedia scraping completed: {products_count} products found",
-                level="info"
-            )
-        else:
-            capture_message(
-                f"Tokopedia scraping failed with {errors_count} errors",
-                level="warning"
-            )
+        success_msg = f"Tokopedia scraping completed: {products_count} products found"
+        failure_msg = f"Tokopedia scraping failed with {errors_count} errors"
+        TokopediaSentryMonitor._capture_result_message(success, success_msg, failure_msg)
     
     @staticmethod
     def track_database_operation(operation: str, result: Dict[str, Any]):
@@ -88,31 +107,28 @@ class TokopediaSentryMonitor:
         anomalies_count = len(result.get('anomalies', []))
         
         # Set metrics
-        sentry_sdk.set_measurement("db_inserted", inserted)
-        sentry_sdk.set_measurement("db_updated", updated)
-        sentry_sdk.set_measurement("anomalies_detected", anomalies_count)
+        measurements = {
+            "db_inserted": inserted,
+            "db_updated": updated,
+            "anomalies_detected": anomalies_count
+        }
+        TokopediaSentryMonitor._set_measurements(measurements)
         
         # Add context
-        sentry_sdk.set_context("database_operation", {
+        context = {
             "operation": operation,
             "success": success,
             "inserted": inserted,
             "updated": updated,
             "anomalies": anomalies_count,
             "timestamp": time.time()
-        })
+        }
+        sentry_sdk.set_context("database_operation", context)
         
         # Log to Sentry
-        if success:
-            capture_message(
-                f"Tokopedia database {operation} completed: {inserted} inserted, {updated} updated",
-                level="info"
-            )
-        else:
-            capture_message(
-                f"Tokopedia database {operation} failed",
-                level="warning"
-            )
+        success_msg = f"Tokopedia database {operation} completed: {inserted} inserted, {updated} updated"
+        failure_msg = f"Tokopedia database {operation} failed"
+        TokopediaSentryMonitor._capture_result_message(success, success_msg, failure_msg)
 
 
 def monitor_tokopedia_function(operation_name: str, component: str = TokopediaSentryMonitor.COMPONENT_SCRAPER):
@@ -146,52 +162,57 @@ def monitor_tokopedia_function(operation_name: str, component: str = TokopediaSe
                 start_time = time.time()
                 
                 try:
-                    # Execute function
                     result = func(*args, **kwargs)
+                    execution_time = time.time() - start_time
                     
                     # Track success
-                    execution_time = time.time() - start_time
-                    span.set_data("execution_time", execution_time)
-                    span.set_data("status", "success")
-                    
-                    TokopediaSentryMonitor.add_breadcrumb(
-                        f"Completed {operation_name} in {execution_time:.2f}s",
-                        category=f"tokopedia.{component}",
-                        level="info"
-                    )
+                    _track_span_completion(span, execution_time, "success", operation_name, component)
                     
                     return result
                     
                 except Exception as e:
-                    # Track error
                     execution_time = time.time() - start_time
-                    span.set_data("execution_time", execution_time)
-                    span.set_data("status", "error")
-                    span.set_data("error_type", type(e).__name__)
                     
-                    # Add error context
-                    sentry_sdk.set_context("error_context", {
-                        "function": func.__name__,
-                        "operation": operation_name,
-                        "component": component,
-                        "execution_time": execution_time,
-                        "error_message": str(e)
-                    })
-                    
-                    TokopediaSentryMonitor.add_breadcrumb(
-                        f"Error in {operation_name}: {str(e)}",
-                        category=f"tokopedia.{component}",
-                        level="error"
-                    )
-                    
-                    # Capture exception
-                    capture_exception(e)
+                    # Track error
+                    _track_span_completion(span, execution_time, "error", operation_name, component, e)
                     
                     # Re-raise
                     raise
         
         return wrapper
     return decorator
+
+
+def _track_span_completion(span, execution_time: float, status: str, operation_name: str, component: str, exception: Optional[Exception] = None):
+    """Helper to track span completion with consistent error/success handling."""
+    span.set_data("execution_time", execution_time)
+    span.set_data("status", status)
+    
+    if status == "success":
+        TokopediaSentryMonitor.add_breadcrumb(
+            f"Completed {operation_name} in {execution_time:.2f}s",
+            category=f"tokopedia.{component}",
+            level="info"
+        )
+    else:
+        span.set_data("error_type", type(exception).__name__)
+        
+        # Add error context
+        sentry_sdk.set_context("error_context", {
+            "operation": operation_name,
+            "component": component,
+            "execution_time": execution_time,
+            "error_message": str(exception)
+        })
+        
+        TokopediaSentryMonitor.add_breadcrumb(
+            f"Error in {operation_name}: {str(exception)}",
+            category=f"tokopedia.{component}",
+            level="error"
+        )
+        
+        # Capture exception
+        capture_exception(exception)
 
 
 def track_tokopedia_transaction(transaction_name: str):
@@ -222,16 +243,18 @@ class TokopediaTaskMonitor:
         self.task_type = task_type
         self.start_time = time.time()
         
-        # Set task context
-        sentry_sdk.set_tag("task_id", task_id)
-        sentry_sdk.set_tag("task_type", task_type)
-        
-        sentry_sdk.set_context("task_context", {
+        # Set task context and tags
+        tags = {
+            "task_id": task_id,
+            "task_type": task_type
+        }
+        context = {
             "task_id": task_id,
             "task_type": task_type,
             "started_at": self.start_time,
             "vendor": "tokopedia"
-        })
+        }
+        TokopediaSentryMonitor._set_context_and_tags("task_context", context, tags)
         
         TokopediaSentryMonitor.add_breadcrumb(
             f"Task started: {task_id}",
@@ -264,10 +287,13 @@ class TokopediaTaskMonitor:
         sentry_sdk.set_measurement("task_duration", execution_time)
         sentry_sdk.set_tag("task_status", "success" if success else "failed")
         
+        level = "info" if success else "warning"
+        status = "success" if success else "failed"
+        
         TokopediaSentryMonitor.add_breadcrumb(
-            f"Task completed: {self.task_id} ({'success' if success else 'failed'})",
+            f"Task completed: {self.task_id} ({status})",
             category="task",
-            level="info" if success else "error",
+            level=level,
             data={
                 "execution_time": execution_time,
                 "result": result_data or {}
@@ -276,5 +302,5 @@ class TokopediaTaskMonitor:
         
         capture_message(
             f"Tokopedia task {self.task_id} completed in {execution_time:.2f}s",
-            level="info" if success else "warning"
+            level=level
         )
