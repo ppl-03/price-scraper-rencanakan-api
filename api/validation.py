@@ -44,7 +44,7 @@ class KeywordValidator(FieldValidator):
     @staticmethod
     def _sanitize_keyword(keyword: str) -> str:
         keyword = re.sub(r'<[^>]+>', '', keyword)
-        keyword = re.sub(r"[<>'\"\\\\\x00-\x1f\x7f-\x9f]", '', keyword)
+        keyword = re.sub(r"[<>'\"\\x00-\x1f\x7f-\x9f]", '', keyword)
         keyword = ' '.join(keyword.split())
         return keyword.strip()
 
