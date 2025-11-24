@@ -214,3 +214,29 @@ jobs:
 
             # Remove trap so success doesn't trigger rollback
             trap - ERR
+            
+  release:
+    name: Create GitHub Release (main branch only)
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref_name == 'main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Generate release version
+        id: vars
+        run: |
+          VERSION="v$(date +'%Y%m%d-%H%M%S')"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.version }}
+          name: "Release ${{ steps.vars.outputs.version }}"
+          body: |
+            Automated release generated from main branch.
+            Commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
