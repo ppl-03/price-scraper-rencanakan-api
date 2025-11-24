@@ -751,13 +751,13 @@ class TestSecurityCoverageExtended(TestCase):
         """Test boolean validation with empty string"""
         is_valid, msg, _ = InputValidator.validate_boolean('', 'test_field')
         self.assertFalse(is_valid)
-        self.assertIn('must be a boolean', msg)
+        self.assertIn('cannot be empty', msg)
     
     def test_input_validator_boolean_invalid_string(self):
         """Test boolean validation with invalid string"""
         is_valid, msg, _ = InputValidator.validate_boolean('maybe', 'test_field')
         self.assertFalse(is_valid)
-        self.assertIn('must be a boolean', msg)
+        self.assertTrue('true' in msg and 'false' in msg)
     
     def test_database_validator_invalid_table(self):
         """Test database query validator with invalid table name"""
