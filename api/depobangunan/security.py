@@ -127,35 +127,38 @@ rate_limiter = RateLimiter()
 
 
 class TokenRegistry:
-    """Centralized token storage and retrieval."""
+    """Centralized token storage and retrieval for Depobangunan API."""
     
     TOKENS = {
-        'dev-token-12345': {
-            'name': 'Development Token',
-            'owner': 'dev-team',
-            'permissions': ['read', 'write', 'scrape'],
+        'depobangunan-dev-token-xyz789': {
+            'name': 'Depobangunan Development Token',
+            'owner': 'depobangunan-dev-team',
+            'permissions': ['read', 'write', 'scrape', 'admin'],
             'allowed_ips': [],
-            'rate_limit': {'requests': 100, 'window': 60},
-            'created': '2024-01-01',
-            'expires': None
+            'rate_limit': {'requests': 150, 'window': 60},
+            'created': '2024-03-15',
+            'expires': None,
+            'vendor': 'depobangunan'
         },
-        'legacy-api-token-67890': {
-            'name': 'Legacy Client Token',
-            'owner': 'legacy-client',
+        'depobangunan-client-token-abc456': {
+            'name': 'Depobangunan Client Access Token',
+            'owner': 'depobangunan-api-client',
             'permissions': ['read', 'scrape'],
             'allowed_ips': [],
-            'rate_limit': {'requests': 50, 'window': 60},
-            'created': '2024-01-01',
-            'expires': None
+            'rate_limit': {'requests': 75, 'window': 60},
+            'created': '2024-03-15',
+            'expires': '2025-12-31',
+            'vendor': 'depobangunan'
         },
-        'read-only-token': {
-            'name': 'Read Only Token',
-            'owner': 'monitoring',
+        'depobangunan-monitor-token': {
+            'name': 'Depobangunan Monitoring Token',
+            'owner': 'depobangunan-monitoring-service',
             'permissions': ['read'],
             'allowed_ips': [],
-            'rate_limit': {'requests': 200, 'window': 60},
-            'created': '2024-01-01',
-            'expires': None
+            'rate_limit': {'requests': 300, 'window': 60},
+            'created': '2024-03-15',
+            'expires': None,
+            'vendor': 'depobangunan'
         }
     }
     

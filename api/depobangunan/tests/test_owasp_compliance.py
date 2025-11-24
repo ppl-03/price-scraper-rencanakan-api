@@ -118,8 +118,9 @@ class TestA01BrokenAccessControl(TestCase):
     def test_valid_token_accepted(self):
         """Test that valid tokens are accepted"""
         print("\n[A01] Test: Valid token accepted")
-        _, _, token_info = self._test_token_validation('dev-token-12345', True)
-        self.assertEqual(token_info['name'], 'Development Token')
+        _, _, token_info = self._test_token_validation('depobangunan-dev-token-xyz789', True)
+        self.assertEqual(token_info['name'], 'Depobangunan Development Token')
+        self.assertEqual(token_info['vendor'], 'depobangunan')
         print("✓ Valid token accepted")
     
     def test_permission_enforcement(self):
@@ -662,7 +663,7 @@ class TestSecurityCoverageExtended(TestCase):
     def test_access_control_token_expiration_check(self):
         """Test token expiration logic (currently pass statement)"""
         request = self.factory.get('/test/')
-        request.META['HTTP_AUTHORIZATION'] = 'dev-token-12345'
+        request.META['HTTP_AUTHORIZATION'] = 'depobangunan-dev-token-xyz789'
         
         # This tests the expiration check code path (currently a pass statement)
         is_valid, _, _ = AccessControlManager.validate_token(request)

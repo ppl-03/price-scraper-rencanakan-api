@@ -869,7 +869,7 @@ class TestDepoBangunanSecurityValidation(TestCase):
             'keyword': 'cement',
             'sort_by_price': 'true',
             'page': '0'
-        }, HTTP_AUTHORIZATION='dev-token-12345')
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)

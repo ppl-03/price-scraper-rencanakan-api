@@ -70,7 +70,7 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
             self.mock_db.save.side_effect = side_effect
 
     def post_json(self, data):
-        resp = self.client.post(self.url, data, HTTP_AUTHORIZATION='dev-token-12345')
+        resp = self.client.post(self.url, data, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         # Return both raw response and parsed JSON for flexible assertions
         try:
             parsed = json.loads(resp.content)
