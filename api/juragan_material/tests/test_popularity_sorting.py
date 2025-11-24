@@ -56,9 +56,15 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         mock_scraper = self.create_mock_scraper(products)
         mock_create_scraper.return_value = mock_scraper
         
-        # Mock database service
+        # Mock database service to return dict format expected by new implementation
         mock_db_instance = Mock()
-        mock_db_instance.save.return_value = True
+        mock_db_instance.save_with_price_update.return_value = {
+            'success': True,
+            'inserted': 3,
+            'updated': 0,
+            'anomalies': [],
+            'categorized': 0
+        }
         mock_db_service.return_value = mock_db_instance
         
         response = self.client.get(self.scrape_and_save_url, {
@@ -80,8 +86,8 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         )
         
         # Verify all products were saved
-        mock_db_instance.save.assert_called_once()
-        saved_products = mock_db_instance.save.call_args[0][0]
+        mock_db_instance.save_with_price_update.assert_called_once()
+        saved_products = mock_db_instance.save_with_price_update.call_args[0][0]
         self.assertEqual(len(saved_products), 3)
     
     @patch('api.juragan_material.views.JuraganMaterialDatabaseService')
@@ -95,9 +101,15 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         mock_scraper = self.create_mock_scraper(products)
         mock_create_scraper.return_value = mock_scraper
         
-        # Mock database service
+        # Mock database service to return dict format expected by new implementation
         mock_db_instance = Mock()
-        mock_db_instance.save.return_value = True
+        mock_db_instance.save_with_price_update.return_value = {
+            'success': True,
+            'inserted': 5,
+            'updated': 0,
+            'anomalies': [],
+            'categorized': 0
+        }
         mock_db_service.return_value = mock_db_instance
         
         response = self.client.get(self.scrape_and_save_url, {
@@ -119,8 +131,8 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         )
         
         # Verify only top 5 products were saved
-        mock_db_instance.save.assert_called_once()
-        saved_products = mock_db_instance.save.call_args[0][0]
+        mock_db_instance.save_with_price_update.assert_called_once()
+        saved_products = mock_db_instance.save_with_price_update.call_args[0][0]
         self.assertEqual(len(saved_products), 5)
     
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')
@@ -132,7 +144,13 @@ class TestScrapeAndSaveWithSortType(JuraganMaterialPopularitySortingTests):
         
         with patch('api.juragan_material.views.JuraganMaterialDatabaseService') as mock_db_service:
             mock_db_instance = Mock()
-            mock_db_instance.save.return_value = True
+            mock_db_instance.save_with_price_update.return_value = {
+                'success': True,
+                'inserted': 1,
+                'updated': 0,
+                'anomalies': [],
+                'categorized': 0
+            }
             mock_db_service.return_value = mock_db_instance
             
             response = self.client.get(self.scrape_and_save_url, {
