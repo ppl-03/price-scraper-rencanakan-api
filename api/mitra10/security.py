@@ -502,7 +502,7 @@ def validate_input(validators: dict):
                         data_source = {**request.GET.dict(), **json.loads(request.body)}
                     else:
                         data_source = {**request.GET.dict(), **request.POST.dict()}
-                except (ValueError, TypeError, json.JSONDecodeError) as e:
+                except (ValueError, json.JSONDecodeError) as e:
                     logger.warning(f"Failed to parse request body: {str(e)}")
                     data_source = {**request.GET.dict(), **request.POST.dict()}
             else:
