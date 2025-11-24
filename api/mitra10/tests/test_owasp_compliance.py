@@ -14,7 +14,6 @@ from api.mitra10.security import (
     require_api_token,
     validate_input,
     enforce_resource_limits,
-    secure_endpoint,
     rate_limiter
 )
 
@@ -825,7 +824,8 @@ class TestDecoratorIntegration(unittest.TestCase):
         self.assertIn('status', data)
     
     def test_secure_endpoint_no_token(self):
-        @secure_endpoint('read')
+        """Test that endpoints without token are rejected"""
+        @require_api_token('read')
         def test_view(request):
             return JsonResponse({'status': 'success'})
         

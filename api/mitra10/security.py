@@ -334,6 +334,28 @@ class DatabaseQueryValidator:
         return column_name in allowed_columns
     
     @staticmethod
+    def _validate_columns(columns: list, context: str = "column") -> Tuple[bool, str]:
+        """Validate a list of column names."""
+        for col in columns:
+            if not DatabaseQueryValidator.validate_column_name(col):
+                logger.critical(f"Invalid {context} name attempt: {col}")
+                return False, f"Invalid {context} name: {col}"
+        return True, ""
+    
+    @staticmethod
+    def _build_where_clause(where_clause: Dict) -> Tuple[bool, str, str]:
+        """Build and validate WHERE clause."""
+        is_valid, error_msg = DatabaseQueryValidator._validate_columns(
+            list(where_clause.keys()), 
+            "WHERE clause column"
+        )
+        if not is_valid:
+            return False, error_msg, ""
+        
+        where_parts = [f"{k} = %s" for k in where_clause.keys()]
+        return True, "", " WHERE " + " AND ".join(where_parts)
+    
+    @staticmethod
     def build_safe_query(
         operation: str,
         table: str,
@@ -347,27 +369,21 @@ class DatabaseQueryValidator:
             logger.critical(f"Invalid table name attempt: {table}")
             return False, "Invalid table name", ""
         
-        for col in columns:
-            if not DatabaseQueryValidator.validate_column_name(col):
-                logger.critical(f"Invalid column name attempt: {col}")
-                return False, f"Invalid column name: {col}", ""
+        is_valid, error_msg = DatabaseQueryValidator._validate_columns(columns)
+        if not is_valid:
+            return False, error_msg, ""
         
-        if operation == 'SELECT':
-            cols = ', '.join(columns)
-            query = f"SELECT {cols} FROM {table}"
-            
-            if where_clause:
-                # Validate WHERE clause columns
-                for col in where_clause.keys():
-                    if not DatabaseQueryValidator.validate_column_name(col):
-                        logger.critical(f"Invalid WHERE clause column name attempt: {col}")
-                        return False, f"Invalid column name in WHERE clause: {col}", ""
-                
-                where_parts = [f"{k} = %s" for k in where_clause.keys()]
-                query += " WHERE " + " AND ".join(where_parts)
-        
-        else:
+        if operation != 'SELECT':
             return False, "Operation not implemented", ""
+        
+        cols = ', '.join(columns)
+        query = f"SELECT {cols} FROM {table}"
+        
+        if where_clause:
+            is_valid, error_msg, where_sql = DatabaseQueryValidator._build_where_clause(where_clause)
+            if not is_valid:
+                return False, error_msg, ""
+            query += where_sql
         
         return True, "", query
 
