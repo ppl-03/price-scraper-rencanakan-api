@@ -188,6 +188,57 @@
     .page-item .page-link:hover { background:#dfe7ec; color:#00365a; }
 
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
+
+    /* Edit Mode Styles */
+    .edit-mode-btn {
+      position: relative;
+      overflow: hidden;
+    }
+    .edit-mode-btn.active {
+      background: #28a745;
+      border-color: #28a745;
+    }
+    .edit-mode-btn.active:hover {
+      background: #218838;
+      border-color: #1e7e34;
+    }
+    
+    /* Hide Aksi column and buttons by default */
+    thead .edit-mode-header,
+    tbody .edit-action-cell {
+      display: none !important;
+    }
+    
+    /* Show Aksi column and buttons when table has edit-mode class */
+    #pricesTable.edit-mode thead .edit-mode-header,
+    #pricesTable.edit-mode tbody .edit-action-cell {
+      display: table-cell !important;
+      visibility: visible !important;
+    }
+    
+    .edit-category-btn {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      transition: all 0.2s ease;
+    }
+    
+    .edit-category-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .category-cell {
+      transition: background-color 0.2s ease;
+    }
+    .edit-mode .category-cell:hover {
+      background-color: #f8f9fa;
+    }
+    #categoryEditModal .modal-header {
+      background: linear-gradient(135deg, #00365a 0%, #022b47 100%);
+      color: white;
+    }
+    #categoryEditModal .btn-close {
+      filter: brightness(0) invert(1);
+    }
   </style>
 {% endblock %}
 
@@ -221,6 +272,14 @@
         </button>
       </div>
     </form>
+
+    <!-- Edit Mode Toggle -->
+    <div class="d-flex justify-content-end mb-3">
+      <button id="editModeToggle" class="btn btn-outline-secondary btn-sm edit-mode-btn">
+        <i class="bi bi-pencil-square me-1"></i>
+        <span class="edit-mode-text">Enable Edit Mode</span>
+      </button>
+    </div>
 
     <!-- Client-side DataTable-like controls -->
     <div class="card mb-3">
@@ -304,20 +363,23 @@
           <thead>
             <tr>
               <th style="width:5%">No.</th>
-              <th class="th-sort" data-key="item" style="width:28%">Nama Produk</th>
-              <th class="th-sort" data-key="category" style="width:13%">Kategori</th>
+              <th class="th-sort" data-key="item" style="width:25%">Nama Produk</th>
+              <th class="th-sort" data-key="category" style="width:15%">Kategori</th>
               <th class="th-sort " data-key="price" style="width:10%">Harga</th>
               <th style="width:7%">Unit</th>
               <th class="th-sort" data-key="vendor" style="width:13%">Vendor</th>
-              <th class="th-sort" data-key="location" style="width:22%">Lokasi</th>
+              <th class="th-sort" data-key="location" style="width:18%">Lokasi</th>
+              <th style="width:5%" class="edit-mode-header">Aksi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
             {% for r in prices %}
-              <tr>
+              <tr data-product-url="{{ r.url }}" data-vendor="{{ r.source }}">
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
-                <td class="c-category">{{ r.category|default:"Lainnya" }}</td>
+                <td class="c-category category-cell" data-category="{{ r.category|default:"Lainnya" }}">
+                  <span class="category-text">{{ r.category|default:"Lainnya" }}</span>
+                </td>
                 <td class="c-price price-align-right">{{ r.value }}</td>
                 <td class="c-unit">{{ r.unit|default:"—" }}</td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
@@ -332,9 +394,9 @@
                               data-locations="{{ r.all_locations|join:'|' }}"
                               data-bs-toggle="tooltip"
                               title="Show all {{ r.location_count }} locations"
-                              aria-label="+{{ r.location_count|add:"-1" }} more locations"
+                              aria-label="Show {{ r.location_count|add:"-1" }} more locations for {{ r.source }}"
                               style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
-                          +{{ r.location_count|add:"-1" }}
+                          <span aria-hidden="true">+{{ r.location_count|add:"-1" }}</span>
                         </button>
                       {% endif %}
                     </div>
@@ -342,10 +404,17 @@
                     <span class="text-muted">—</span>
                   {% endif %}
                 </td>
+                <td class="edit-action-cell">
+                  <button class="btn btn-sm btn-outline-primary edit-category-btn" 
+                          onclick="openCategoryEditModal(this)" 
+                          title="Edit Category">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="7" class="empty-state">
+                <td colspan="8" class="empty-state">
                   <div class="empty-state-icon">Tidak ada data</div>
                   <h5>Belum ada data harga</h5>
                   <p class="mb-0">Gunakan form pencarian di atas untuk mulai mencari harga produk</p>
@@ -488,6 +557,9 @@
       const priceNum = toNumber(priceText);
       const locationCell = tr.querySelector(".c-location");
       
+      // Extract URL from row data attribute
+      const url = tr.dataset.productUrl || "";
+      
       // Extract modal data from button if present (updated from span)
       const modalButton = locationCell?.querySelector("button[data-locations]");
       const allLocations = modalButton ? modalButton.dataset.locations?.split("|") || [] : [];
@@ -505,7 +577,7 @@
       // Normalize empty unit to dash
       const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
       
-      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
+      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations, url };
     });
 
     // Populate vendor dropdown (for…of)
@@ -725,14 +797,26 @@
         }
         locationHtml += `</div>`;
         
+        tr.dataset.productUrl = d.url || '';
+        tr.dataset.vendor = d.vendor || '';
+        
         tr.innerHTML = `
           <td>${start + idx + 1}</td>
           <td class="c-item">${d.item}</td>
-          <td class="c-category">${d.category || 'Lainnya'}</td>
+          <td class="c-category category-cell" data-category="${d.category || 'Lainnya'}">
+            <span class="category-text">${d.category || 'Lainnya'}</span>
+          </td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
           <td class="c-unit">${d.unit || '—'}</td>
           <td class="c-vendor">${d.vendor}</td>
-          <td class="c-location">${locationHtml}</td>`;
+          <td class="c-location">${locationHtml}</td>
+          <td class="edit-action-cell">
+            <button class="btn btn-sm btn-outline-primary edit-category-btn" 
+                    onclick="openCategoryEditModal(this)" 
+                    title="Edit Category">
+              <i class="bi bi-pencil"></i>
+            </button>
+          </td>`;
         tbody.appendChild(tr);
         
         // Add click event listener to the location badge if it exists
@@ -766,7 +850,7 @@
       }
       if (slice.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="5" class="text-center text-muted py-4">Tidak ada data</td>`;
+        tr.innerHTML = `<td colspan="8" class="text-center text-muted py-4">Tidak ada data</td>`;
         tbody.appendChild(tr);
       }
 
@@ -981,4 +1065,250 @@
       </div>
     </div>
   </div>
+
+  <!-- Category Edit Modal -->
+  <div class="modal fade" id="categoryEditModal" tabindex="-1" aria-labelledby="categoryEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="categoryEditModalLabel">
+            <i class="bi bi-pencil-square me-2"></i>Edit Kategori Produk
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <div class="form-label fw-bold">Nama Produk:</div>
+            <p id="editProductName" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Vendor:</div>
+            <p id="editVendor" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Kategori Saat Ini:</div>
+            <p id="currentCategory" class="text-muted mb-2"></p>
+          </div>
+          <div class="mb-3">
+            <label for="newCategoryInput" class="form-label fw-bold">Kategori Baru:</label>
+            <input type="text" 
+                   class="form-control" 
+                   id="newCategoryInput" 
+                   maxlength="100" 
+                   placeholder="Masukkan kategori baru..."
+                   autocomplete="off">
+            <div class="form-text">Maksimal 100 karakter</div>
+            <div id="categoryError" class="text-danger mt-2" style="display: none;"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-primary" id="saveCategoryBtn" onclick="saveCategory()">
+            <span class="save-text">Simpan Perubahan</span>
+            <span class="save-spinner spinner-border spinner-border-sm ms-2" style="display:none" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== CSRF Token Helper ==========
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+          const trimmedCookie = cookie.trim();
+          if (trimmedCookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(trimmedCookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+
+    // ========== Edit Mode Management ==========
+    let editModeEnabled = false;
+    let currentEditingProduct = null;
+    let categoryEditModalInstance = null;
+
+    // Toggle edit mode
+    document.getElementById('editModeToggle').addEventListener('click', function() {
+      editModeEnabled = !editModeEnabled;
+      const table = document.getElementById('pricesTable');
+      const tableBody = document.getElementById('tableBody');
+      const editModeText = this.querySelector('.edit-mode-text');
+      
+      if (editModeEnabled) {
+        table.classList.add('edit-mode');
+        tableBody.classList.add('edit-mode');
+        this.classList.add('active');
+        this.classList.remove('btn-outline-secondary');
+        this.classList.add('btn-success');
+        editModeText.textContent = 'Exit Edit Mode';
+        console.log('Edit mode enabled - table classes:', table.className);
+      } else {
+        table.classList.remove('edit-mode');
+        tableBody.classList.remove('edit-mode');
+        this.classList.remove('active', 'btn-success');
+        this.classList.add('btn-outline-secondary');
+        editModeText.textContent = 'Enable Edit Mode';
+        console.log('Edit mode disabled');
+      }
+    });
+
+    // ========== Category Edit Modal Functions ==========
+    function openCategoryEditModal(button) {
+      if (!editModeEnabled) return;
+      
+      const row = button.closest('tr');
+      const productName = row.querySelector('.c-item').textContent.trim();
+      const vendor = row.dataset.vendor;
+      const productUrl = row.dataset.productUrl;
+      const categoryCell = row.querySelector('.c-category');
+      const currentCategory = categoryCell.dataset.category;
+      
+      // Store current editing context
+      currentEditingProduct = {
+        row: row,
+        vendor: vendor,
+        productUrl: productUrl,
+        productName: productName,
+        currentCategory: currentCategory,
+        categoryCell: categoryCell
+      };
+      
+      // Populate modal
+      document.getElementById('editProductName').textContent = productName;
+      document.getElementById('editVendor').textContent = vendor;
+      document.getElementById('currentCategory').textContent = currentCategory;
+      document.getElementById('newCategoryInput').value = currentCategory;
+      document.getElementById('categoryError').style.display = 'none';
+      
+      // Show modal
+      const modalElement = document.getElementById('categoryEditModal');
+      if (categoryEditModalInstance) {
+        categoryEditModalInstance.dispose();
+      }
+      categoryEditModalInstance = new bootstrap.Modal(modalElement);
+      categoryEditModalInstance.show();
+      
+      // Focus on input
+      setTimeout(() => {
+        document.getElementById('newCategoryInput').focus();
+        document.getElementById('newCategoryInput').select();
+      }, 500);
+    }
+
+    // Save category changes
+    async function saveCategory() {
+      if (!currentEditingProduct) return;
+      
+      const newCategory = document.getElementById('newCategoryInput').value.trim();
+      const errorDiv = document.getElementById('categoryError');
+      const saveBtn = document.getElementById('saveCategoryBtn');
+      const saveText = saveBtn.querySelector('.save-text');
+      const saveSpinner = saveBtn.querySelector('.save-spinner');
+      
+      // Validation
+      if (newCategory.length > 100) {
+        errorDiv.textContent = 'Kategori tidak boleh lebih dari 100 karakter';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      // Show loading state
+      saveBtn.disabled = true;
+      saveText.textContent = 'Menyimpan...';
+      saveSpinner.style.display = 'inline-block';
+      errorDiv.style.display = 'none';
+      
+      try {
+        const csrftoken = getCookie('csrftoken');
+        const response = await fetch('/api/category/update/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+          },
+          body: JSON.stringify({
+            source: currentEditingProduct.vendor,
+            product_url: currentEditingProduct.productUrl,
+            new_category: newCategory
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Update the UI
+          currentEditingProduct.categoryCell.dataset.category = data.new_category;
+          const categoryTextSpan = currentEditingProduct.categoryCell.querySelector('.category-text');
+          categoryTextSpan.textContent = data.new_category;
+          
+          // Close modal
+          categoryEditModalInstance.hide();
+          
+          // Show success message
+          showNotification('Kategori berhasil diperbarui!', 'success');
+          
+          // Reset
+          currentEditingProduct = null;
+        } else {
+          errorDiv.textContent = data.error || 'Gagal memperbarui kategori';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error updating category:', error);
+        errorDiv.textContent = 'Terjadi kesalahan jaringan. Silakan coba lagi.';
+        errorDiv.style.display = 'block';
+      } finally {
+        // Reset button state
+        saveBtn.disabled = false;
+        saveText.textContent = 'Simpan Perubahan';
+        saveSpinner.style.display = 'none';
+      }
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info') {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+      alertDiv.style.position = 'fixed';
+      alertDiv.style.top = '20px';
+      alertDiv.style.right = '20px';
+      alertDiv.style.zIndex = '9999';
+      alertDiv.style.minWidth = '300px';
+      alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      
+      document.body.appendChild(alertDiv);
+      
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        alertDiv.classList.remove('show');
+        setTimeout(() => alertDiv.remove(), 150);
+      }, 5000);
+    }
+
+    // Handle Enter key in category input
+    document.getElementById('newCategoryInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveCategory();
+      }
+    });
+
+    // Clean up modal instance on hide
+    document.getElementById('categoryEditModal').addEventListener('hidden.bs.modal', function() {
+      if (categoryEditModalInstance) {
+        categoryEditModalInstance.dispose();
+        categoryEditModalInstance = null;
+      }
+    });
+  </script>
 {% endblock %}
