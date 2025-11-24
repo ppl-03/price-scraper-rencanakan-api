@@ -25,7 +25,6 @@
 
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
-    .table td{ vertical-align: middle; border-color:#f1f3f5; }
     
     /* Fixed column widths for consistent table layout */
     .table { table-layout: fixed; width: 100%; }
@@ -36,8 +35,10 @@
     .table th:nth-child(5), .table td:nth-child(5) { width: 8%; }  /* Unit */
     .table th:nth-child(6), .table td:nth-child(6) { width: 20%; } /* Lokasi */
     
-    /* Text overflow handling */
+    /* Text overflow handling and cell styling */
     .table td { 
+      vertical-align: middle;
+      border-color: #f1f3f5;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
