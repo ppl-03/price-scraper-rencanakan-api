@@ -369,7 +369,7 @@ class TestViewsIntegration(TestCase):
             products=[],
             success=True,
             error_message=None,
-            url="http://test.com"
+            url="https://test.com"
         )
         mock_scraper_instance.scrape_products.return_value = mock_result
         
@@ -409,7 +409,7 @@ class TestViewsIntegration(TestCase):
             products=[],
             success=True,
             error_message=None,
-            url="http://test.com"
+            url="https://test.com"
         )
         mock_scraper_instance.scrape_products.return_value = mock_result
         
@@ -448,7 +448,7 @@ class TestViewsIntegration(TestCase):
             products=[],
             success=True,
             error_message=None,
-            url="http://test.com"
+            url="https://test.com"
         )
         mock_scraper_instance.scrape_popularity_products.return_value = mock_result
         
@@ -518,7 +518,7 @@ class TestDatabaseMonitoring(TestCase):
         mock_product = Mock()
         mock_product.name = "Test Product"
         mock_product.price = 10000
-        mock_product.url = "http://test.com"
+        mock_product.url = "https://test.com"
         mock_product.unit = "pcs"
         mock_product.location = "Test Location"
         
@@ -557,7 +557,7 @@ class TestDatabaseMonitoring(TestCase):
         mock_product = Mock()
         mock_product.name = "Test Product"
         mock_product.price = 10000
-        mock_product.url = "http://test.com"
+        mock_product.url = "https://test.com"
         mock_product.unit = "pcs"
         mock_product.location = "Test Location"
         
