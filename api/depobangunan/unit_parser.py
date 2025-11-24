@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 class DepoBangunanUnitExtractor:
     # Pre-compile commonly used patterns
     _AREA_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)\s?[x×]\s?(\d{1,10}(?:[.,]\d{1,10})?)\s?(cm|mm|m)(?:\s|$)', re.IGNORECASE)
-    _INCH_PATTERN = re.compile(r'\d+(?:[.,]\d+)?\s*(?:["″]|inch|inchi)', re.IGNORECASE)
-    _FEET_PATTERN = re.compile(r'\d+(?:[.,]\d+)?\s*(?:[\'′]|feet|ft)', re.IGNORECASE)
+    _INCH_PATTERN = re.compile(r'\d+(?:[.,]\d+)?[ \t]{0,3}(?:["″]|inch|inchi)', re.IGNORECASE)
+    _FEET_PATTERN = re.compile(r'\d+(?:[.,]\d+)?[ \t]{0,3}(?:[\'′]|feet|ft)', re.IGNORECASE)
     _ADJACENT_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)(kg|gram|gr|g|ml|lt|l|cc|pcs|set|mm|cm|m)(?:\s|$)', re.IGNORECASE)
     _SPEC_UNIT_PATTERN = re.compile(r'[a-zA-Z²³]+')
     

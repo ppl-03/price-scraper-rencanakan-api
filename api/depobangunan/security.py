@@ -481,28 +481,55 @@ class SecurityDesignPatterns:
     """
     
     @staticmethod
+    def _validate_type_check(value: Any, rule_config: Dict) -> Tuple[bool, str]:
+        """Validate type check rule."""
+        if not isinstance(value, rule_config['types']):
+            return False, rule_config['error']
+        return True, ""
+    
+    @staticmethod
+    def _validate_range_check(field_name: str, value: Any, rule_config: Dict) -> Tuple[bool, str]:
+        """Validate range check rule."""
+        if value < rule_config.get('min', float('-inf')):
+            return False, rule_config.get('min_error', rule_config['error'])
+        if value > rule_config.get('max', float('inf')):
+            logger.warning(f"Suspicious {field_name} value: {value}")
+            return False, rule_config.get('max_error', rule_config['error'])
+        return True, ""
+    
+    @staticmethod
+    def _validate_length_check(value: Any, rule_config: Dict) -> Tuple[bool, str]:
+        """Validate length check rule."""
+        if len(value) < rule_config.get('min', 0):
+            return False, rule_config.get('min_error', rule_config['error'])
+        if len(value) > rule_config.get('max', float('inf')):
+            return False, rule_config.get('max_error', rule_config['error'])
+        return True, ""
+    
+    @staticmethod
+    def _validate_pattern_check(field_name: str, value: Any, rule_config: Dict) -> Tuple[bool, str]:
+        """Validate pattern check rule."""
+        if not rule_config['condition'](value):
+            if rule_config.get('critical'):
+                logger.critical(f"{field_name} validation failed: {value}")
+            return False, rule_config['error']
+        return True, ""
+    
+    @staticmethod
     def _validate_field(field_name: str, value: Any, validation_rules: Dict[str, Any]) -> Tuple[bool, str]:
         """Generic field validation based on rules."""
-        for rule_name, rule_config in validation_rules.items():
-            if rule_name == 'type_check':
-                if not isinstance(value, rule_config['types']):
-                    return False, rule_config['error']
-            elif rule_name == 'range_check':
-                if value < rule_config.get('min', float('-inf')):
-                    return False, rule_config.get('min_error', rule_config['error'])
-                if value > rule_config.get('max', float('inf')):
-                    logger.warning(f"Suspicious {field_name} value: {value}")
-                    return False, rule_config.get('max_error', rule_config['error'])
-            elif rule_name == 'length_check':
-                if len(value) < rule_config.get('min', 0):
-                    return False, rule_config.get('min_error', rule_config['error'])
-                if len(value) > rule_config.get('max', float('inf')):
-                    return False, rule_config.get('max_error', rule_config['error'])
-            elif rule_name == 'pattern_check':
-                if not rule_config['condition'](value):
-                    if rule_config.get('critical'):
-                        logger.critical(f"{field_name} validation failed: {value}")
-                    return False, rule_config['error']
+        validators = {
+            'type_check': lambda: SecurityDesignPatterns._validate_type_check(value, validation_rules['type_check']),
+            'range_check': lambda: SecurityDesignPatterns._validate_range_check(field_name, value, validation_rules['range_check']),
+            'length_check': lambda: SecurityDesignPatterns._validate_length_check(value, validation_rules['length_check']),
+            'pattern_check': lambda: SecurityDesignPatterns._validate_pattern_check(field_name, value, validation_rules['pattern_check'])
+        }
+        
+        for rule_name in validation_rules:
+            if rule_name in validators:
+                is_valid, error_msg = validators[rule_name]()
+                if not is_valid:
+                    return False, error_msg
         return True, ""
     
     @staticmethod

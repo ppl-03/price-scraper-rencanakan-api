@@ -210,9 +210,9 @@ class SecurityDesignPatternsValidateBusinessLogicTests(TestCase):
     def test_partial_data_validation(self):
         """Test that validation works with partial data"""
         data = {'price': 50000}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(data)
+        is_valid, _ = SecurityDesignPatterns.validate_business_logic(data)
         self.assertTrue(is_valid)
-        self.assertEqual(error_msg, "")
+        self.assertEqual(_, "")
     
     def test_empty_data_valid(self):
         """Test that empty data is considered valid"""
@@ -326,7 +326,7 @@ class SecurityDesignPatternsIntegrationTests(TestCase):
         request = self.factory.get('/api/products?keyword=cement&limit=50')
         
         # Check resource limits
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request)
         self.assertTrue(is_valid)
         
         # Validate product data
@@ -335,7 +335,7 @@ class SecurityDesignPatternsIntegrationTests(TestCase):
             'price': 75000,
             'url': 'https://depobangunan.com/product/cement-premium'
         }
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product_data)
+        is_valid,  _ =  SecurityDesignPatterns.validate_business_logic(product_data)
         self.assertTrue(is_valid)
     
     def test_attack_detection_flow(self):
@@ -346,18 +346,18 @@ class SecurityDesignPatternsIntegrationTests(TestCase):
             'price': 100,
             'url': 'https://127.0.0.1/admin'
         }
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(ssrf_data)
+        is_valid, _ = SecurityDesignPatterns.validate_business_logic(ssrf_data)
         self.assertFalse(is_valid)
         
         # Test resource exhaustion attempt
         params = '&'.join([f'p{i}=v{i}' for i in range(25)])
         request = self.factory.get(f'/api/products?{params}')
-        is_valid, error_msg = SecurityDesignPatterns.enforce_resource_limits(request)
+        is_valid, _ = SecurityDesignPatterns.enforce_resource_limits(request)
         self.assertFalse(is_valid)
         
         # Test business logic violation
         invalid_data = {'price': 5000000000}
-        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(invalid_data)
+        is_valid, _ = SecurityDesignPatterns.validate_business_logic(invalid_data)
         self.assertFalse(is_valid)
 
 

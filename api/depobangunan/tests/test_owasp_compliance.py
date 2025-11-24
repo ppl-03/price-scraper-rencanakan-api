@@ -18,10 +18,14 @@ from django.conf import settings
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Load test IP addresses from Django settings (configured from .env file)
-# These are RFC 1918 private addresses for testing only
-TEST_IP_ALLOWED = getattr(settings, 'TEST_IP_ALLOWED', '192.168.1.100')
-TEST_IP_DENIED = getattr(settings, 'TEST_IP_DENIED', '192.168.1.200')
-TEST_IP_ATTACKER = getattr(settings, 'TEST_IP_ATTACKER', '192.168.1.250')
+# SECURITY NOTE: These hardcoded IPs are SAFE because:
+# 1. RFC 1918 private addresses (192.168.x.x) - non-routable on public internet
+# 2. Only used in test environment, never in production code
+# 3. Fallback values only; production should override via settings/environment
+# 4. Used solely for simulating IP-based access control scenarios in tests
+TEST_IP_ALLOWED = getattr(settings, 'TEST_IP_ALLOWED', '192.168.1.100')  # NOSONAR - Safe: RFC 1918 test IP
+TEST_IP_DENIED = getattr(settings, 'TEST_IP_DENIED', '192.168.1.200')    # NOSONAR - Safe: RFC 1918 test IP
+TEST_IP_ATTACKER = getattr(settings, 'TEST_IP_ATTACKER', '192.168.1.250')  # NOSONAR - Safe: RFC 1918 test IP
 
 from api.depobangunan.security import (
     RateLimiter,
@@ -54,7 +58,7 @@ class SecurityTestHelpers:
     @staticmethod
     def run_rate_limit_test(rate_limiter, client_id, max_requests, expect_block=True):
         results = []
-        for i in range(max_requests + 1):
+        for _ in range(max_requests + 1):
             is_allowed, error = rate_limiter.check_rate_limit(
                 client_id, max_requests=max_requests, window_seconds=60
             )
@@ -301,7 +305,7 @@ class TestA03InjectionPrevention(TestCase):
         ]
         
         for invalid_input, expected_error_part in invalid_inputs:
-            is_valid, error_msg, _ = InputValidator.validate_keyword(invalid_input)
+            is_valid, _, _  = InputValidator.validate_keyword(invalid_input)
             self.assertFalse(is_valid, f"Invalid input should be rejected: {invalid_input[:30]}")
             print(f"✓ Rejected invalid input: {expected_error_part}")
     
@@ -668,13 +672,13 @@ class TestSecurityCoverageExtended(TestCase):
                 'name': 'IP Restricted Token',
                 'owner': 'test',
                 'permissions': ['read'],
-                'allowed_ips': ['192.168.1.100'],
+                'allowed_ips': ['192.168.1.100'],  # NOSONAR - Safe: RFC 1918 private IP for testing
                 'rate_limit': {'requests': 10, 'window': 60}
             }
         }):
             request = self.factory.get('/test/')
             request.META['HTTP_AUTHORIZATION'] = 'ip-restricted-token'
-            request.META['REMOTE_ADDR'] = '192.168.1.200'  # Different IP
+            request.META['REMOTE_ADDR'] = '192.168.1.200'  # NOSONAR - Safe: RFC 1918 test IP (different)
             
             is_valid, msg, _ = AccessControlManager.validate_token(request)
             self.assertFalse(is_valid)
@@ -687,13 +691,13 @@ class TestSecurityCoverageExtended(TestCase):
                 'name': 'IP Restricted Token',
                 'owner': 'test',
                 'permissions': ['read'],
-                'allowed_ips': ['192.168.1.100'],
+                'allowed_ips': ['192.168.1.100'],  # NOSONAR - Safe: RFC 1918 private IP for testing
                 'rate_limit': {'requests': 10, 'window': 60}
             }
         }):
             request = self.factory.get('/test/')
             request.META['HTTP_AUTHORIZATION'] = 'ip-restricted-token'
-            request.META['REMOTE_ADDR'] = '192.168.1.100'  # Matching IP
+            request.META['REMOTE_ADDR'] = '192.168.1.100'  # NOSONAR - Safe: RFC 1918 test IP (matching)
             
             is_valid, _, _ = AccessControlManager.validate_token(request)
             self.assertTrue(is_valid)
@@ -701,14 +705,14 @@ class TestSecurityCoverageExtended(TestCase):
     def test_access_control_multiple_failures_alert(self):
         """Test critical alert on multiple access control failures"""
         request = self.factory.get('/test/')
-        request.META['REMOTE_ADDR'] = '192.168.1.250'
+        request.META['REMOTE_ADDR'] = '192.168.1.250'  # NOSONAR - Safe: RFC 1918 test IP for attack simulation
         
         # Simulate 11 failures to trigger alert
-        for i in range(11):
+        for _ in range(11):
             AccessControlManager.log_access_attempt(request, success=False, reason='Test failure')
         
         # Check cache for failure count (using correct cache key from implementation)
-        cache_key = "failed_access_192.168.1.250"
+        cache_key = "failed_access_192.168.1.250"  # NOSONAR - Safe: matches test IP above
         failures = cache.get(cache_key, 0)
         self.assertGreater(failures, 10)
     
@@ -793,7 +797,8 @@ class TestSecurityCoverageExtended(TestCase):
     
     def test_security_design_patterns_ssrf_private_ip(self):
         """Test SSRF prevention for private IPs"""
-        product = {'price': 100, 'url': 'http://192.168.1.1/admin', 'name': 'Test'}
+        # NOSONAR - Safe: RFC 1918 IP used to test SSRF attack detection
+        product = {'price': 100, 'url': 'http://192.168.1.1/admin', 'name': 'Test'}  # NOSONAR
         is_valid, msg = SecurityDesignPatterns.validate_business_logic(product)
         self.assertFalse(is_valid)
         self.assertIn('HTTPS', msg)  # First validation is HTTPS protocol
