@@ -169,7 +169,7 @@ class TestJuraganMaterialTaskMonitor(TestCase):
         task_id = "test_task_123"
         task_type = "scraping"
         
-        monitor = JuraganMaterialTaskMonitor(task_id=task_id, task_type=task_type)
+        JuraganMaterialTaskMonitor(task_id=task_id, task_type=task_type)
         
         # Verify tags were set
         tag_calls = mock_sentry.set_tag.call_args_list
@@ -318,7 +318,7 @@ class TestTransactionTracking(TestCase):
         mock_transaction = MagicMock()
         mock_start_transaction.return_value = mock_transaction
         
-        transaction = track_juragan_material_transaction("test_transaction")
+        track_juragan_material_transaction("test_transaction")
         
         # Verify transaction was created
         mock_start_transaction.assert_called_once_with(
@@ -384,7 +384,7 @@ class TestViewsIntegration(TestCase):
         request = self.factory.get('/scrape/', {'keyword': 'test', 'page': '0'})
         
         # Call view
-        response = scrape_products(request)
+        scrape_products(request)
         
         # Verify monitoring was called
         self.assertTrue(mock_transaction.called)
@@ -424,7 +424,7 @@ class TestViewsIntegration(TestCase):
         request = self.factory.get('/scrape-save/', {'keyword': 'test', 'page': '0'})
         
         # Call view
-        response = scrape_and_save_products(request)
+        scrape_and_save_products(request)
         
         # Verify monitoring was called
         self.assertTrue(mock_transaction.called)
@@ -463,7 +463,7 @@ class TestViewsIntegration(TestCase):
         request = self.factory.get('/scrape-popularity/', {'keyword': 'test', 'page': '0'})
         
         # Call view
-        response = scrape_popularity(request)
+        scrape_popularity(request)
         
         # Verify monitoring was called
         self.assertTrue(mock_transaction.called)
@@ -495,7 +495,7 @@ class TestViewsIntegration(TestCase):
         request = self.factory.get('/scrape/', {'keyword': 'test'})
         
         # Call view - should handle exception
-        response = scrape_products(request)
+        scrape_products(request)
         
         # Verify error breadcrumb was added
         breadcrumb_calls = [str(call) for call in mock_monitor.add_breadcrumb.call_args_list]
@@ -533,7 +533,7 @@ class TestDatabaseMonitoring(TestCase):
         }
         
         # Call function
-        result = _save_products_to_database([mock_product])
+        _save_products_to_database([mock_product])
         
         # Verify monitoring was called
         self.assertTrue(mock_monitor.add_breadcrumb.called)

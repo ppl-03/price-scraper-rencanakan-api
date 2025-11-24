@@ -15,6 +15,12 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# Sentry breadcrumb categories
+CATEGORY_DATABASE = "juragan_material.database"
+CATEGORY_CATEGORIZATION = "juragan_material.categorization"
+CATEGORY_SCRAPER = "juragan_material.scraper"
+CATEGORY_ERROR = "juragan_material.error"
+
 
 def _save_products_to_database(products):
     """
@@ -72,7 +78,7 @@ def _save_products_to_database(products):
                 if product_ids:
                     JuraganMaterialSentryMonitor.add_breadcrumb(
                         f"Starting auto-categorization for {len(product_ids)} products",
-                        category="juragan_material.categorization",
+                        category=CATEGORY_CATEGORIZATION,
                         level="info"
                     )
                     
@@ -86,7 +92,7 @@ def _save_products_to_database(products):
                     
                     JuraganMaterialSentryMonitor.add_breadcrumb(
                         f"Auto-categorization completed in {categorization_time:.2f}s",
-                        category="juragan_material.categorization",
+                        category=CATEGORY_CATEGORIZATION,
                         level="info",
                         data={
                             "duration": categorization_time,
@@ -98,7 +104,7 @@ def _save_products_to_database(products):
                 logger.warning(f"Auto-categorization failed: {str(cat_error)}")
                 JuraganMaterialSentryMonitor.add_breadcrumb(
                     f"Auto-categorization failed: {str(cat_error)}",
-                    category="juragan_material.categorization",
+                    category=CATEGORY_CATEGORIZATION,
                     level="warning"
                 )
                 # Don't fail the entire operation if categorization fails
@@ -161,6 +167,36 @@ def _convert_products_to_dict(products):
     ]
 
 
+def _get_products_count(result):
+    """Get product count from scraping result."""
+    return len(result.products) if result.products else 0
+
+
+def _add_database_info_to_response(response_data, db_save_result, save_to_db):
+    """Add database save information to response data."""
+    if db_save_result and isinstance(db_save_result, dict):
+        response_data['database'] = {
+            'saved': db_save_result.get('success', False),
+            'inserted': db_save_result.get('inserted', 0),
+            'updated': db_save_result.get('updated', 0),
+            'categorized': db_save_result.get('categorized', 0),
+            'anomalies': db_save_result.get('anomalies', [])
+        }
+    else:
+        response_data['saved_to_database'] = db_save_result
+    response_data['database_save_attempted'] = save_to_db
+
+
+def _update_scraping_result_with_db_data(scraping_result, save_to_db, db_save_result):
+    """Update scraping result with database operation data."""
+    if save_to_db and db_save_result:
+        scraping_result.update({
+            'db_inserted': db_save_result.get('inserted', 0),
+            'db_updated': db_save_result.get('updated', 0),
+            'db_categorized': db_save_result.get('categorized', 0)
+        })
+
+
 @require_http_methods(["GET"])
 def scrape_products(request):
     # Start Sentry transaction for monitoring
@@ -193,7 +229,7 @@ def scrape_products(request):
             # Track product scraping start
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Starting product scraping for keyword: {keyword}",
-                category="juragan_material.scraper",
+                category=CATEGORY_SCRAPER,
                 level="info",
                 data={
                     "keyword": keyword,
@@ -212,25 +248,28 @@ def scrape_products(request):
                 page=page
             )
             scrape_time = time.time() - scrape_start_time
+            products_count = _get_products_count(result)
             
             # Update task progress
-            task.record_progress(1, 2 if save_to_db else 1, f"Product scraping completed in {scrape_time:.2f}s")
+            total_steps = 2 if save_to_db else 1
+            task.record_progress(1, total_steps, f"Product scraping completed in {scrape_time:.2f}s")
             
             # Track scraping result
             scraping_result = {
-                'products_count': len(result.products) if result.products else 0,
+                'products_count': products_count,
                 'success': result.success,
                 'errors_count': 0 if result.success else 1,
                 'scrape_time': scrape_time
             }
             
+            breadcrumb_level = "info" if result.success else "warning"
             JuraganMaterialSentryMonitor.add_breadcrumb(
-                f"Product scraping completed - Found: {len(result.products) if result.products else 0} products",
-                category="juragan_material.scraper",
-                level="info" if result.success else "warning",
+                f"Product scraping completed - Found: {products_count} products",
+                category=CATEGORY_SCRAPER,
+                level=breadcrumb_level,
                 data={
                     "success": result.success,
-                    "products_count": len(result.products) if result.products else 0,
+                    "products_count": products_count,
                     "duration": scrape_time
                 }
             )
@@ -245,25 +284,10 @@ def scrape_products(request):
             response_data = format_scraping_response(result)
             
             # Add database save information to response
-            if db_save_result and isinstance(db_save_result, dict):
-                response_data['database'] = {
-                    'saved': db_save_result.get('success', False),
-                    'inserted': db_save_result.get('inserted', 0),
-                    'updated': db_save_result.get('updated', 0),
-                    'categorized': db_save_result.get('categorized', 0),
-                    'anomalies': db_save_result.get('anomalies', [])
-                }
-            else:
-                response_data['saved_to_database'] = db_save_result
-            response_data['database_save_attempted'] = save_to_db
+            _add_database_info_to_response(response_data, db_save_result, save_to_db)
             
             # Track overall scraping result
-            if save_to_db and db_save_result:
-                scraping_result.update({
-                    'db_inserted': db_save_result.get('inserted', 0),
-                    'db_updated': db_save_result.get('updated', 0),
-                    'db_categorized': db_save_result.get('categorized', 0)
-                })
+            _update_scraping_result_with_db_data(scraping_result, save_to_db, db_save_result)
             
             JuraganMaterialSentryMonitor.track_scraping_result(scraping_result)
             
@@ -278,7 +302,7 @@ def scrape_products(request):
             # Track error in Sentry
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Fatal error in scrape_products: {str(e)}",
-                category="juragan_material.error",
+                category=CATEGORY_ERROR,
                 level="error"
             )
             
@@ -344,7 +368,7 @@ def scrape_and_save_products(request):
             # Track scraping start
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Starting scrape and save for keyword: {keyword}",
-                category="juragan_material.scraper",
+                category=CATEGORY_SCRAPER,
                 level="info",
                 data={
                     "keyword": keyword,
@@ -368,7 +392,7 @@ def scrape_and_save_products(request):
             
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Scraping completed - Found: {len(result.products) if result.products else 0} products",
-                category="juragan_material.scraper",
+                category=CATEGORY_SCRAPER,
                 level="info" if result.success else "warning",
                 data={
                     "success": result.success,
@@ -448,7 +472,7 @@ def scrape_and_save_products(request):
             # Track error in Sentry
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Fatal error in scrape_and_save_products: {str(e)}",
-                category="juragan_material.error",
+                category=CATEGORY_ERROR,
                 level="error"
             )
             
@@ -511,7 +535,7 @@ def scrape_popularity(request):
             # Track scraping start
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Starting popularity scraping for keyword: {keyword} (top {top_n})",
-                category="juragan_material.scraper",
+                category=CATEGORY_SCRAPER,
                 level="info",
                 data={
                     "keyword": keyword,
@@ -544,7 +568,7 @@ def scrape_popularity(request):
             
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Popularity scraping completed - Found: {len(result.products) if result.products else 0} products",
-                category="juragan_material.scraper",
+                category=CATEGORY_SCRAPER,
                 level="info" if result.success else "warning",
                 data={
                     "success": result.success,
@@ -577,7 +601,7 @@ def scrape_popularity(request):
             # Track error in Sentry
             JuraganMaterialSentryMonitor.add_breadcrumb(
                 f"Fatal error in scrape_popularity: {str(e)}",
-                category="juragan_material.error",
+                category=CATEGORY_ERROR,
                 level="error"
             )
             
