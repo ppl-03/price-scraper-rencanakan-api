@@ -133,6 +133,34 @@ def _convert_products(products, location_value):
     ]
 
 
+def _auto_categorize_products(product_count):
+    """Auto-categorize newly inserted products.
+    
+    Args:
+        product_count: Number of products to categorize
+        
+    Returns:
+        int: Number of products successfully categorized
+    """
+    try:
+        from db_pricing.models import DepoBangunanProduct
+        
+        # Get recently inserted products (ones without category)
+        uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:product_count]
+        product_ids = list(uncategorized_products.values_list('id', flat=True))
+        
+        if product_ids:
+            categorization_service = AutoCategorizationService()
+            categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
+            categorized_count = categorization_result.get('categorized', 0)
+            logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
+            return categorized_count
+    except Exception as cat_error:
+        logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+    
+    return 0
+
+
 def _save_products(db_service, products_data, use_price_update, result_url):
     # Validate business logic for each product
     for product_data in products_data:
@@ -147,23 +175,7 @@ def _save_products(db_service, products_data, use_price_update, result_url):
             return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
         
         # Auto-categorize newly inserted products
-        categorized_count = 0
-        if save_result.get('new_count', 0) > 0:
-            try:
-                from db_pricing.models import DepoBangunanProduct
-                
-                # Get recently inserted products (ones without category)
-                uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:save_result['new_count']]
-                product_ids = list(uncategorized_products.values_list('id', flat=True))
-                
-                if product_ids:
-                    categorization_service = AutoCategorizationService()
-                    categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
-                    categorized_count = categorization_result.get('categorized', 0)
-                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
-            except Exception as cat_error:
-                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
-                # Don't fail the entire operation if categorization fails
+        categorized_count = _auto_categorize_products(save_result.get('new_count', 0))
         
         return ({
             'success': True,
@@ -181,22 +193,7 @@ def _save_products(db_service, products_data, use_price_update, result_url):
         return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
     
     # Auto-categorize newly saved products
-    categorized_count = 0
-    try:
-        from db_pricing.models import DepoBangunanProduct
-        
-        # Get recently inserted products (ones without category)
-        uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:len(products_data)]
-        product_ids = list(uncategorized_products.values_list('id', flat=True))
-        
-        if product_ids:
-            categorization_service = AutoCategorizationService()
-            categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
-            categorized_count = categorization_result.get('categorized', 0)
-            logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
-    except Exception as cat_error:
-        logger.warning(f"Auto-categorization failed: {str(cat_error)}")
-        # Don't fail the entire operation if categorization fails
+    categorized_count = _auto_categorize_products(len(products_data))
     
     return ({
         'success': True,
