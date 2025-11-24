@@ -357,6 +357,12 @@ class DatabaseQueryValidator:
             query = f"SELECT {cols} FROM {table}"
             
             if where_clause:
+                # Validate WHERE clause columns
+                for col in where_clause.keys():
+                    if not DatabaseQueryValidator.validate_column_name(col):
+                        logger.critical(f"Invalid WHERE clause column name attempt: {col}")
+                        return False, f"Invalid column name in WHERE clause: {col}", ""
+                
                 where_parts = [f"{k} = %s" for k in where_clause.keys()]
                 query += " WHERE " + " AND ".join(where_parts)
         
@@ -503,8 +509,11 @@ def validate_input(validators: dict):
                     else:
                         data_source = {**request.GET.dict(), **request.POST.dict()}
                 except ValueError as e:
-                    logger.warning(f"Failed to parse request body: {str(e)}")
-                    data_source = {**request.GET.dict(), **request.POST.dict()}
+                    logger.error(f"Failed to parse request body: {str(e)}")
+                    return JsonResponse({
+                        'error': 'Invalid JSON in request body',
+                        'code': 'INVALID_JSON'
+                    }, status=400)
             else:
                 data_source = request.GET
             
@@ -549,11 +558,3 @@ def enforce_resource_limits(view_func):
         return view_func(request, *args, **kwargs)
     
     return wrapper
-
-
-def secure_endpoint(required_permission: str = 'read'):
-    def decorator(view_func):
-        secured_func = validate_input(view_func)
-        secured_func = require_api_token(required_permission)(secured_func)
-        return secured_func
-    return decorator
