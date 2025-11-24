@@ -955,7 +955,7 @@ class TestDatabaseQueryValidatorCoverage(unittest.TestCase):
     
     def test_build_safe_query_invalid_operation(self):
         """Test build_safe_query with invalid operation"""
-        is_valid, error_msg, query = DatabaseQueryValidator.build_safe_query(
+        is_valid, error_msg, _ = DatabaseQueryValidator.build_safe_query(
             operation='INVALID',
             table='mitra10_products',
             columns=['name', 'price']
