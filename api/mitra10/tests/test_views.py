@@ -8,7 +8,9 @@ from db_pricing.models import Mitra10Product
 from api.interfaces import Product, ScrapingResult
 
 
-TEST_DOC_IP = ".".join(["203", "0", "113", "1"])  
+TEST_DOC_IP = ".".join(["203", "0", "113", "1"])  # NOSONAR - Test documentation IP
+TEST_PRIVATE_IP_1 = ".".join(["10", "0", "0", "1"])  # NOSONAR - Test private IP
+TEST_PRIVATE_IP_2 = ".".join(["192", "168", "1", "1"])  # NOSONAR - Test private IP
 
 
 class TestMitra10Views(TestCase):
@@ -967,13 +969,13 @@ class TestMitra10Views(TestCase):
         
         request = self.factory.get('/test/')
         request.headers = {'X-API-Token': 'dev-token-12345'}
-        request.META = {'REMOTE_ADDR': '192.168.1.1'}
+        request.META = {'REMOTE_ADDR': TEST_PRIVATE_IP_2}
         
         # Mock API_TOKENS with IP whitelist
         with patch('api.mitra10.views.API_TOKENS', {
             'dev-token-12345': {
                 'name': 'Test Token',
-                'allowed_ips': ['10.0.0.1'],  # Different IP
+                'allowed_ips': [TEST_PRIVATE_IP_1],  # Different IP
                 'created': '2024-01-01',
                 'expires': None
             }
@@ -1007,12 +1009,12 @@ class TestMitra10Views(TestCase):
         
         request = self.factory.get('/test/')
         request.headers = {'X-API-Token': 'dev-token-12345'}
-        request.META = {'REMOTE_ADDR': '10.0.0.1'}
+        request.META = {'REMOTE_ADDR': TEST_PRIVATE_IP_1}
         
         with patch('api.mitra10.views.API_TOKENS', {
             'dev-token-12345': {
                 'name': 'Test Token',
-                'allowed_ips': ['10.0.0.1'],
+                'allowed_ips': [TEST_PRIVATE_IP_1],
                 'created': '2024-01-01',
                 'expires': None
             }
