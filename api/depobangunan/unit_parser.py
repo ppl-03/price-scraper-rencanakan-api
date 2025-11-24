@@ -15,7 +15,7 @@ except AttributeError:
 class DepoBangunanUnitExtractor:
     # Pre-compile commonly used patterns with ReDoS protection
     # Fixed: Use atomic groups and bounded quantifiers to prevent backtracking
-    _AREA_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)[ \t]?[x×][ \t]?(\d{1,10}(?:[.,]\d{1,10})?)[ \t]?(cm|mm|m)(?=\s|$)', re.IGNORECASE)
+    _AREA_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)[ \t]?[x×][ \t]?(\d{1,10}(?:[.,]\d{1,10})?)[ \t]?(cm|mm|m)(?:\s|$)', re.IGNORECASE)
     _INCH_PATTERN = re.compile(r'\d{1,10}(?:[.,]\d{1,10})?[ \t]{0,3}(?:["″]|inch|inchi)(?=\s|$)', re.IGNORECASE)
     _FEET_PATTERN = re.compile(r'\d{1,10}(?:[.,]\d{1,10})?[ \t]{0,3}(?:[\'′]|feet|ft)(?=\s|$)', re.IGNORECASE)
     _ADJACENT_PATTERN = re.compile(r'(\d{1,10}(?:[.,]\d{1,10})?)(kg|gram|gr|g|ml|lt|l|cc|pcs|set|mm|cm|m)(?=\s|$)', re.IGNORECASE)
