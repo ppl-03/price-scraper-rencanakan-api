@@ -183,7 +183,7 @@
       <div class="row align-items-center">
         <div class="col-md-8">
           <h6 class="mb-2"><i class="fas fa-map-marker-alt me-2"></i>Wilayah Terpilih</h6>
-          <p class="mb-0">Data HSPK untuk <strong>Kabupaten Cilacap</strong> - Provinsi Jawa Tengah</p>
+          <p class="mb-0">Data HSPK <strong>Tahun 2025</strong> untuk <strong>Kabupaten Cilacap</strong> - Provinsi Jawa Tengah</p>
         </div>
         <div class="col-md-4 text-md-end">
           <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#regionModal">
@@ -349,6 +349,7 @@
     let currentSort = { field: '', direction: '' };
     let currentFilters = {
       region: 'Kab. Cilacap',
+      year: '2025',
       search: '',
       category: '',
       price_range: ''
@@ -359,56 +360,192 @@
 
     // API Functions
     async function fetchWageData() {
-      if (isLoading) return;
+      if (isLoading) {
+        console.log('Already loading, skipping request');
+        return;
+      }
       
       isLoading = true;
       showLoading(true);
       
+      console.log('=== Fetching Wage Data ===');
+      console.log('Filters:', currentFilters);
+      
       try {
-        const hasFilters = currentFilters.search || currentFilters.category || currentFilters.price_range || 
-                          currentSort.field !== 'item_number' || currentSort.direction !== 'asc';
-        
+        // Build query parameters for the 2025 API
+        // Request ALL data for client-side filtering
         const params = new URLSearchParams({
           region: currentFilters.region,
-          search: currentFilters.search,
-          category: currentFilters.category,
-          price_range: currentFilters.price_range,
-          page: currentPage,
-          per_page: 10,
-          sort_by: currentSort.field || 'item_number',
-          sort_order: currentSort.direction || 'asc'
+          year: currentFilters.year,
+          all: 'true'  // Get all data for client-side filtering
         });
         
-        const response = await fetch(`/api/gov-wage/data/?${params}`);
+        // Add force_refresh parameter if needed
+        if (currentFilters.force_refresh) {
+          params.append('force_refresh', 'true');
+        }
+        
+        const url = `/api/gov-wage/data/?${params}`;
+        console.log('Fetching from URL:', url);
+        
+        const response = await fetch(url);
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
         const data = await response.json();
+        console.log('Response data:', data);
         
         if (data.success) {
-          currentData = data.data;
-          updatePagination(data.pagination);
+          // Store ALL data WITHOUT filtering - this is the complete dataset
+          allData = data.data;
+          console.log('Stored allData:', allData.length, 'items');
+          
+          // NOW apply client-side filters and sorting
+          let filteredData = applyClientFilters(allData);
+          filteredData = applyClientSort(filteredData);
+          
+          // Calculate pagination from filtered data
+          const totalItems = filteredData.length;
+          totalPages = Math.ceil(totalItems / 10) || 1;
+          const startIndex = (currentPage - 1) * 10;
+          const endIndex = startIndex + 10;
+          currentData = filteredData.slice(startIndex, endIndex);
+          
+          console.log('After filtering - showing', currentData.length, 'items on page', currentPage);
+          
+          // Update UI
+          updatePagination({
+            current_page: currentPage,
+            total_pages: totalPages,
+            total_items: totalItems,
+            per_page: 10,
+            has_next: currentPage < totalPages,
+            has_previous: currentPage > 1
+          });
           renderTable();
-          updateResultsCount(data.pagination);
+          updateResultsCount({
+            current_page: currentPage,
+            total_items: totalItems,
+            per_page: 10
+          });
           
-          // Show scraping method in console for debugging
-          if (data.scraping_method) {
-            console.log(`Data loaded using: ${data.scraping_method}`);
-          }
-          
-          // Show cache status
-          if (data.cached) {
-            console.log('Data loaded from cache');
-          } else {
-            console.log(`Fresh data scraped (${hasFilters ? 'with filters' : 'smart pagination'})`);
+          // Show cache status in console
+          if (data.data_load_time_ms) {
+            console.log(`Data loaded in ${data.data_load_time_ms}ms (${data.cached ? 'from cache' : 'fresh'})`);
           }
         } else {
+          console.error('API Error:', data.error);
           showError(data.error || 'Gagal mengambil data HSPK');
         }
       } catch (error) {
         console.error('Error fetching wage data:', error);
-        showError('Terjadi kesalahan saat mengambil data');
+        showError('Terjadi kesalahan saat mengambil data: ' + error.message);
       } finally {
         isLoading = false;
         showLoading(false);
       }
+    }
+    
+    // Client-side filtering
+    function applyClientFilters(data) {
+      let filtered = data;
+      
+      console.log('╔═══════════════════════════════════════════════════════════════');
+      console.log('║ APPLY CLIENT FILTERS');
+      console.log('╠═══════════════════════════════════════════════════════════════');
+      console.log('║ Input data count:', data.length);
+      console.log('║ Current filters:', JSON.stringify(currentFilters, null, 2));
+      
+      // Search filter
+      if (currentFilters.search && currentFilters.search.trim().length > 0) {
+        const searchLower = currentFilters.search.toLowerCase().trim();
+        console.log('╠═══════════════════════════════════════════════════════════════');
+        console.log('║ 🔍 SEARCH FILTER ACTIVE');
+        console.log('║ Search term:', `"${searchLower}"`);
+        console.log('║ Before filter:', filtered.length, 'items');
+        
+        filtered = filtered.filter(item => {
+          const description = (item.work_description || '').toLowerCase();
+          const code = (item.work_code || '').toLowerCase();
+          const matches = description.includes(searchLower) || code.includes(searchLower);
+          
+          if (matches) {
+            console.log('║   ✓ Match:', item.work_code, '-', item.work_description.substring(0, 40));
+          }
+          
+          return matches;
+        });
+        
+        console.log('║ After search filter:', filtered.length, 'items');
+      } else {
+        console.log('║ ℹ️  No search filter (empty or whitespace)');
+      }
+      
+      // Category filter
+      if (currentFilters.category) {
+        console.log('╠═══════════════════════════════════════════════════════════════');
+        console.log('║ 📁 CATEGORY FILTER ACTIVE');
+        console.log('║ Category:', currentFilters.category);
+        console.log('║ Before filter:', filtered.length, 'items');
+        filtered = filtered.filter(item => item.category === currentFilters.category);
+        console.log('║ After category filter:', filtered.length, 'items');
+      }
+      
+      // Price range filter
+      if (currentFilters.price_range) {
+        const [min, max] = parsePriceRange(currentFilters.price_range);
+        console.log('╠═══════════════════════════════════════════════════════════════');
+        console.log('║ 💰 PRICE FILTER ACTIVE');
+        console.log('║ Price range:', min, '-', max);
+        console.log('║ Before filter:', filtered.length, 'items');
+        filtered = filtered.filter(item => {
+          const price = item.unit_price_idr || 0;
+          return price >= min && (max === Infinity || price <= max);
+        });
+        console.log('║ After price filter:', filtered.length, 'items');
+      }
+      
+      console.log('╠═══════════════════════════════════════════════════════════════');
+      console.log('║ ✅ FINAL RESULT:', filtered.length, 'items');
+      console.log('╚═══════════════════════════════════════════════════════════════\n');
+      return filtered;
+    }
+    
+    // Client-side sorting
+    function applyClientSort(data) {
+      if (!currentSort.field) return data;
+      
+      return [...data].sort((a, b) => {
+        let aVal = a[currentSort.field];
+        let bVal = b[currentSort.field];
+        
+        // Handle numeric fields
+        if (currentSort.field === 'unit_price_idr' || currentSort.field === 'item_number') {
+          aVal = parseFloat(aVal) || 0;
+          bVal = parseFloat(bVal) || 0;
+        } else {
+          // String comparison
+          aVal = String(aVal || '').toLowerCase();
+          bVal = String(bVal || '').toLowerCase();
+        }
+        
+        if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    
+    // Parse price range string
+    function parsePriceRange(range) {
+      if (range === '0-500000') return [0, 500000];
+      if (range === '500000-1000000') return [500000, 1000000];
+      if (range === '1000000-2000000') return [1000000, 2000000];
+      if (range === '2000000-') return [2000000, Infinity];
+      
+      const parts = range.split('-');
+      const min = parseInt(parts[0]) || 0;
+      const max = parts[1] ? parseInt(parts[1]) : Infinity;
+      return [min, max];
     }
 
     async function fetchAvailableRegions() {
@@ -426,7 +563,12 @@
 
     async function fetchPaginationInfo(region) {
       try {
-        const response = await fetch(`/api/gov-wage/pagination/?region=${encodeURIComponent(region)}`);
+        const params = new URLSearchParams({
+          region: region,
+          year: currentFilters.year
+        });
+        
+        const response = await fetch(`/api/gov-wage/pagination/?${params}`);
         const data = await response.json();
         
         if (data.success) {
@@ -450,31 +592,140 @@
     }
 
     // Event Listeners
-    document.getElementById('searchInput').addEventListener('input', debounce(function() {
-      currentFilters.search = this.value;
+    document.getElementById('searchInput').addEventListener('input', debounce(function(event) {
+      const searchValue = this.value;
+      currentFilters.search = searchValue;
       currentPage = 1;
-      fetchWageData();
-    }, 500));
+      
+      console.log('╔═══════════════════════════════════════════════════════════════');
+      console.log('║ SEARCH EVENT TRIGGERED');
+      console.log('╠═══════════════════════════════════════════════════════════════');
+      console.log('║ Search input value:', `"${searchValue}"`);
+      console.log('║ Search length:', searchValue.length);
+      console.log('║ allData available:', allData.length, 'items');
+      console.log('║ currentFilters:', JSON.stringify(currentFilters, null, 2));
+      console.log('╚═══════════════════════════════════════════════════════════════');
+      
+      if (allData.length === 0) {
+        console.error('❌ ERROR: allData is empty! Cannot filter.');
+        return;
+      }
+      
+      // Log first 3 items to verify data
+      console.log('First 3 items in allData:');
+      allData.slice(0, 3).forEach((item, idx) => {
+        console.log(`  ${idx + 1}. ${item.work_code} - ${item.work_description.substring(0, 60)}...`);
+      });
+      
+      // Client-side filtering without API call
+      console.log('🔍 Calling applyClientFilters...');
+      let filteredData = applyClientFilters(allData);
+      console.log('✓ Filtered results:', filteredData.length, 'items');
+      
+      if (filteredData.length > 0) {
+        console.log('Filtered items:');
+        filteredData.slice(0, 5).forEach((item, idx) => {
+          console.log(`  ${idx + 1}. ${item.work_code} - ${item.work_description.substring(0, 60)}...`);
+        });
+      }
+      
+      filteredData = applyClientSort(filteredData);
+      
+      const totalItems = filteredData.length;
+      totalPages = Math.ceil(totalItems / 10) || 1;
+      currentData = filteredData.slice(0, 10);
+      
+      console.log('📄 Displaying:', currentData.length, 'items on page 1');
+      console.log('═══════════════════════════════════════════════════════════════\n');
+      
+      updatePagination({
+        current_page: 1,
+        total_pages: totalPages,
+        total_items: totalItems,
+        per_page: 10,
+        has_next: totalPages > 1,
+        has_previous: false
+      });
+      renderTable();
+      updateResultsCount({
+        current_page: 1,
+        total_items: totalItems,
+        per_page: 10
+      });
+    }, 300));
 
     document.getElementById('categoryFilter').addEventListener('change', function() {
       currentFilters.category = this.value;
       currentPage = 1;
-      fetchWageData();
+      
+      console.log('Category filter:', this.value);
+      
+      // Client-side filtering without API call
+      let filteredData = applyClientFilters(allData);
+      console.log('Filtered results:', filteredData.length, 'items');
+      
+      filteredData = applyClientSort(filteredData);
+      
+      const totalItems = filteredData.length;
+      totalPages = Math.ceil(totalItems / 10) || 1;
+      currentData = filteredData.slice(0, 10);
+      
+      updatePagination({
+        current_page: 1,
+        total_pages: totalPages,
+        total_items: totalItems,
+        per_page: 10,
+        has_next: totalPages > 1,
+        has_previous: false
+      });
+      renderTable();
+      updateResultsCount({
+        current_page: 1,
+        total_items: totalItems,
+        per_page: 10
+      });
     });
 
     document.getElementById('priceRange').addEventListener('change', function() {
       currentFilters.price_range = this.value;
       currentPage = 1;
-      fetchWageData();
+      
+      console.log('Price range filter:', this.value);
+      
+      // Client-side filtering without API call
+      let filteredData = applyClientFilters(allData);
+      console.log('Filtered results:', filteredData.length, 'items');
+      
+      filteredData = applyClientSort(filteredData);
+      
+      const totalItems = filteredData.length;
+      totalPages = Math.ceil(totalItems / 10) || 1;
+      currentData = filteredData.slice(0, 10);
+      
+      updatePagination({
+        current_page: 1,
+        total_pages: totalPages,
+        total_items: totalItems,
+        per_page: 10,
+        has_next: totalPages > 1,
+        has_previous: false
+      });
+      renderTable();
+      updateResultsCount({
+        current_page: 1,
+        total_items: totalItems,
+        per_page: 10
+      });
     });
 
     // Debounce function for search
     function debounce(func, wait) {
       let timeout;
       return function executedFunction(...args) {
+        const context = this;
         const later = () => {
           clearTimeout(timeout);
-          func(...args);
+          func.apply(context, args);
         };
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
@@ -487,9 +738,21 @@
       const dataTable = document.getElementById('dataTable');
       const emptyState = document.getElementById('emptyState');
 
+      console.log('Rendering table with', currentData.length, 'items');
+
       if (currentData.length === 0) {
+        console.log('No data to display - showing empty state');
         dataTable.style.display = 'none';
         emptyState.style.display = 'block';
+        
+        // Reset empty state to default (not error)
+        emptyState.innerHTML = `
+          <div class="empty-state-icon">
+            <i class="fas fa-search"></i>
+          </div>
+          <h5>Tidak ada data ditemukan</h5>
+          <p>Coba ubah filter pencarian atau kata kunci yang digunakan</p>
+        `;
         return;
       }
 
@@ -498,7 +761,7 @@
 
       tableBody.innerHTML = currentData.map((item, index) => `
         <tr>
-          <td>${item.item_number || index + 1}</td>
+          <td>${item.item_number || ((currentPage - 1) * 10 + index + 1)}</td>
           <td>${item.work_code || '-'}</td>
           <td>${item.work_description || '-'}</td>
           <td class="text-center">${item.unit || '-'}</td>
@@ -510,9 +773,13 @@
     function updateResultsCount(pagination) {
       const resultsCount = document.getElementById('resultsCount');
       if (pagination) {
-        const start = ((pagination.current_page - 1) * pagination.per_page) + 1;
-        const end = Math.min(start + pagination.per_page - 1, pagination.total_items);
-        resultsCount.textContent = `Menampilkan ${start} sampai ${end} dari ${pagination.total_items} entri`;
+        if (pagination.total_items === 0) {
+          resultsCount.textContent = 'Tidak ada data yang ditemukan';
+        } else {
+          const start = ((pagination.current_page - 1) * pagination.per_page) + 1;
+          const end = Math.min(start + pagination.per_page - 1, pagination.total_items);
+          resultsCount.textContent = `Menampilkan ${start} sampai ${end} dari ${pagination.total_items} entri`;
+        }
       } else {
         resultsCount.textContent = 'Memuat data...';
       }
@@ -577,7 +844,33 @@
     function changePage(page) {
       if (page !== currentPage && page >= 1 && page <= totalPages) {
         currentPage = page;
-        fetchWageData();
+        
+        // Client-side pagination
+        let filteredData = applyClientFilters(allData);
+        filteredData = applyClientSort(filteredData);
+        
+        const totalItems = filteredData.length;
+        const startIndex = (page - 1) * 10;
+        const endIndex = startIndex + 10;
+        currentData = filteredData.slice(startIndex, endIndex);
+        
+        updatePagination({
+          current_page: page,
+          total_pages: totalPages,
+          total_items: totalItems,
+          per_page: 10,
+          has_next: page < totalPages,
+          has_previous: page > 1
+        });
+        renderTable();
+        updateResultsCount({
+          current_page: page,
+          total_items: totalItems,
+          per_page: 10
+        });
+        
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
 
@@ -595,7 +888,25 @@
     }
 
     function showError(message) {
-      alert(message); // You can replace this with a better error display
+      // Create a better error display
+      const emptyState = document.getElementById('emptyState');
+      const dataTable = document.getElementById('dataTable');
+      
+      dataTable.style.display = 'none';
+      emptyState.style.display = 'block';
+      emptyState.innerHTML = `
+        <div class="empty-state-icon" style="color: #dc3545;">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <h5 style="color: #dc3545;">Error</h5>
+        <p>${message}</p>
+        <button class="btn btn-primary mt-3" onclick="location.reload()">
+          <i class="fas fa-redo me-2"></i>Muat Ulang Halaman
+        </button>
+      `;
+      
+      // Also log to console
+      console.error('Application Error:', message);
     }
 
     function updateRegionSelect(regions) {
@@ -644,7 +955,7 @@
       header.addEventListener('click', function() {
         const field = this.dataset.sort;
         
-        // Map frontend field names to API field names
+        // Map frontend field names to data field names
         const fieldMap = {
           'no': 'item_number',
           'kode': 'work_code',
@@ -653,7 +964,7 @@
           'harga': 'unit_price_idr'
         };
         
-        const apiField = fieldMap[field] || field;
+        const dataField = fieldMap[field] || field;
         
         // Remove sort classes from all headers
         for (const h of document.querySelectorAll('.th-sort')) {
@@ -661,18 +972,38 @@
         }
 
         // Determine sort direction
-        if (currentSort.field === apiField && currentSort.direction === 'asc') {
+        if (currentSort.field === dataField && currentSort.direction === 'asc') {
           currentSort.direction = 'desc';
           this.classList.add('desc');
         } else {
           currentSort.direction = 'asc';
           this.classList.add('asc');
         }
-        currentSort.field = apiField;
+        currentSort.field = dataField;
         
-        // Refresh data with new sorting
+        // Apply client-side sorting
         currentPage = 1;
-        fetchWageData();
+        let filteredData = applyClientFilters(allData);
+        filteredData = applyClientSort(filteredData);
+        
+        const totalItems = filteredData.length;
+        totalPages = Math.ceil(totalItems / 10);
+        currentData = filteredData.slice(0, 10);
+        
+        updatePagination({
+          current_page: 1,
+          total_pages: totalPages,
+          total_items: totalItems,
+          per_page: 10,
+          has_next: totalPages > 1,
+          has_previous: false
+        });
+        renderTable();
+        updateResultsCount({
+          current_page: 1,
+          total_items: totalItems,
+          per_page: 10
+        });
       });
     }
 
@@ -689,18 +1020,17 @@
       currentFilters.region = regency;
       currentPage = 1;
       
-      // Update display
-      document.querySelector('.region-selector strong').textContent = 
-        document.querySelector(`#regencySelect option[value="${regency}"]`).textContent;
+      // Update display - find the paragraph with region info
+      const regionText = document.querySelector('.region-selector p');
+      const regencyName = document.querySelector(`#regencySelect option[value="${regency}"]`).textContent;
+      regionText.innerHTML = `Data HSPK <strong>Tahun ${currentFilters.year}</strong> untuk <strong>${regencyName}</strong> - Provinsi Jawa Tengah`;
       
       // Close modal
       const modal = bootstrap.Modal.getInstance(document.getElementById('regionModal'));
       modal.hide();
       
-      // Fetch pagination info for new region, then data
-      fetchPaginationInfo(regency).then(() => {
-        fetchWageData();
-      });
+      // Fetch new data for the region
+      fetchWageData();
     }
 
     // Province change handler
@@ -715,13 +1045,18 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
-      // Load initial data and pagination info
-      fetchPaginationInfo(currentFilters.region);
+      console.log('=== Gov Wage Page Initialized ===');
+      console.log('Current filters:', currentFilters);
+      console.log('Starting to fetch wage data...');
+      
+      // Load initial data
       fetchWageData();
       fetchAvailableRegions();
 
       // Set up initial display
       updateResultsCount();
+      
+      console.log('Gov Wage Dashboard initialized with 2025 JSON caching system');
     });
   </script>
 {% endblock %}
