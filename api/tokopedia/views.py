@@ -9,8 +9,16 @@ from .url_builder_ulasan import TokopediaUrlBuilderUlasan
 from .http_client import TokopediaHttpClient
 from .html_parser import TokopediaHtmlParser
 from .scraper import TokopediaPriceScraper
+from .sentry_monitoring import (
+    TokopediaSentryMonitor,
+    track_tokopedia_transaction,
+    TokopediaTaskMonitor
+)
 from .security import require_api_token, enforce_resource_limits
 import logging
+import uuid
+import time
+
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -22,6 +30,12 @@ MIN_LIMIT = 1
 MIN_PAGE = 0
 MIN_PRICE = 0
 MAX_QUERY_LENGTH = 200  # Maximum allowed query length
+
+# Sentry monitoring constants
+SCRAPER_CATEGORY = "tokopedia.scraper"
+ERROR_CATEGORY = "tokopedia.error"
+SCRAPING_COMPLETED = "Product scraping completed"
+DB_SAVE_COMPLETED = "Database save completed"
 
 
 def _sanitize_string(value: str, max_length: int = MAX_QUERY_LENGTH) -> str:
@@ -265,8 +279,6 @@ def _save_products_to_database(products) -> dict:
 
     except Exception as e:
         # Log the error but don't fail the entire request
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Database save error: {str(e)}")
         return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
 
@@ -355,32 +367,90 @@ def _handle_scraping_result(result):
 @require_http_methods(["GET"])
 def scrape_products(request):
     """Scrape products with basic parameters (query, sort, page, limit)"""
-    try:
-        # Parse common parameters
-        params, error = _parse_common_parameters(request)
-        if error:
-            return error
-        
-        # Perform scraping
-        scraper = create_tokopedia_scraper()
-        result = scraper.scrape_products(
-            keyword=params['query'],
-            sort_by_price=params['sort_by_price'],
-            page=params['page'],
-            limit=params['limit']
-        )
-        
-        # Handle result and save to database
-        result, db_result = _handle_scraping_result(result)
-        
-        # Format and return response
-        return JsonResponse(_format_scrape_result(result, db_result))
-        
-    except Exception as e:
-        return _create_error_response(
-            f"Tokopedia scraper error: {str(e)}", 
-            status=500
-        )
+    # Start Sentry transaction for monitoring
+    with track_tokopedia_transaction("tokopedia_scrape_products"):
+        try:
+            # Parse common parameters
+            params, error = _parse_common_parameters(request)
+            if error:
+                return error
+            
+            # Create task monitor for tracking
+            task_id = f"scrape_{uuid.uuid4().hex[:8]}"
+            task = TokopediaTaskMonitor(task_id=task_id, task_type="product_scraping")
+            
+            # Set scraping context for Sentry
+            TokopediaSentryMonitor.set_scraping_context(
+                keyword=params['query'],
+                page=params['page'],
+                additional_data={
+                    'sort_by_price': params['sort_by_price'],
+                    'limit': params['limit'],
+                    'source': 'api_endpoint',
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            
+            # Track product scraping
+            TokopediaSentryMonitor.add_breadcrumb(
+                f"Starting product scraping for keyword: {params['query']}",
+                category=SCRAPER_CATEGORY,
+                level="info"
+            )
+            
+            product_start_time = time.time()
+            scraper = create_tokopedia_scraper()
+            result = scraper.scrape_products(
+                keyword=params['query'],
+                sort_by_price=params['sort_by_price'],
+                page=params['page'],
+                limit=params['limit']
+            )
+            product_time = time.time() - product_start_time
+            
+            # Update task progress
+            task.record_progress(1, 2, SCRAPING_COMPLETED)
+            
+            # Track scraping result
+            scraping_result = {
+                'products_count': len(result.products),
+                'success': result.success,
+                'errors_count': 0 if result.success else 1,
+                'product_time': product_time
+            }
+            TokopediaSentryMonitor.track_scraping_result(scraping_result)
+            
+            # Handle result and save to database
+            result, db_result = _handle_scraping_result(result)
+            
+            # Track database operation if applicable
+            if db_result:
+                TokopediaSentryMonitor.track_database_operation("save", db_result)
+                task.record_progress(2, 2, DB_SAVE_COMPLETED)
+            
+            # Complete task
+            task.complete(success=result.success, result_data=scraping_result)
+            
+            # Format and return response
+            return JsonResponse(_format_scrape_result(result, db_result))
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in scraper: {type(e).__name__}")
+            
+            # Track error in Sentry
+            TokopediaSentryMonitor.add_breadcrumb(
+                f"Fatal error in scrape_products: {str(e)}",
+                category=ERROR_CATEGORY,
+                level="error"
+            )
+            
+            if 'task' in locals():
+                task.complete(success=False)
+            
+            return _create_error_response(
+                f"Tokopedia scraper error: {str(e)}", 
+                status=500
+            )
 
 
 def _parse_filter_parameters(request) -> Tuple[Optional[dict], Optional[JsonResponse]]:
@@ -420,40 +490,106 @@ def _parse_filter_parameters(request) -> Tuple[Optional[dict], Optional[JsonResp
 @require_http_methods(["GET"])
 def scrape_products_with_filters(request):
     """Scrape products with advanced filters (price range, location, limit)"""
-    try:
-        # Parse common parameters
-        params, error = _parse_common_parameters(request)
-        if error:
-            return error
-        
-        # Parse filter parameters
-        filters, error = _parse_filter_parameters(request)
-        if error:
-            return error
-        
-        # Perform scraping with filters
-        scraper = create_tokopedia_scraper()
-        result = scraper.scrape_products_with_filters(
-            keyword=params['query'],
-            sort_by_price=params['sort_by_price'],
-            page=params['page'],
-            min_price=filters['min_price'],
-            max_price=filters['max_price'],
-            location=filters['location'],
-            limit=params['limit']
-        )
-        
-        # Handle result and save to database
-        result, db_result = _handle_scraping_result(result)
-        
-        # Format and return response
-        return JsonResponse(_format_scrape_result(result, db_result))
-        
-    except Exception as e:
-        return _create_error_response(
-            f"Tokopedia scraper with filters error: {str(e)}", 
-            status=500
-        )
+    # Start Sentry transaction for monitoring
+    with track_tokopedia_transaction("tokopedia_scrape_products_with_filters"):
+        try:
+            # Parse common parameters
+            params, error = _parse_common_parameters(request)
+            if error:
+                return error
+            
+            # Parse filter parameters
+            filters, error = _parse_filter_parameters(request)
+            if error:
+                return error
+            
+            # Create task monitor for tracking
+            task_id = f"scrape_filter_{uuid.uuid4().hex[:8]}"
+            task = TokopediaTaskMonitor(task_id=task_id, task_type="product_scraping_with_filters")
+            
+            # Set scraping context for Sentry
+            TokopediaSentryMonitor.set_scraping_context(
+                keyword=params['query'],
+                page=params['page'],
+                additional_data={
+                    'sort_by_price': params['sort_by_price'],
+                    'limit': params['limit'],
+                    'min_price': filters['min_price'],
+                    'max_price': filters['max_price'],
+                    'location': filters['location'],
+                    'source': 'api_endpoint',
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            
+            # Track product scraping with filters
+            TokopediaSentryMonitor.add_breadcrumb(
+                f"Starting product scraping with filters for keyword: {params['query']}",
+                category=SCRAPER_CATEGORY,
+                level="info",
+                data={
+                    'min_price': filters['min_price'],
+                    'max_price': filters['max_price'],
+                    'location': filters['location']
+                }
+            )
+            
+            product_start_time = time.time()
+            scraper = create_tokopedia_scraper()
+            result = scraper.scrape_products_with_filters(
+                keyword=params['query'],
+                sort_by_price=params['sort_by_price'],
+                page=params['page'],
+                min_price=filters['min_price'],
+                max_price=filters['max_price'],
+                location=filters['location'],
+                limit=params['limit']
+            )
+            product_time = time.time() - product_start_time
+            
+            # Update task progress
+            task.record_progress(1, 2, SCRAPING_COMPLETED)
+            
+            # Track scraping result
+            scraping_result = {
+                'products_count': len(result.products),
+                'success': result.success,
+                'errors_count': 0 if result.success else 1,
+                'product_time': product_time
+            }
+            TokopediaSentryMonitor.track_scraping_result(scraping_result)
+            
+            # Handle result and save to database
+            result, db_result = _handle_scraping_result(result)
+            
+            # Track database operation if applicable
+            if db_result:
+                TokopediaSentryMonitor.track_database_operation("save_with_filters", db_result)
+                task.record_progress(2, 2, DB_SAVE_COMPLETED)
+            
+            # Complete task
+            task.complete(success=result.success, result_data=scraping_result)
+            
+            # Format and return response
+            return JsonResponse(_format_scrape_result(result, db_result))
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in scraper with filters: {type(e).__name__}")
+            
+            # Track error in Sentry
+            TokopediaSentryMonitor.add_breadcrumb(
+                f"Fatal error in scrape_products_with_filters: {str(e)}",
+                category=ERROR_CATEGORY,
+                level="error"
+            )
+            
+            if 'task' in locals():
+                task.complete(success=False)
+            
+            return _create_error_response(
+                f"Tokopedia scraper with filters error: {str(e)}", 
+                status=500
+            )
 
 
 @require_api_token(required_permission='scrape')
@@ -466,42 +602,111 @@ def scrape_products_ulasan(request):
     Tokopedia `ob=5` parameter. It mirrors `scrape_products_with_filters`
     but forces the ulasan/popularity ordering.
     """
-    try:
-        # Parse common parameters
-        params, error = _parse_common_parameters(request)
-        if error:
-            return error
+    # Start Sentry transaction for monitoring
+    with track_tokopedia_transaction("tokopedia_scrape_products_ulasan"):
+        try:
+            # Parse common parameters
+            params, error = _parse_common_parameters(request)
+            if error:
+                return error
 
-        # Parse filter parameters
-        filters, error = _parse_filter_parameters(request)
-        if error:
-            return error
+            # Parse filter parameters
+            filters, error = _parse_filter_parameters(request)
+            if error:
+                return error
 
-        # Build a scraper that uses the ulasan URL builder
-        http_client = TokopediaHttpClient()
-        url_builder = TokopediaUrlBuilderUlasan()
-        html_parser = TokopediaHtmlParser()
-        scraper = TokopediaPriceScraper(http_client, url_builder, html_parser)
+            # Create task monitor for tracking
+            task_id = f"scrape_ulasan_{uuid.uuid4().hex[:8]}"
+            task = TokopediaTaskMonitor(task_id=task_id, task_type="product_scraping_ulasan")
+            
+            # Set scraping context for Sentry
+            TokopediaSentryMonitor.set_scraping_context(
+                keyword=params['query'],
+                page=params['page'],
+                additional_data={
+                    'sort_by': 'ulasan',
+                    'limit': params['limit'],
+                    'min_price': filters['min_price'],
+                    'max_price': filters['max_price'],
+                    'location': filters['location'],
+                    'source': 'api_endpoint',
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            
+            # Track product scraping by popularity
+            TokopediaSentryMonitor.add_breadcrumb(
+                f"Starting product scraping by popularity (ulasan) for keyword: {params['query']}",
+                category=SCRAPER_CATEGORY,
+                level="info",
+                data={
+                    'sort_by': 'ulasan',
+                    'min_price': filters['min_price'],
+                    'max_price': filters['max_price'],
+                    'location': filters['location']
+                }
+            )
 
-        # Use sort_by_price=False so the ulasan builder emits ob=5
-        result = scraper.scrape_products_with_filters(
-            keyword=params['query'],
-            sort_by_price=False,
-            page=params['page'],
-            min_price=filters['min_price'],
-            max_price=filters['max_price'],
-            location=filters['location'],
-            limit=params['limit']
-        )
+            product_start_time = time.time()
+            # Build a scraper that uses the ulasan URL builder
+            http_client = TokopediaHttpClient()
+            url_builder = TokopediaUrlBuilderUlasan()
+            html_parser = TokopediaHtmlParser()
+            scraper = TokopediaPriceScraper(http_client, url_builder, html_parser)
 
-        # Handle result and save to database
-        result, db_result = _handle_scraping_result(result)
+            # Use sort_by_price=False so the ulasan builder emits ob=5
+            result = scraper.scrape_products_with_filters(
+                keyword=params['query'],
+                sort_by_price=False,
+                page=params['page'],
+                min_price=filters['min_price'],
+                max_price=filters['max_price'],
+                location=filters['location'],
+                limit=params['limit']
+            )
+            product_time = time.time() - product_start_time
+            
+            # Update task progress
+            task.record_progress(1, 2, SCRAPING_COMPLETED)
+            
+            # Track scraping result
+            scraping_result = {
+                'products_count': len(result.products),
+                'success': result.success,
+                'errors_count': 0 if result.success else 1,
+                'product_time': product_time,
+                'sort_by': 'ulasan'
+            }
+            TokopediaSentryMonitor.track_scraping_result(scraping_result)
 
-        # Format and return response
-        return JsonResponse(_format_scrape_result(result, db_result))
+            # Handle result and save to database
+            result, db_result = _handle_scraping_result(result)
+            
+            # Track database operation if applicable
+            if db_result:
+                TokopediaSentryMonitor.track_database_operation("save_ulasan", db_result)
+                task.record_progress(2, 2, DB_SAVE_COMPLETED)
+            
+            # Complete task
+            task.complete(success=result.success, result_data=scraping_result)
 
-    except Exception as e:
-        return _create_error_response(
-            f"Tokopedia scraper (ulasan) error: {str(e)}",
-            status=500
-        )
+            # Format and return response
+            return JsonResponse(_format_scrape_result(result, db_result))
+
+        except Exception as e:
+            logger.error(f"Unexpected error in scraper (ulasan): {type(e).__name__}")
+            
+            # Track error in Sentry
+            TokopediaSentryMonitor.add_breadcrumb(
+                f"Fatal error in scrape_products_ulasan: {str(e)}",
+                category=ERROR_CATEGORY,
+                level="error"
+            )
+            
+            if 'task' in locals():
+                task.complete(success=False)
+            
+            return _create_error_response(
+                f"Tokopedia scraper (ulasan) error: {str(e)}",
+                status=500
+            )
