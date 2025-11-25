@@ -1,4 +1,3 @@
-import logging
 import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
@@ -6,8 +5,10 @@ from bs4 import BeautifulSoup
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import GemilangPriceCleaner
 from .unit_parser import GemilangUnitParser
+from .logging_utils import get_gemilang_logger
+import logging
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("html_parser")
 
 class RegexCache:
     SLUG_PATTERN = re.compile(r'[^a-zA-Z0-9\s]')
@@ -60,7 +61,7 @@ class GemilangHtmlParser(IHtmlParser):
             
             product_items = soup.find_all('div', class_='item-product')
             if logger.isEnabledFor(logging.INFO):
-                logger.info(f"Found {len(product_items)} product items in HTML")
+                logger.info("Found %s product items in HTML", len(product_items))
             
             for item in product_items:
                 try:
@@ -69,11 +70,11 @@ class GemilangHtmlParser(IHtmlParser):
                         products.append(product)
                 except Exception as e:
                     if logger.isEnabledFor(logging.WARNING):
-                        logger.warning(f"Failed to extract product from item: {str(e)}")
+                        logger.warning("Failed to extract product from item: %s", e)
                     continue
             
             if logger.isEnabledFor(logging.INFO):
-                logger.info(f"Successfully parsed {len(products)} products")
+                logger.info("Successfully parsed %s products", len(products))
             return products
             
         except Exception as e:
@@ -197,7 +198,7 @@ class GemilangHtmlParser(IHtmlParser):
             
         except Exception as e:
             if logger.isEnabledFor(logging.WARNING):
-                logger.warning(f"Failed to parse product details: {str(e)}")
+                logger.warning("Failed to parse product details: %s", e)
             return None
     
     def _extract_product_name_from_page(self, soup: BeautifulSoup) -> Optional[str]:

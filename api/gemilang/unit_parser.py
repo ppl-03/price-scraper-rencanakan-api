@@ -3,8 +3,9 @@ import logging
 from typing import Optional, Dict, List, Tuple, Protocol
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup
+from .logging_utils import get_gemilang_logger
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("unit_parser")
 
 # Unit type constants
 UNIT_M2 = 'M²'
@@ -116,10 +117,10 @@ class AreaPatternStrategy:
             return None
             
         except re.error as e:
-            logger.warning(f"Regex error in area pattern extraction: {e}")
+            logger.warning("Regex error in area pattern extraction: %s", e)
             return None
         except Exception as e:
-            logger.error(f"Unexpected error in area pattern extraction: {e}")
+            logger.error("Unexpected error in area pattern extraction: %s", e)
             return None
 
 
@@ -150,16 +151,16 @@ class AdjacentPatternStrategy:
                             if unit_key in unit_map:
                                 return unit_map[unit_key]
                         except (IndexError, AttributeError) as e:
-                            logger.warning(f"Error processing match group: {e}")
+                            logger.warning("Error processing match group: %s", e)
                             continue
                 except re.error as e:
-                    logger.warning(f"Invalid regex pattern: {pattern}, error: {e}")
+                    logger.warning("Invalid regex pattern: %s, error: %s", pattern, e)
                     continue
             
             return None
             
         except Exception as e:
-            logger.error(f"Unexpected error in adjacent pattern extraction: {e}")
+            logger.error("Unexpected error in adjacent pattern extraction: %s", e)
             return None
 
 
@@ -194,7 +195,7 @@ class UnitExtractor:
             return None
             
         except Exception as e:
-            logger.warning(f"Error during unit extraction: {e}")
+            logger.warning("Error during unit extraction: %s", e)
             return None
     
     def _extract_by_priority_patterns(self, text_lower: str) -> Optional[str]:
@@ -213,13 +214,13 @@ class UnitExtractor:
                         if re.search(pattern_with_boundaries, text_lower, re.IGNORECASE):
                             return unit
                     except re.error as e:
-                        logger.warning(f"Invalid regex pattern '{pattern}' for unit '{unit}': {e}")
+                        logger.warning("Invalid regex pattern '%s' for unit '%s': %s", pattern, unit, e)
                         continue
             
             return None
             
         except Exception as e:
-            logger.error(f"Error in priority pattern extraction: {e}")
+            logger.error("Error in priority pattern extraction: %s", e)
             return None
 
     def _extract_area_units(self, text_lower: str) -> Optional[str]:
@@ -256,21 +257,21 @@ class SpecificationFinder:
             specifications.extend(table_specs)
         except Exception as e:
             if logger.isEnabledFor(logging.WARNING):
-                logger.warning(f"Error extracting table specifications: {e}")
+                logger.warning("Error extracting table specifications: %s", e)
         
         try:
             span_specs = self._extract_from_spans(soup)
             specifications.extend(span_specs)
         except Exception as e:
             if logger.isEnabledFor(logging.WARNING):
-                logger.warning(f"Error extracting span specifications: {e}")
+                logger.warning("Error extracting span specifications: %s", e)
         
         try:
             div_specs = self._extract_from_divs(soup)
             specifications.extend(div_specs)
         except Exception as e:
             if logger.isEnabledFor(logging.WARNING):
-                logger.warning(f"Error extracting div specifications: {e}")
+                logger.warning("Error extracting div specifications: %s", e)
         
         return specifications
     
@@ -282,7 +283,7 @@ class SpecificationFinder:
                 table_specs = self._extract_specs_from_table(table)
                 specs.extend(table_specs)
         except Exception as e:
-            logger.warning(f"Error finding tables: {e}")
+            logger.warning("Error finding tables: %s", e)
         
         return specs
     
@@ -295,7 +296,7 @@ class SpecificationFinder:
                 if spec_value:
                     specs.append(spec_value)
         except Exception as e:
-            logger.debug(f"Error processing table: {e}")
+            logger.debug("Error processing table: %s", e)
         return specs
     
     def _extract_spec_from_row(self, row) -> Optional[str]:
@@ -308,7 +309,7 @@ class SpecificationFinder:
                 if any(keyword in key for keyword in self.spec_keywords):
                     return value
         except (AttributeError, IndexError) as e:
-            logger.debug(f"Error processing table row: {e}")
+            logger.debug("Error processing table row: %s", e)
         return None
     
     def _extract_from_spans(self, soup: BeautifulSoup) -> List[str]:
@@ -323,10 +324,10 @@ class SpecificationFinder:
                         specs.append(text)
                 except AttributeError as e:
                     if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug(f"Error processing span: {e}")
+                        logger.debug("Error processing span: %s", e)
                     continue
         except Exception as e:
-            logger.warning(f"Error finding spans: {e}")
+            logger.warning("Error finding spans: %s", e)
         
         return specs
     
@@ -344,10 +345,10 @@ class SpecificationFinder:
                         specs.append(text)
                 except AttributeError as e:
                     if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug(f"Error processing div: {e}")
+                        logger.debug("Error processing div: %s", e)
                     continue
         except Exception as e:
-            logger.warning(f"Error finding divs: {e}")
+            logger.warning("Error finding divs: %s", e)
         
         return specs
 
@@ -379,7 +380,7 @@ class UnitParserConfiguration:
             text_lower = text.lower()
             return any(keyword in text_lower for keyword in self.construction_keywords)
         except Exception as e:
-            logger.warning(f"Error checking construction context: {e}")
+            logger.warning("Error checking construction context: %s", e)
             return False
     
     def is_electrical_context(self, text: str) -> bool:
@@ -389,7 +390,7 @@ class UnitParserConfiguration:
             text_lower = text.lower()
             return any(keyword in text_lower for keyword in self.electrical_keywords)
         except Exception as e:
-            logger.warning(f"Error checking electrical context: {e}")
+            logger.warning("Error checking electrical context: %s", e)
             return False
 
 
@@ -421,7 +422,7 @@ class GemilangUnitParser:
             
         except Exception as e:
             if logger.isEnabledFor(logging.ERROR):
-                logger.error(f"Unexpected error in unit parsing from element: {e}")
+                logger.error("Unexpected error in unit parsing from element: %s", e)
             return None
     
     def _extract_specifications_from_element(self, element) -> List[str]:
@@ -437,7 +438,7 @@ class GemilangUnitParser:
                         specifications.append(text)
         except Exception as e:
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Error extracting specifications from element: {e}")
+                logger.debug("Error extracting specifications from element: %s", e)
         return specifications
     
     def parse_unit(self, html_content: str) -> Optional[str]:
@@ -459,14 +460,14 @@ class GemilangUnitParser:
             
         except Exception as e:
             if logger.isEnabledFor(logging.ERROR):
-                logger.error(f"Unexpected error in unit parsing: {e}")
+                logger.error("Unexpected error in unit parsing: %s", e)
             return None
     
     def _create_soup_safely(self, html_content: str) -> Optional[BeautifulSoup]:
         try:
             return BeautifulSoup(html_content, 'html.parser')
         except Exception as e:
-            logger.warning(f"Error creating soup from HTML: {e}")
+            logger.warning("Error creating soup from HTML: %s", e)
             return None
     
     def _extract_specifications_safely(self, soup: BeautifulSoup) -> List[str]:
@@ -474,7 +475,7 @@ class GemilangUnitParser:
             return self.spec_finder.find_specification_values(soup)
         except Exception as e:
             if logger.isEnabledFor(logging.WARNING):
-                logger.warning(f"Error extracting specifications: {e}")
+                logger.warning("Error extracting specifications: %s", e)
             return []
     
     def _extract_units_from_specifications(self, specifications: List[str]) -> List[str]:
@@ -486,7 +487,7 @@ class GemilangUnitParser:
                     found_units.append(unit)
             except Exception as e:
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"Error extracting unit from spec '{spec}': {e}")
+                    logger.debug("Error extracting unit from spec '%s': %s", spec, e)
                 continue
         
         return found_units
@@ -517,7 +518,7 @@ class GemilangUnitParser:
             
         except Exception as e:
             if logger.isEnabledFor(logging.WARNING):
-                logger.warning(f"Error applying priority rules: {e}")
+                logger.warning("Error applying priority rules: %s", e)
             return found_units[0] if found_units else None
     
     def _extract_from_full_text(self, soup: BeautifulSoup) -> Optional[str]:
@@ -526,5 +527,5 @@ class GemilangUnitParser:
             return self.extractor.extract_unit(full_text)
         except Exception as e:
             if logger.isEnabledFor(logging.WARNING):
-                logger.warning(f"Error extracting from full text: {e}")
+                logger.warning("Error extracting from full text: %s", e)
             return None
