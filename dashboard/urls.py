@@ -27,4 +27,10 @@ urlpatterns = [
     path("scheduler/update/", scheduler_views.update_schedule, name="update_schedule"),
     path("scheduler/run-now/", scheduler_views.run_scheduler_now, name="run_scheduler_now"),
     path("scheduler/status/", scheduler_views.get_scheduler_status, name="get_scheduler_status"),
+    path("price-anomalies/", views_db.price_anomalies, name="price_anomalies"),
+
+    # Category update endpoints
+    path("api/category/update/", views_db.update_product_category, name="update_product_category"),
+    path("api/category/bulk-update/", views_db.bulk_update_categories, name="bulk_update_categories"),
+    path("api/vendors/", views_db.get_available_vendors, name="get_available_vendors"),
 ]

@@ -16,3 +16,4 @@ class TestDepoBangunanAnomalyIntegration(TestCase):
         PriceAnomaly.objects.all().delete()
         DepoBangunanProduct.objects.all().delete()
         self.service = DepoBangunanDatabaseService()
+

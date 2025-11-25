@@ -186,11 +186,7 @@
         <!-- Sidebar -->
         <nav class="sidebar">
             <div class="sidebar-logo">
-                {% load static %}
-                <!-- Rencanakan Logo -->
-                <img src="{% static 'dashboard/images/rencanakan_logo.png' %}" 
-                     alt="Rencanakan">
-                <!-- Fallback if image doesn't load -->
+                <!-- Rencanakan Logo - using text fallback -->
                 <div class="logo-fallback">
                     <div class="logo-icon">
                         <i class="fas fa-cube"></i>
@@ -223,7 +219,7 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'curated_price_list_db' %}active{% endif %}" 
-                       href="{% url 'dashboard:curated_price_list_db' %}">
+                       href="{% url 'dashboard:price_anomalies' %}">
                         <i class="fas fa-chart-line"></i>
                         <span class="nav-link-text">Price Anomalies</span>
                     </a>
