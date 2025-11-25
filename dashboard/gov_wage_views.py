@@ -74,11 +74,12 @@ def gov_wage_page(request):
             {'value': 'Kab. Magelang', 'name': 'Kabupaten Magelang'},
         ],
         'categories': [
-            {'value': 'pondasi', 'name': 'Pondasi'},
-            {'value': 'bekisting', 'name': 'Bekisting'},
-            {'value': 'batu', 'name': 'Batu & Mortar'},
-            {'value': 'plat', 'name': 'Plat & Lantai'},
-            {'value': 'dinding', 'name': 'Dinding'},
+            {'value': 'pagar', 'name': 'Pagar'},
+            {'value': 'panel', 'name': 'Panel'},
+            {'value': 'papan_nama', 'name': 'Papan Nama'},
+            {'value': 'bangunan_sementara', 'name': 'Bangunan Sementara'},
+            {'value': 'jalan_sementara', 'name': 'Jalan Sementara'},
+            {'value': 'lainnya', 'name': 'Lainnya'},
         ]
     }
     return render(request, 'dashboard/gov_wage_page.html', context)
@@ -377,24 +378,29 @@ def search_work_code(request):
 
 
 def categorize_work_item(work_description):
+    """
+    Categorize work items based on actual HSPK 2025 data keywords.
+    Categories are separated based on user requirements.
+    Priority order matters - more specific categories checked first.
+    """
     if not work_description:
         return 'lainnya'
     
     description_lower = work_description.lower()
     
+    # Categories in priority order (check specific terms first to avoid conflicts)
+    # Note: papan_nama checked before besi/baja to avoid misclassification
     categories = {
-        'pondasi': ['pondasi', 'fondasi', 'pile', 'tiang pancang'],
-        'bekisting': ['bekisting', 'formwork', 'cetakan'],
-        'batu': ['batu', 'mortar', 'adukan', 'semen'],
-        'plat': ['plat', 'lantai', 'slab', 'floor'],
-        'dinding': ['dinding', 'wall', 'tembok', 'sheerwall'],
-        'atap': ['atap', 'roof', 'genteng', 'asbes'],
-        'beton': ['beton', 'concrete', 'cor'],
-        'besi': ['besi', 'baja', 'steel', 'tulangan'],
-        'cat': ['cat', 'painting', 'pengecatan'],
-        'pipa': ['pipa', 'pipe', 'perpipaan', 'plumbing'],
+        'papan_nama': ['papan nama', 'signboard', 'sign board', 'name board'],  # Check first
+        'panel': ['panel beton', 'panel pracetak'],  # Check panel before pagar
+        'pagar': ['pagar', 'fence', 'brc', 'kawat duri'],  # Pagar without panel
+        'bangunan_sementara': ['kantor sementara', 'rumah jaga', 'gudang', 'barak', 'temporary building', 'direksi keet'],
+        'jalan_sementara': ['jalan sementara', 'temporary road', 'macadam', 'jalan kerja'],
+        'baja': ['rangka baja', 'baja'],  # Check baja before besi, more specific first
+        'besi': ['frame besi', 'besi', 'tulangan', 'pembesian', 'reinforcement'],  # Besi without baja
     }
     
+    # Check each category in order - return first match
     for category, keywords in categories.items():
         for keyword in keywords:
             if keyword in description_lower:

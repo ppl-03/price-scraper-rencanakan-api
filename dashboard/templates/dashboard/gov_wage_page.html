@@ -10,9 +10,26 @@
       color: #333; 
     }
 
+    /* Override base template - force main-content to full height */
+    .d-flex {
+      min-height: 100vh !important;
+    }
+    
+    .main-content {
+      min-height: 100vh !important;
+      display: flex !important;
+      flex-direction: column !important;
+      width: 100% !important;
+    }
+
     /* Content wrapper */
     .content-wrapper { 
       padding: 2rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: none;
     }
 
     .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
@@ -26,12 +43,23 @@
       box-shadow: 0 2px 10px rgba(0,0,0,.06);
     }
 
+    /* Data container wrapper */
+    .data-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 500px;
+    }
+
     /* Table styling */
     .table-container {
       background: white;
       border-radius: 14px;
       overflow: hidden;
       box-shadow: 0 2px 10px rgba(0,0,0,.06);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
     }
     
     .table thead{ background:#f8f9fa; border-bottom:2px solid #e9ecef; }
@@ -144,6 +172,11 @@
       text-align: center;
       padding: 3rem 1rem;
       color: #6c757d;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
     }
     .empty-state-icon {
       font-size: 3rem;
@@ -202,27 +235,29 @@
           <div class="input-group">
             <span class="input-group-text"><i class="fas fa-search"></i></span>
             <input type="text" id="searchInput" class="form-control" 
-                   placeholder="Masukkan kata kunci (misal: pondasi, batu, mortar...)">
+                   placeholder="Masukkan kata kunci (misal: pagar, papan nama, besi...)">
           </div>
         </div>
         <div class="col-md-3">
           <label for="categoryFilter" class="form-label">Kategori</label>
           <select id="categoryFilter" class="form-select">
             <option value="">Semua Kategori</option>
-            <option value="pondasi">Pondasi</option>
-            <option value="bekisting">Bekisting</option>
-            <option value="batu">Batu & Mortar</option>
-            <option value="plat">Plat & Lantai</option>
-            <option value="dinding">Dinding</option>
+            <option value="pagar">Pagar</option>
+            <option value="panel">Panel</option>
+            <option value="papan_nama">Papan Nama</option>
+            <option value="bangunan_sementara">Bangunan Sementara</option>
+            <option value="jalan_sementara">Jalan Sementara</option>
           </select>
         </div>
         <div class="col-md-3">
           <label for="priceRange" class="form-label">Range Harga</label>
           <select id="priceRange" class="form-select">
             <option value="">Semua Harga</option>
-            <option value="0-500000">< Rp 500.000</option>
-            <option value="500000-1000000">Rp 500.000 - 1 Juta</option>
-            <option value="1000000-2000000">Rp 1 Juta - 2 Juta</option>
+            <option value="0-100000">< Rp 100.000</option>
+            <option value="100000-500000">Rp 100rb - 500rb</option>
+            <option value="500000-1000000">Rp 500rb - 1 Juta</option>
+            <option value="1000000-1500000">Rp 1 Juta - 1,5 Juta</option>
+            <option value="1500000-2000000">Rp 1,5 Juta - 2 Juta</option>
             <option value="2000000-">> Rp 2 Juta</option>
           </select>
         </div>
@@ -241,8 +276,11 @@
       </div>
       <p class="mt-3">Memuat data HSPK...</p>
     </div>
-    <!-- Data Table -->
-    <div id="dataTable" class="table-container">
+    
+    <!-- Table and Empty State Container -->
+    <div class="data-container">
+      <!-- Data Table -->
+      <div id="dataTable" class="table-container">
       <div class="table-responsive">
         <table class="table table-hover mb-0">
           <thead>
@@ -292,6 +330,8 @@
       <h5>Tidak ada data ditemukan</h5>
       <p>Coba ubah filter pencarian atau kata kunci yang digunakan</p>
     </div>
+    </div>
+    <!-- End Table and Empty State Container -->
 
     <!-- Footer -->
     <div class="mt-5 pt-4 border-top text-center text-muted">
