@@ -138,7 +138,6 @@ class InputValidatorTestCase(TestCase):
             'page': 1,
             'sort_by_price': True
         }
-        
         result = InputValidator.validate_scraping_request(data)
         self.assertTrue(result.is_valid)
         self.assertEqual(result.cleaned_data['keyword'], 'cement blocks')
