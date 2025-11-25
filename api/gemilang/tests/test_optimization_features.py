@@ -320,10 +320,10 @@ class TestLoggerGuards(unittest.TestCase):
         try:
             # When logger is at WARNING level, INFO logs should not be captured
             # We should NOT use assertLogs since no logs will be produced
-            parser.parse_products(html)
-            # If we got here without exception, the test passes
-            # The logger guard worked - no INFO logs were produced
-            self.assertTrue(True)
+            # Test passes if parse_products completes without exception
+            result = parser.parse_products(html)
+            # Verify the method executed successfully
+            self.assertIsNotNone(result)
         finally:
             logger.setLevel(original_level)
     
