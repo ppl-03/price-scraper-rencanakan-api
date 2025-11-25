@@ -442,7 +442,11 @@ class TokopediaSentryIntegrationTests(TestCase):
         )
         
         # Make request
-        response = self.client.get(self.scrape_url, {'q': 'laptop'})
+        response = self.client.get(
+            self.scrape_url,
+            {'q': 'laptop'},
+            HTTP_X_API_TOKEN='dev-token-12345'
+        )
         
         # Verify response is successful
         self.assertEqual(response.status_code, 200)
@@ -468,7 +472,11 @@ class TokopediaSentryIntegrationTests(TestCase):
         mock_task_monitor_class.return_value = mock_task_monitor
         
         # Make request
-        response = self.client.get(self.scrape_url, {'q': 'laptop'})
+        response = self.client.get(
+            self.scrape_url,
+            {'q': 'laptop'},
+            HTTP_X_API_TOKEN='dev-token-12345'
+        )
         
         # Verify response is successful
         self.assertEqual(response.status_code, 200)
@@ -493,7 +501,11 @@ class TokopediaSentryIntegrationTests(TestCase):
         mock_scraper.scrape_products.side_effect = RuntimeError("Scraping failed")
         
         # Make request
-        response = self.client.get(self.scrape_url, {'q': 'laptop'})
+        response = self.client.get(
+            self.scrape_url,
+            {'q': 'laptop'},
+            HTTP_X_API_TOKEN='dev-token-12345'
+        )
         
         # Verify error response
         self.assertEqual(response.status_code, 500)
