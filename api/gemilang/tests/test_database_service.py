@@ -428,3 +428,17 @@ class TestDatabaseServiceSecurity(MySQLTestCase):
             
         self.assertFalse(result['success'])
         self.assertIn("Database operation failed", result['error'])
+    
+    def test_save_database_exception(self):
+        """Test save method handles database exceptions (lines 168-170)."""
+        service = GemilangDatabaseService()
+        data = [{"name": "test", "price": 1000, "url": "https://example.com", "unit": "pcs"}]
+        
+        with patch('api.gemilang.database_service.connection') as mock_conn:
+            mock_cursor = MagicMock()
+            mock_cursor.executemany.side_effect = Exception("Database error")
+            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+            
+            result, error = service.save(data)
+            self.assertFalse(result)
+            self.assertIn("Database operation failed", error)

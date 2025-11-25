@@ -388,6 +388,27 @@ def scrape_and_save(request):
             'error': f'Internal server error: {str(e)}'
         }, status=500)
 
+
+def _create_scrape_response(result):
+    """Helper function to format scraping result into response data."""
+    products_data = [
+        {
+            'name': product.name,
+            'price': product.price,
+            'url': product.url,
+            'unit': product.unit if product.unit else None,
+        }
+        for product in result.products
+    ]
+    
+    return {
+        'success': result.success,
+        'data': products_data,
+        'error_message': result.error_message,
+        'url': result.url
+    }
+
+
 @require_http_methods(["GET"])
 def scrape_popularity(request):
     try:

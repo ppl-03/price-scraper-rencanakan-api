@@ -1,6 +1,6 @@
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from bs4 import BeautifulSoup
 from api.interfaces import Location, HtmlParserError
 from api.gemilang.location_parser import GemilangLocationParser
@@ -911,4 +911,30 @@ class TestGemilangLocationParser(TestCase):
             
         # Both locations fail due to exception (lines 188-190)
         self.assertEqual(len(locations), 0)
+
+    def test_extract_locations_create_location_exception_continues(self):
+        """Test that exception in _create_location during loop continues processing (lines 188-190)."""
+        parser = GemilangLocationParser()
+        
+        # Create three mock items
+        mock_item1 = MagicMock()
+        mock_item2 = MagicMock()
+        mock_item3 = MagicMock()
+        
+        # Mock _create_location to raise exception for the second store
+        def create_location_side_effect(name, address):
+            if "Store 2" in name:
+                raise ValueError("Test error for Store 2")
+            return {"name": name, "address": address}
+        
+        # Patch both the element extractor methods and _create_location
+        with patch.object(parser._element_extractor, 'extract_store_name', side_effect=["Store 1", "Store 2", "Store 3"]), \
+             patch.object(parser._element_extractor, 'extract_address', side_effect=["Address 1", "Address 2", "Address 3"]), \
+             patch.object(parser, '_create_location', side_effect=create_location_side_effect):
+            
+            locations = parser._extract_locations_from_items([mock_item1, mock_item2, mock_item3])
+            # Should get 2 locations (Store 1 and Store 3), Store 2 should be skipped due to exception
+            self.assertEqual(len(locations), 2)
+            self.assertEqual(locations[0]["name"], "Store 1")
+            self.assertEqual(locations[1]["name"], "Store 3")
 
