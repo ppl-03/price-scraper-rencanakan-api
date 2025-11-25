@@ -37,7 +37,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
         for browser_type in ["chromium", "firefox", "webkit"]:
             with self.subTest(browser_type=browser_type):
                 client = GovernmentWagePlaywrightClient(browser_type=browser_type)
-                mock_pw, mock_browser, mock_context, mock_page = self._setup_mocks(mock_playwright)
+                mock_pw, _, _, _ = self._setup_mocks(mock_playwright)
                 self.loop.run_until_complete(client._ensure_browser())
                 getattr(mock_pw, browser_type).launch.assert_called_once_with(headless=True)
     
@@ -51,7 +51,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
     def test_ensure_browser_reuses_instances(self, mock_playwright):
-        mock_pw, _, _, _ = self._setup_mocks(mock_playwright)
+        self._setup_mocks(mock_playwright)
         self.loop.run_until_complete(self.client._ensure_browser())
         self.loop.run_until_complete(self.client._ensure_browser())
         mock_playwright.return_value.start.assert_called_once()
@@ -72,7 +72,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
     def test_async_get_success(self, mock_playwright):
-        mock_pw, mock_browser, mock_context, mock_page = self._setup_mocks(mock_playwright)
+        _, _, _, mock_page = self._setup_mocks(mock_playwright)
         mock_response = AsyncMock(ok=True, status=200)
         mock_page.goto = AsyncMock(return_value=mock_response)
         mock_page.wait_for_selector = AsyncMock()
@@ -91,7 +91,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
     def test_async_get_errors(self, mock_playwright):
-        mock_pw, mock_browser, mock_context, mock_page = self._setup_mocks(mock_playwright)
+        _, _, _, mock_page = self._setup_mocks(mock_playwright)
         
         mock_response = AsyncMock(ok=False, status=404)
         mock_page.goto = AsyncMock(return_value=mock_response)
@@ -108,7 +108,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
     def test_async_get_region_fallback(self, mock_playwright):
-        mock_pw, mock_browser, mock_context, mock_page = self._setup_mocks(mock_playwright)
+        _, _, _, mock_page = self._setup_mocks(mock_playwright)
         mock_response = AsyncMock(ok=True)
         mock_page.goto = AsyncMock(return_value=mock_response)
         mock_page.wait_for_selector = AsyncMock()
@@ -153,7 +153,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
     def test_async_get_with_search(self, mock_playwright):
-        mock_pw, mock_browser, mock_context, mock_page = self._setup_mocks(mock_playwright)
+        _, _, _, mock_page = self._setup_mocks(mock_playwright)
         mock_response = AsyncMock(ok=True)
         mock_page.goto = AsyncMock(return_value=mock_response)
         mock_page.wait_for_selector = AsyncMock()

@@ -3,6 +3,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from .scraper import get_cached_or_scrape
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,9 @@ def scrape_region_data(request):
         force_refresh = request.GET.get('force_refresh', 'false').lower() == 'true'
         
         # Get data from cache or scrape if needed
+        start_time = time.time()
         items = get_cached_or_scrape(region, year, force_refresh)
+        data_load_time = (time.time() - start_time) * 1000  # Convert to milliseconds
         
         # Format wage data
         wage_data = [
@@ -52,9 +55,10 @@ def scrape_region_data(request):
             'data': wage_data,
             'count': len(wage_data),
             'error_message': None,
+            'data_load_time_ms': round(data_load_time, 2),  # Show cache performance
         }
         
-        logger.info(f"Government wage data retrieved for region '{region}': {len(items)} items")
+        logger.info(f"Government wage data retrieved for region '{region}': {len(items)} items (load time: {data_load_time:.2f}ms)")
         return JsonResponse(response_data)
         
     except Exception as e:

@@ -227,12 +227,12 @@ class TestGovernmentWageScraper(TestCase):
         mock_client = MagicMock()
         scraper = GovernmentWageScraper(mock_client, self.mock_url_builder, self.mock_html_parser)
         
-        try:
-            with scraper:
-                pass
-            self.assertTrue(True)
-        except Exception as e:
-            self.fail(f"Context manager failed: {e}")
+        # Test that context manager enters and exits without errors
+        with scraper:
+            # Verify the scraper is usable within context
+            self.assertIsNotNone(scraper)
+        
+        # If we reach here, context manager worked correctly
     
     def test_create_scraper_factory(self):
         from api.government_wage.scraper import create_government_wage_scraper, GovernmentWageScraper
