@@ -360,18 +360,21 @@ class TestMitra10Views(TestCase):
         mock_scraper = self._create_mock_scraper_with_products(products)
         mock_scraper_factory.return_value = mock_scraper
 
-        # DB service returns a malformed dict missing required keys to cause KeyError in logger/response
+        # DB service returns a malformed dict missing required keys
+        # After Sentry monitoring integration, the code uses .get() for safe access
+        # so this now returns 200 with default values instead of 500
         mock_service_instance = self._create_mock_db_service({'success': True})
         mock_db_service.return_value = mock_service_instance
 
         request = self.factory.post("/api/mitra10/scrape-and-save/?q=item", **self.auth_headers)
         response = views.scrape_and_save_products(request)
 
-        # Should hit the outermost exception handler returning 500 with Internal server error
-        self.assertEqual(response.status_code, 500)
+        # Code now handles malformed dicts gracefully with .get() defaults
+        self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
-        self.assertFalse(data["success"])
-        self.assertIn("Internal server error", data["error_message"])
+        self.assertTrue(data["success"])
+        self.assertEqual(data["inserted"], 0)  # Default value from .get()
+        self.assertEqual(data["updated"], 0)  # Default value from .get()
 
     @patch("api.mitra10.views.logger")
     @patch("api.mitra10.views.Mitra10DatabaseService")
