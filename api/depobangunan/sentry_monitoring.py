@@ -50,34 +50,35 @@ class DepoBangunanSentryMonitor:
     @staticmethod
     def track_scraping_result(result: Dict[str, Any]):
         """Track the result of a scraping operation."""
-        products_count = result.get('products_count', 0)
-        success = result.get('success', False)
-        errors_count = result.get('errors_count', 0)
+        # Extract result metrics
+        metrics = {
+            'products': result.get('products_count', 0),
+            'success': result.get('success', False),
+            'errors': result.get('errors_count', 0)
+        }
         
-        # Set metrics
-        sentry_sdk.set_tag("scraping_success", str(success))
-        sentry_sdk.set_measurement("products_scraped", products_count)
-        sentry_sdk.set_measurement("scraping_errors", errors_count)
+        # Update Sentry tags and measurements
+        sentry_sdk.set_tag("scraping_success", str(metrics['success']))
+        sentry_sdk.set_measurement("products_scraped", metrics['products'])
+        sentry_sdk.set_measurement("scraping_errors", metrics['errors'])
         
-        # Add context
-        sentry_sdk.set_context("scraping_result", {
-            "products_found": products_count,
-            "success": success,
-            "errors": errors_count,
+        # Build context data
+        context_data = {
+            "products_found": metrics['products'],
+            "success": metrics['success'],
+            "errors": metrics['errors'],
             "timestamp": time.time()
-        })
+        }
+        sentry_sdk.set_context("scraping_result", context_data)
         
-        # Log to Sentry
-        if success:
-            capture_message(
-                f"DepoBangunan scraping completed: {products_count} products found",
-                level="info"
-            )
-        else:
-            capture_message(
-                f"DepoBangunan scraping failed with {errors_count} errors",
-                level="warning"
-            )
+        # Log result to Sentry with appropriate level
+        log_level = "info" if metrics['success'] else "warning"
+        status_text = "completed" if metrics['success'] else "failed"
+        
+        message_parts = [f"DepoBangunan scraping {status_text}:"]
+        message_parts.append(f"{metrics['products']} products found" if metrics['success'] else f"{metrics['errors']} errors")
+        
+        capture_message(" ".join(message_parts), level=log_level)
 
 
 def monitor_depobangunan_function(operation_name: str, component: str = DepoBangunanSentryMonitor.COMPONENT_SCRAPER):
