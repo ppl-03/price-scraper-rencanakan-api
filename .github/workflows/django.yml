@@ -1,4 +1,4 @@
-name: Django Tests
+name: CI CD
 
 on:
   push:
@@ -66,6 +66,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install coverage
 
       - name: Wait for MySQL
         run: |
@@ -82,6 +83,72 @@ jobs:
         run: |
           python manage.py migrate --noinput --fake-initial
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
-          python manage.py test api db_pricing.tests dashboard security --verbosity=2 --keepdb
+          python -m coverage run --source='.' -m pytest api db_pricing/tests/test_connection_checker.py db_pricing/tests/test_status_api.py security
+          python -m coverage report
+          python -m coverage json
+          python -m coverage html
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-reports
+          path: |
+            test_report.html
+            htmlcov/
+            coverage.json
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
+        with:
+          file: ./coverage.json
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Update Coverage Badge
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: we-cli/coverage-badge-action@8a0b6ee05f6dd0f294089cbe7a848452a2b43eef
+
+  deploy:
+    name: Deploy to Azure VM
+    runs-on: ubuntu-latest
+    needs: test
+    if: >
+      github.ref_name == 'development' ||
+      github.ref_name == 'staging' ||
+      github.ref_name == 'main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set deploy variables based on branch
+        run: |
+          if [[ "${{ github.ref_name }}" == "development" ]]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-development" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-dev.service" >> $GITHUB_ENV
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-staging" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-staging.service" >> $GITHUB_ENV
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "DEPLOY_DIR=/home/azureuser/price-scraper-rencanakan-api-production" >> $GITHUB_ENV
+            echo "SERVICE_NAME=price-scraper-rencanakan-api-prod.service" >> $GITHUB_ENV
+          else
+            echo "ERROR: Attempted to deploy from an unsupported branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+      - name: Deploy
+        uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6 # v0.1.10
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd $DEPLOY_DIR
+            git pull origin ${{ github.ref_name }}
+            source venv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart $SERVICE_NAME

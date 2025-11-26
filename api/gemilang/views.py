@@ -10,7 +10,6 @@ import logging
 
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
-from db_pricing.auto_categorization_service import AutoCategorizationService
 from .security import (
     require_api_token,
     validate_input,
@@ -22,8 +21,13 @@ from .security import (
 logger = logging.getLogger(__name__)
 
 
+def _clean_location_name(location_name: str) -> str:
+    if location_name.startswith('GEMILANG - '):
+        return location_name.replace('GEMILANG - ', '', 1)
+    return location_name
+
+
 def _validate_page_param(x):
-    """Helper function to validate page parameter."""
     if not x:
         return InputValidator.validate_integer(0, 'page', min_value=0, max_value=100)
     if str(x).lstrip('-').isdigit():
@@ -45,6 +49,21 @@ def scrape_products(request):
         sort_by_price = validated_data.get('sort_by_price', True)
         page = validated_data.get('page', 0)
         
+        location_scraper = create_gemilang_location_scraper()
+        location_result = location_scraper.scrape_locations(timeout=30)
+        
+        logger.info(f"[scrape_products] Location scraping - Success: {location_result.success}, Count: {len(location_result.locations) if location_result.locations else 0}")
+        
+        store_locations = []
+        if location_result.success and location_result.locations:
+            store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
+            logger.info(f"[scrape_products] Found {len(store_locations)} locations")
+        else:
+            logger.warning(f"[scrape_products] No locations found - Success: {location_result.success}")
+        
+        all_stores_location = ", ".join(store_locations) if store_locations else ""
+        logger.info(f"[scrape_products] Location string length: {len(all_stores_location)}")
+        
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
             keyword=keyword,
@@ -57,7 +76,8 @@ def scrape_products(request):
                 'name': product.name,
                 'price': product.price,
                 'url': product.url,
-                'unit': product.unit
+                'unit': product.unit,
+                'location': all_stores_location
             }
             for product in result.products
         ]
@@ -234,6 +254,41 @@ def _handle_regular_save(db_service, products_data):
         }, status=500)
 
 
+def _fetch_store_locations():
+    """Helper to fetch and process store locations"""
+    location_scraper = create_gemilang_location_scraper()
+    location_result = location_scraper.scrape_locations(timeout=30)
+    
+    logger.info(f"Location scraping result - Success: {location_result.success}, Locations count: {len(location_result.locations) if location_result.locations else 0}")
+    
+    if not location_result.success:
+        logger.error(f"Location scraping failed with error: {location_result.error_message}")
+        return ""
+    
+    if not location_result.locations:
+        logger.warning("No locations found, will save without locations")
+        return ""
+    
+    store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
+    logger.info(f"Found {len(store_locations)} Gemilang store locations: {store_locations[:3]}")
+    
+    all_stores_location = ", ".join(store_locations)
+    logger.info(f"Final location string length: {len(all_stores_location)}, Preview: {all_stores_location[:200]}")
+    
+    return all_stores_location
+
+
+def _categorize_products(products_data):
+    """Helper to categorize products"""
+    from db_pricing.categorization import ProductCategorizer
+    categorizer = ProductCategorizer()
+    
+    for product in products_data:
+        category = categorizer.categorize(product['name'])
+        product['category'] = category if category else None
+        logger.info(f"Categorized '{product['name']}' as '{category}'")
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_api_token(required_permission='write')
@@ -247,6 +302,8 @@ def scrape_and_save(request):
         params, error_response = _validate_scrape_params(body)
         if error_response:
             return error_response
+        
+        all_stores_location = _fetch_store_locations()
         
         scraper = create_gemilang_scraper()
         result = scraper.scrape_products(
@@ -270,10 +327,13 @@ def scrape_and_save(request):
                 'name': product.name,
                 'price': product.price,
                 'url': product.url,
-                'unit': product.unit
+                'unit': product.unit,
+                'location': all_stores_location
             }
             for product in result.products
         ]
+        
+        logger.info(f"Prepared {len(products_data)} products with location: {all_stores_location[:100]}...")
         
         if not products_data:
             return JsonResponse({
@@ -289,50 +349,14 @@ def scrape_and_save(request):
         if error_response:
             return error_response
         
+        _categorize_products(products_data)
+        
         db_service = GemilangDatabaseService()
         
-        if use_price_update:
-            save_result = db_service.save_with_price_update(products_data)
-            
-            if save_result['success'] and save_result['product_ids']:
-                cat_result = auto_categorization.categorize_products('gemilang', save_result['product_ids'])
-            else:
-                cat_result = {'categorized': 0}
-            
-            return JsonResponse({
-                'success': save_result['success'],
-                'message': f"Updated {save_result['updated']} products, inserted {save_result['inserted']} new products. Categorized {cat_result['categorized']} products.",
-                'saved': save_result['updated'] + save_result['inserted'],
-                'updated': save_result['updated'],
-                'inserted': save_result['inserted'],
-                'categorized': cat_result['categorized'],
-                'anomalies': save_result['anomalies'],
-                'anomaly_count': len(save_result['anomalies'])
-            })
-        else:
-            save_result = db_service.save(products_data)
-            if save_result['success']:
-                cat_result = auto_categorization.categorize_products('gemilang', save_result['product_ids'])
-                
-                return JsonResponse({
-                    'success': True,
-                    'message': f"Successfully saved {len(products_data)} products. Categorized {cat_result['categorized']} products.",
-                    'saved': len(products_data),
-                    'updated': 0,
-                    'inserted': len(products_data),
-                    'categorized': cat_result['categorized'],
-                    'anomalies': []
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Failed to save products to database',
-                    'saved': 0,
-                    'updated': 0,
-                    'inserted': 0,
-                    'categorized': 0,
-                    'anomalies': []
-                }, status=500)
+        if params['use_price_update']:
+            return _handle_price_update_save(db_service, products_data)
+        
+        return _handle_regular_save(db_service, products_data)
         
     except Exception as e:
         import traceback
@@ -342,4 +366,30 @@ def scrape_and_save(request):
         print(error_details)
         return JsonResponse({
             'error': f'Internal server error: {str(e)}'
+        }, status=500)
+
+@require_http_methods(["GET"])
+def scrape_popularity(request):
+    try:
+        keyword = request.GET.get('keyword', '').strip()
+        page = int(request.GET.get('page', 0))
+
+        if not keyword:
+            return JsonResponse({'error': 'Keyword is required'}, status=400)
+
+        if page < 0:
+            return JsonResponse({'error': 'Page must be a non-negative integer'}, status=400)
+
+        scraper = create_gemilang_scraper()
+        # For popularity we just set sort_by_price to False so url_builder uses sort=new
+        result = scraper.scrape_products(keyword=keyword, sort_by_price=False, page=page)
+
+        response_data = _create_scrape_response(result)
+
+        return JsonResponse(response_data)
+
+    except Exception as e:
+        logger.error(f"Unexpected error in scraper: {type(e).__name__}")
+        return JsonResponse({
+            'error': 'Internal server error occurred'
         }, status=500)

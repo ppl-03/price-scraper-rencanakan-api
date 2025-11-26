@@ -1,5 +1,5 @@
 from django.test import TestCase
-from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct
+from db_pricing.models import GemilangProduct, Mitra10Product, DepoBangunanProduct, JuraganMaterialProduct, TokopediaProduct
 from db_pricing.categorization import ProductCategorizer
 
 
@@ -100,6 +100,7 @@ class TanahPasirBatuSemenAutoCategorizationIntegrationTest(TestCase):
             Mitra10Product.objects.create(name="Pasir Beton per m3", price=250000, url="https://t/2", unit="kubik"),
             DepoBangunanProduct.objects.create(name="Cat Kayu Jati", price=85000, url="https://t/3", unit="kaleng"),
             JuraganMaterialProduct.objects.create(name="Batu Split 2/3", price=300000, url="https://t/4", unit="kubik"),
+            TokopediaProduct.objects.create(name="Tanah Urug Merah", price=200000, url="https://t/5", unit="truk"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])
@@ -116,6 +117,7 @@ class TanahPasirBatuSemenAutoCategorizationIntegrationTest(TestCase):
             Mitra10Product.objects.create(name="Pasir Pasang", price=200000, url="https://t/2", unit="m3"),
             DepoBangunanProduct.objects.create(name="Batu Kali", price=180000, url="https://t/3", unit="m3"),
             JuraganMaterialProduct.objects.create(name="Tanah Urug", price=150000, url="https://t/4", unit="truk"),
+            TokopediaProduct.objects.create(name="Kerikil Beton", price=220000, url="https://t/5", unit="m3"),
         ]
 
         results = self.categorizer.categorize_batch([p.name for p in products])

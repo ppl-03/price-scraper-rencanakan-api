@@ -192,6 +192,55 @@ class TestGemilangDatabaseService(MySQLTestCase):
         self.assertIsNotNone(product.created_at)
         self.assertIsNotNone(product.updated_at)
 
+    def test_save_with_location(self):
+        data = [
+            {
+                "name": "Item 1", 
+                "price": 10000, 
+                "url": "https://example.com/1", 
+                "unit": "pcs",
+                "location": "GEMILANG - BANJARMASIN SUTOYO"
+            }
+        ]
+        service = GemilangDatabaseService()
+        success, error_msg = service.save(data)
+        self.assertTrue(success)
+        self.assertEqual(error_msg, "")
+        product = GemilangProduct.objects.first()
+        self.assertEqual(product.location, "GEMILANG - BANJARMASIN SUTOYO")
+
+    def test_save_with_multiple_locations(self):
+        location_string = "GEMILANG - BANJARMASIN SUTOYO, GEMILANG - BANJARMASIN KM, GEMILANG - BANJARBARU, GEMILANG - PALANGKARAYA, GEMILANG - PALANGKARAYA KM.8"
+        data = [
+            {
+                "name": "Item 1", 
+                "price": 10000, 
+                "url": "https://example.com/1", 
+                "unit": "pcs",
+                "location": location_string
+            }
+        ]
+        service = GemilangDatabaseService()
+        success, _ = service.save(data)
+        self.assertTrue(success)
+        product = GemilangProduct.objects.first()
+        self.assertEqual(product.location, location_string)
+
+    def test_save_without_location(self):
+        data = [
+            {
+                "name": "Item 1", 
+                "price": 10000, 
+                "url": "https://example.com/1", 
+                "unit": "pcs"
+            }
+        ]
+        service = GemilangDatabaseService()
+        success, _ = service.save(data)
+        self.assertTrue(success)
+        product = GemilangProduct.objects.first()
+        self.assertEqual(product.location, "")
+
 
 from unittest.mock import patch, MagicMock
 

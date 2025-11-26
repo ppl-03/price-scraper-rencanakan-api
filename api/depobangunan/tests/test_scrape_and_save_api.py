@@ -88,9 +88,9 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         resp, data = self.post_json({'keyword': 'semen', 'sort_by_price': 'true', 'page': '0'})
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(data['success'])
-        self.assertEqual(data['message'], 'Products scraped and saved successfully')
-        self.assertEqual(data['scraped_count'], 2)
-        self.assertEqual(data['saved_count'], 2)
+        self.assertEqual(data['message'], 'Successfully saved 2 products')
+        self.assertEqual(data['saved'], 2)
+        self.assertEqual(data['inserted'], 2)
         self.assertEqual(data['url'], "https://www.depobangunan.co.id/catalogsearch/result/?q=semen")
 
         self.mock_scraper.scrape_products.assert_called_once_with(keyword='semen', sort_by_price=True, page=0)
@@ -106,8 +106,7 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(data['success'])
         self.assertEqual(data['message'], 'No products found to save')
-        self.assertEqual(data['scraped_count'], 0)
-        self.assertEqual(data['saved_count'], 0)
+        self.assertEqual(data['saved'], 0)
 
     def test_scrape_and_save_error_responses(self):
         cases = [
@@ -128,7 +127,7 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
 
         resp, data = self.post_json({'keyword': 'semen', 'sort_by_price': 'true', 'page': '0'})
         self.assertEqual(resp.status_code, 500)
-        self.assertEqual(data['error'], 'Scraping failed: Failed to connect to website')
+        self.assertEqual(data['error'], 'Failed to connect to website')
 
     def test_scrape_and_save_database_save_failure(self):
         self.given_scraper(success=True, products=[self.sample_product_1], url="https://www.depobangunan.co.id/test")
@@ -207,8 +206,10 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         for key, typ in [
             ('success', bool),
             ('message', str),
-            ('scraped_count', int),
-            ('saved_count', int),
+            ('saved', int),
+            ('inserted', int),
+            ('updated', int),
+            ('anomalies', list),
             ('url', str),
         ]:
             self.assertIn(key, data)
