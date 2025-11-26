@@ -216,7 +216,7 @@ jobs:
             # Seed demo data if explicitly enabled
             if [ "${{ env.DEMO_SEED }}" = "true" ]; then
               echo "Seeding demo data..."
-              python manage.py seed_demo_data || { echo 'Seeding failed'; exit 1; }
+              DEMO_SEED=${{ env.DEMO_SEED }} python manage.py seed_demo_data || { echo 'Seeding failed'; exit 1; }
             else
               echo "Demo seeding skipped (DEMO_SEED != true)"
             fi
