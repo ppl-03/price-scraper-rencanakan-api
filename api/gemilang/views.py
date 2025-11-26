@@ -289,7 +289,6 @@ def _categorize_products(products_data):
         logger.info(f"Categorized '{product['name']}' as '{category}'")
 
 
-@csrf_exempt
 @require_http_methods(["POST"])
 @require_api_token(required_permission='write')
 @enforce_resource_limits
