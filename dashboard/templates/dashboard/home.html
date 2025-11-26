@@ -227,6 +227,17 @@
       transform: translateY(-1px);
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+    
+    .edit-unit-btn {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      transition: all 0.2s ease;
+    }
+    
+    .edit-unit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
     .category-cell {
       transition: background-color 0.2s ease;
     }
@@ -382,7 +393,9 @@
                   <span class="category-text">{{ r.category|default:"Lainnya" }}</span>
                 </td>
                 <td class="c-price price-align-right">{{ r.value }}</td>
-                <td class="c-unit">{{ r.unit|default:"—" }}</td>
+                <td class="c-unit unit-cell" data-unit="{{ r.unit|default:"" }}">
+                  <span class="unit-text">{{ r.unit|default:"—" }}</span>
+                </td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
                 <td class="c-location">
                   {% if r.location %}
@@ -406,10 +419,15 @@
                   {% endif %}
                 </td>
                 <td class="edit-action-cell">
-                  <button class="btn btn-sm btn-outline-primary edit-category-btn" 
+                  <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
                           onclick="openCategoryEditModal(this)" 
                           title="Edit Category">
                     <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-success edit-unit-btn" 
+                          onclick="openUnitEditModal(this)" 
+                          title="Edit Unit">
+                    <i class="bi bi-rulers"></i>
                   </button>
                 </td>
               </tr>
@@ -808,14 +826,21 @@
             <span class="category-text">${d.category || 'Lainnya'}</span>
           </td>
           <td class="c-price">${idf.format(Math.round(d.price))}</td>
-          <td class="c-unit">${d.unit || '—'}</td>
+          <td class="c-unit unit-cell" data-unit="${d.unit || ''}">
+            <span class="unit-text">${d.unit || '—'}</span>
+          </td>
           <td class="c-vendor">${d.vendor}</td>
           <td class="c-location">${locationHtml}</td>
           <td class="edit-action-cell">
-            <button class="btn btn-sm btn-outline-primary edit-category-btn" 
+            <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
                     onclick="openCategoryEditModal(this)" 
                     title="Edit Category">
               <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-success edit-unit-btn" 
+                    onclick="openUnitEditModal(this)" 
+                    title="Edit Unit">
+              <i class="bi bi-rulers"></i>
             </button>
           </td>`;
         tbody.appendChild(tr);
@@ -1067,6 +1092,52 @@
     </div>
   </div>
 
+  <!-- Unit Edit Modal -->
+  <div class="modal fade" id="unitEditModal" tabindex="-1" aria-labelledby="unitEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="unitEditModalLabel">
+            <i class="bi bi-rulers me-2"></i>Edit Unit Produk
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <div class="form-label fw-bold">Nama Produk:</div>
+            <p id="editProductNameUnit" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Vendor:</div>
+            <p id="editVendorUnit" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Unit Saat Ini:</div>
+            <p id="currentUnit" class="text-muted mb-2"></p>
+          </div>
+          <div class="mb-3">
+            <label for="newUnitInput" class="form-label fw-bold">Unit Baru:</label>
+            <input type="text" 
+                   class="form-control" 
+                   id="newUnitInput" 
+                   maxlength="50" 
+                   placeholder="Masukkan unit baru (contoh: kg, m², pcs)..."
+                   autocomplete="off">
+            <div class="form-text">Maksimal 50 karakter</div>
+            <div id="unitError" class="text-danger mt-2" style="display: none;"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-success" id="saveUnitBtn" onclick="saveUnit()">
+            <span class="save-unit-text">Simpan Perubahan</span>
+            <span class="save-unit-spinner spinner-border spinner-border-sm ms-2" style="display:none" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Category Edit Modal -->
   <div class="modal fade" id="categoryEditModal" tabindex="-1" aria-labelledby="categoryEditModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -1134,6 +1205,8 @@
     let editModeEnabled = false;
     let currentEditingProduct = null;
     let categoryEditModalInstance = null;
+    let currentEditingProductUnit = null;
+    let unitEditModalInstance = null;
 
     // Toggle edit mode
     document.getElementById('editModeToggle').addEventListener('click', function() {
@@ -1309,6 +1382,135 @@
       if (categoryEditModalInstance) {
         categoryEditModalInstance.dispose();
         categoryEditModalInstance = null;
+      }
+    });
+
+    // ========== Unit Edit Modal Functions ==========
+    function openUnitEditModal(button) {
+      if (!editModeEnabled) return;
+      
+      const row = button.closest('tr');
+      const productName = row.querySelector('.c-item').textContent.trim();
+      const vendor = row.dataset.vendor;
+      const productUrl = row.dataset.productUrl;
+      const unitCell = row.querySelector('.c-unit');
+      const currentUnit = unitCell.dataset.unit || '';
+      
+      // Store current editing context
+      currentEditingProductUnit = {
+        row: row,
+        vendor: vendor,
+        productUrl: productUrl,
+        productName: productName,
+        currentUnit: currentUnit,
+        unitCell: unitCell
+      };
+      
+      // Populate modal
+      document.getElementById('editProductNameUnit').textContent = productName;
+      document.getElementById('editVendorUnit').textContent = vendor;
+      document.getElementById('currentUnit').textContent = currentUnit || '—';
+      document.getElementById('newUnitInput').value = currentUnit;
+      document.getElementById('unitError').style.display = 'none';
+      
+      // Show modal
+      const modalElement = document.getElementById('unitEditModal');
+      if (unitEditModalInstance) {
+        unitEditModalInstance.dispose();
+      }
+      unitEditModalInstance = new bootstrap.Modal(modalElement);
+      unitEditModalInstance.show();
+      
+      // Focus on input
+      setTimeout(() => {
+        document.getElementById('newUnitInput').focus();
+        document.getElementById('newUnitInput').select();
+      }, 500);
+    }
+
+    // Save unit changes
+    async function saveUnit() {
+      if (!currentEditingProductUnit) return;
+      
+      const newUnit = document.getElementById('newUnitInput').value.trim();
+      const errorDiv = document.getElementById('unitError');
+      const saveBtn = document.getElementById('saveUnitBtn');
+      const saveText = saveBtn.querySelector('.save-unit-text');
+      const saveSpinner = saveBtn.querySelector('.save-unit-spinner');
+      
+      // Validation
+      if (newUnit.length > 50) {
+        errorDiv.textContent = 'Unit tidak boleh lebih dari 50 karakter';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      // Show loading state
+      saveBtn.disabled = true;
+      saveText.textContent = 'Menyimpan...';
+      saveSpinner.style.display = 'inline-block';
+      errorDiv.style.display = 'none';
+      
+      try {
+        const csrftoken = getCookie('csrftoken');
+        const response = await fetch('/api/unit/update/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+          },
+          body: JSON.stringify({
+            source: currentEditingProductUnit.vendor,
+            product_url: currentEditingProductUnit.productUrl,
+            new_unit: newUnit
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Update the UI
+          currentEditingProductUnit.unitCell.dataset.unit = data.new_unit;
+          const unitTextSpan = currentEditingProductUnit.unitCell.querySelector('.unit-text');
+          unitTextSpan.textContent = data.new_unit || '—';
+          
+          // Close modal
+          unitEditModalInstance.hide();
+          
+          // Show success message
+          showNotification('Unit berhasil diperbarui!', 'success');
+          
+          // Reset
+          currentEditingProductUnit = null;
+        } else {
+          errorDiv.textContent = data.error || 'Gagal memperbarui unit';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error updating unit:', error);
+        errorDiv.textContent = 'Terjadi kesalahan jaringan. Silakan coba lagi.';
+        errorDiv.style.display = 'block';
+      } finally {
+        // Reset button state
+        saveBtn.disabled = false;
+        saveText.textContent = 'Simpan Perubahan';
+        saveSpinner.style.display = 'none';
+      }
+    }
+
+    // Handle Enter key in unit input
+    document.getElementById('newUnitInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveUnit();
+      }
+    });
+
+    // Clean up unit modal instance on hide
+    document.getElementById('unitEditModal').addEventListener('hidden.bs.modal', function() {
+      if (unitEditModalInstance) {
+        unitEditModalInstance.dispose();
+        unitEditModalInstance = null;
       }
     });
   </script>
