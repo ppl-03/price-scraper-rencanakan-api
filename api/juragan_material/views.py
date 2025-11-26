@@ -202,6 +202,103 @@ def _update_scraping_result_with_db_data(scraping_result, save_to_db, db_save_re
         })
 
 
+def _validate_scrape_parameters(request):
+    """
+    Validate all scraping parameters from request.
+    Returns tuple: (is_valid, validated_params, error_response)
+    """
+    # SECURITY: Validate keyword parameter
+    keyword_raw = request.GET.get('keyword', '').strip()
+    is_valid, error_msg, keyword = InputValidator.validate_keyword(keyword_raw)
+    
+    if not is_valid:
+        logger.warning(f"Invalid keyword: {InputValidator.sanitize_for_logging(keyword_raw)}")
+        return False, None, JsonResponse({'error': error_msg or 'Invalid keyword'}, status=400)
+    
+    # SECURITY: Validate page parameter
+    page_raw = request.GET.get('page', '0')
+    is_valid, page, error_msg = InputValidator.validate_integer_param(
+        page_raw, 'page', min_val=0, max_val=100
+    )
+    
+    if not is_valid:
+        logger.warning(f"Invalid page parameter: {InputValidator.sanitize_for_logging(page_raw)}")
+        return False, None, JsonResponse({'error': error_msg or 'Invalid page'}, status=400)
+    
+    # SECURITY: Validate sort_by_price using whitelist approach
+    sort_by_price_raw = request.GET.get('sort_by_price', 'true')
+    is_valid, sort_by_price, error_msg = InputValidator.validate_boolean_param(
+        sort_by_price_raw, 'sort_by_price'
+    )
+    
+    if not is_valid:
+        logger.warning(f"Invalid sort_by_price: {InputValidator.sanitize_for_logging(sort_by_price_raw)}")
+        return False, None, JsonResponse({'error': error_msg or 'Invalid sort_by_price'}, status=400)
+    
+    # SECURITY: Validate save_to_db parameter
+    save_to_db_raw = request.GET.get('save_to_db', 'false')
+    is_valid, save_to_db, error_msg = InputValidator.validate_boolean_param(
+        save_to_db_raw, 'save_to_db'
+    )
+    
+    if not is_valid:
+        logger.warning(f"Invalid save_to_db: {InputValidator.sanitize_for_logging(save_to_db_raw)}")
+        return False, None, JsonResponse({'error': error_msg or 'Invalid save_to_db'}, status=400)
+    
+    validated_params = {
+        'keyword': keyword,
+        'page': page,
+        'sort_by_price': sort_by_price,
+        'save_to_db': save_to_db
+    }
+    
+    return True, validated_params, None
+
+
+def _validate_scrape_and_save_parameters(request):
+    """
+    Validate scrape_and_save parameters from request.
+    Returns tuple: (is_valid, validated_params, error_response)
+    """
+    # SECURITY: Validate keyword parameter
+    keyword_raw = request.GET.get('keyword', '').strip()
+    is_valid, error_msg, keyword = InputValidator.validate_keyword(keyword_raw)
+    
+    if not is_valid:
+        logger.warning(f"Invalid keyword in scrape_and_save: {InputValidator.sanitize_for_logging(keyword_raw)}")
+        return False, None, JsonResponse({'error': error_msg or 'Invalid keyword'}, status=400)
+    
+    # SECURITY: Validate sort_type using whitelist approach
+    sort_type_raw = request.GET.get('sort_type', 'cheapest')
+    is_valid, sort_type, error_msg = InputValidator.validate_sort_type(sort_type_raw)
+    
+    if not is_valid:
+        logger.warning(f"Invalid sort_type: {InputValidator.sanitize_for_logging(sort_type_raw)}")
+        return False, None, JsonResponse({'error': error_msg or 'Invalid sort_type'}, status=400)
+    
+    # SECURITY: Validate page parameter
+    page_raw = request.GET.get('page', '0')
+    is_valid, page, error_msg = InputValidator.validate_integer_param(
+        page_raw, 'page', min_val=0, max_val=100
+    )
+    
+    if not is_valid:
+        logger.warning(f"Invalid page parameter in scrape_and_save: {InputValidator.sanitize_for_logging(page_raw)}")
+        return False, None, JsonResponse({'error': error_msg or 'Invalid page'}, status=400)
+    
+    # Determine sort_by_price based on validated sort_type
+    sort_by_price = (sort_type == 'cheapest')
+    
+    validated_params = {
+        'keyword': keyword,
+        'page': page,
+        'sort_type': sort_type,
+        'sort_by_price': sort_by_price
+    }
+    
+    return True, validated_params, None
+
+
 @require_http_methods(["GET"])
 @require_api_token(required_permission='read')
 @enforce_resource_limits
@@ -217,39 +314,15 @@ def scrape_products(request):
     # Start Sentry transaction for monitoring
     with track_juragan_material_transaction("juragan_material_scrape_products"):
         try:
-            # SECURITY: Validate keyword parameter to prevent injection
-            keyword_raw = request.GET.get('keyword', '').strip()
-            is_valid, error_msg, keyword = InputValidator.validate_keyword(keyword_raw)
-            
+            # SECURITY: Validate all parameters using helper function
+            is_valid, params, error_response = _validate_scrape_parameters(request)
             if not is_valid:
-                logger.warning(f"Invalid keyword rejected: {InputValidator.sanitize_for_logging(keyword_raw)}")
-                return JsonResponse({'error': error_msg or 'Invalid keyword'}, status=400)
+                return error_response
             
-            # SECURITY: Validate page parameter (integer validation)
-            page_raw = request.GET.get('page', '0')
-            is_valid, page, error_msg = InputValidator.validate_integer_param(
-                page_raw, 'page', min_val=None, max_val=100
-            )
-            
-            if not is_valid:
-                logger.warning(f"Invalid page parameter: {InputValidator.sanitize_for_logging(page_raw)}")
-                return JsonResponse({'error': error_msg or 'Invalid page'}, status=400)
-            
-            # SECURITY: Validate sort_by_price parameter (boolean validation)
-            sort_raw = request.GET.get('sort_by_price', 'true')
-            is_valid, sort_by_price, error_msg = InputValidator.validate_boolean_param(sort_raw, 'sort_by_price')
-            
-            if not is_valid:
-                logger.warning(f"Invalid sort_by_price parameter: {InputValidator.sanitize_for_logging(sort_raw)}")
-                return JsonResponse({'error': error_msg or 'Invalid sort_by_price'}, status=400)
-            
-            # SECURITY: Validate save_to_db parameter (boolean validation)
-            save_raw = request.GET.get('save_to_db', 'false')
-            is_valid, save_to_db, error_msg = InputValidator.validate_boolean_param(save_raw, 'save_to_db')
-            
-            if not is_valid:
-                logger.warning(f"Invalid save_to_db parameter: {InputValidator.sanitize_for_logging(save_raw)}")
-                return JsonResponse({'error': error_msg or 'Invalid save_to_db'}, status=400)
+            keyword = params['keyword']
+            page = params['page']
+            sort_by_price = params['sort_by_price']
+            save_to_db = params['save_to_db']
             
             # Log validated data only - page is server-validated integer, keyword is sanitized
             logger.info(f"Scraping request validated: keyword={InputValidator.sanitize_for_logging(keyword)}, page={page}")
@@ -268,10 +341,6 @@ def scrape_products(request):
             # Create task monitor for tracking
             task_id = f"scrape_{uuid.uuid4().hex[:8]}"
             task = JuraganMaterialTaskMonitor(task_id=task_id, task_type="product_scraping")
-            
-            # Check if we should save to database
-            save_to_db_param = request.GET.get('save_to_db', 'false').lower()
-            save_to_db = save_to_db_param in ['true', '1', 'yes']
             
             # Track product scraping start
             JuraganMaterialSentryMonitor.add_breadcrumb(
@@ -383,34 +452,15 @@ def scrape_and_save_products(request):
     # Start Sentry transaction for monitoring
     with track_juragan_material_transaction("juragan_material_scrape_and_save"):
         try:
-            # SECURITY: Validate keyword parameter
-            keyword_raw = request.GET.get('keyword', '').strip()
-            is_valid, error_msg, keyword = InputValidator.validate_keyword(keyword_raw)
-            
+            # SECURITY: Validate all parameters using helper function
+            is_valid, params, error_response = _validate_scrape_and_save_parameters(request)
             if not is_valid:
-                logger.warning(f"Invalid keyword in scrape_and_save: {InputValidator.sanitize_for_logging(keyword_raw)}")
-                return JsonResponse({'error': error_msg or 'Invalid keyword'}, status=400)
+                return error_response
             
-            # SECURITY: Validate sort_type using whitelist approach
-            sort_type_raw = request.GET.get('sort_type', 'cheapest')
-            is_valid, sort_type, error_msg = InputValidator.validate_sort_type(sort_type_raw)
-            
-            if not is_valid:
-                logger.warning(f"Invalid sort_type: {InputValidator.sanitize_for_logging(sort_type_raw)}")
-                return JsonResponse({'error': error_msg or 'Invalid sort_type'}, status=400)
-            
-            # Determine sort_by_price based on validated sort_type
-            sort_by_price = (sort_type == 'cheapest')
-            
-            # SECURITY: Validate page parameter
-            page_raw = request.GET.get('page', '0')
-            is_valid, page, error_msg = InputValidator.validate_integer_param(
-                page_raw, 'page', min_val=0, max_val=100
-            )
-            
-            if not is_valid:
-                logger.warning(f"Invalid page parameter in scrape_and_save: {InputValidator.sanitize_for_logging(page_raw)}")
-                return JsonResponse({'error': error_msg or 'Invalid page'}, status=400)
+            keyword = params['keyword']
+            page = params['page']
+            sort_type = params['sort_type']
+            sort_by_price = params['sort_by_price']
             
             logger.info(f"Validated scrape_and_save request: keyword={InputValidator.sanitize_for_logging(keyword)}, sort_type={sort_type}, page={page}")
             
