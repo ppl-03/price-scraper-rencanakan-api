@@ -1,5 +1,8 @@
 name: CI CD
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ "*" ]
@@ -67,6 +70,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install coverage
+          pip install coverage pytest genbadge[coverage]
 
       - name: Wait for MySQL
         run: |
@@ -89,6 +93,12 @@ jobs:
           python -m coverage report
           python -m coverage json
           python -m coverage html
+          coverage xml -o coverage.xml
+
+      - name: Generate coverage badge
+        run: |
+          genbadge coverage -i coverage.xml -o coverage.svg
+          ls -la coverage.svg
 
       - name: Upload test reports
         if: always()
@@ -99,6 +109,8 @@ jobs:
             test_report.html
             htmlcov/
             coverage.json
+            coverage.xml
+            coverage.svg
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
@@ -108,9 +120,17 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
-      - name: Update Coverage Badge
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: we-cli/coverage-badge-action@8a0b6ee05f6dd0f294089cbe7a848452a2b43eef
+      - name: Commit coverage badge (prevent infinite loops)
+        if: github.event_name == 'push' &&
+            github.actor != 'github-actions[bot]' &&
+            (
+              github.ref_name == 'main'
+            )
+        uses: stefanzweifel/git-auto-commit-action@8756aa072ef5b4a080af5dc8fef36c5d586e521d # v5
+        with:
+          commit_message: "Update coverage badge for ${{ github.ref_name }}"
+          file_pattern: "coverage.svg README.md"
+          branch: ${{ github.ref_name }}
 
   deploy:
     name: Deploy to Azure VM
@@ -140,15 +160,83 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy
+      - name: Deploy with rollback on failure
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6 # v0.1.10
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            cd $DEPLOY_DIR
-            git pull origin ${{ github.ref_name }}
-            source venv/bin/activate
+            set -e  # exit on ANY error
+
+            cd ${{ env.DEPLOY_DIR }}
+
+            # Save last known good commit
+            if [ -f last_good_commit.txt ]; then
+              echo "Last known good commit: $(cat last_good_commit.txt)"
+            else
+              echo "No last_good_commit.txt found – creating one."
+              git rev-parse HEAD > last_good_commit.txt
+            fi
+
+            echo "Saving last attempted commit..."
+            git rev-parse HEAD > last_attempt_commit.txt
+
+            rollback() {
+                echo "⚠️ Deployment failed. Rolling back..."
+                LAST_GOOD=$(cat last_good_commit.txt)
+                git reset --hard "$LAST_GOOD"
+                sudo systemctl restart ${{ env.SERVICE_NAME }}
+                echo "✅ Rolled back to $LAST_GOOD"
+                exit 1
+            }
+
+            trap rollback ERR  # If ANY command fails → rollback automatically
+
+            echo "Fetching latest commit..."
+            git fetch origin ${{ github.ref_name }}
+
+            echo "Resetting to remote branch..."
+            git reset --hard origin/${{ github.ref_name }}
+
+            echo "Activating virtualenv..."
+            source "./venv/bin/activate"
+
+            echo "Installing requirements..."
             pip install -r requirements.txt
-            sudo systemctl restart $SERVICE_NAME
+
+            echo "Restarting service..."
+            sudo systemctl restart ${{ env.SERVICE_NAME }}
+
+            # If everything worked: update known good commit
+            git rev-parse HEAD > last_good_commit.txt
+            echo "✅ Deployment successful."
+
+            # Remove trap so success doesn't trigger rollback
+            trap - ERR
+
+  release:
+    name: Create GitHub Release (main branch only)
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref_name == 'main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Generate release version
+        id: vars
+        run: |
+          VERSION="v$(date +'%Y%m%d-%H%M%S')"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Create Release
+        uses: softprops/action-gh-release@a6c7483a42ee9d5daced968f6c217562cd680f7f # v2
+        with:
+          tag_name: ${{ steps.vars.outputs.version }}
+          name: "Release ${{ steps.vars.outputs.version }}"
+          body: |
+            Automated release generated from main branch.
+            Commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
