@@ -203,3 +203,5 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 TEST_IP_ALLOWED = env.str('TEST_IP_ALLOWED')
 TEST_IP_DENIED = env.str('TEST_IP_DENIED')
 TEST_IP_ATTACKER = env.str('TEST_IP_ATTACKER')
+
+DEMO_SEED = env.bool("DEMO_SEED", default=False)
