@@ -159,6 +159,11 @@ jobs:
             echo "ERROR: Attempted to deploy from an unsupported branch: ${{ github.ref_name }}"
             exit 1
           fi
+          if [[ "${{ github.ref_name }}" == "development" ]]; then
+            echo "DEMO_SEED=true" >> $GITHUB_ENV
+          else
+            echo "DEMO_SEED=false" >> $GITHUB_ENV
+          fi
 
       - name: Deploy with rollback on failure
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6 # v0.1.10
@@ -204,6 +209,17 @@ jobs:
 
             echo "Installing requirements..."
             pip install -r requirements.txt
+
+            echo "Applying database migrations..."
+            python manage.py migrate --noinput
+
+            # Seed demo data if explicitly enabled
+            if [ "${{ env.DEMO_SEED }}" = "true" ]; then
+              echo "Seeding demo data..."
+              python manage.py seed_demo_data || { echo 'Seeding failed'; exit 1; }
+            else
+              echo "Demo seeding skipped (DEMO_SEED != true)"
+            fi
 
             echo "Restarting service..."
             sudo systemctl restart ${{ env.SERVICE_NAME }}
