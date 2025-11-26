@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.conf import settings
 from django.http import JsonResponse
 import json
@@ -7,6 +8,7 @@ import json
 from .services import VendorPricingService, CategoryUpdateService, UnitUpdateService
 
 
+@ensure_csrf_cookie
 @require_GET
 def home_db(request):
     """Dashboard home view that reads vendor prices from the database.
@@ -55,6 +57,7 @@ def curated_price_list_db(request):
 
     return render(request, "dashboard/curated_price_list.html", {"rows": rows})
 
+@ensure_csrf_cookie
 @require_GET
 def price_anomalies(request):
     """
