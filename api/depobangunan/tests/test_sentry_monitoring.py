@@ -24,9 +24,9 @@ class TestDepoBangunanSentryMonitor(TestCase):
         
         # Verify context was set
         mock_sentry.set_context.assert_called_once()
-        context_name, context_data = mock_sentry.set_context.call_args[0]
+        _, context_data = mock_sentry.set_context.call_args[0]
         
-        self.assertEqual(context_name, "scraping_context")
+        self.assertEqual(mock_sentry.set_context.call_args[0][0], "scraping_context")
         self.assertEqual(context_data["keyword"], keyword)
         self.assertEqual(context_data["page"], page)
         self.assertEqual(context_data["vendor"], "depobangunan")
@@ -57,7 +57,7 @@ class TestDepoBangunanSentryMonitor(TestCase):
         DepoBangunanSentryMonitor.set_scraping_context(keyword, page, additional_data)
         
         # Verify context includes additional data
-        context_name, context_data = mock_sentry.set_context.call_args[0]
+        _, context_data = mock_sentry.set_context.call_args[0]
         
         self.assertEqual(context_data["keyword"], keyword)
         self.assertEqual(context_data["page"], page)
@@ -119,17 +119,17 @@ class TestDepoBangunanSentryMonitor(TestCase):
         self.assertIn(call("scraping_errors", 0), measurement_calls)
         
         # Verify context
-        context_name, context_data = mock_sentry.set_context.call_args[0]
-        self.assertEqual(context_name, "scraping_result")
+        _, context_data = mock_sentry.set_context.call_args[0]
+        self.assertEqual(mock_sentry.set_context.call_args[0][0], "scraping_result")
         self.assertEqual(context_data["products_found"], 10)
         self.assertEqual(context_data["success"], True)
         self.assertEqual(context_data["errors"], 0)
         
         # Verify capture_message was called for success
         mock_capture_message.assert_called_once()
-        message, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
-        self.assertIn("DepoBangunan scraping completed", message)
-        self.assertIn("10 products found", message)
+        _, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
+        self.assertIn("DepoBangunan scraping completed", mock_capture_message.call_args[0][0])
+        self.assertIn("10 products found", mock_capture_message.call_args[0][0])
         self.assertEqual(level, "info")
     
     @patch('api.depobangunan.sentry_monitoring.capture_message')
@@ -155,9 +155,9 @@ class TestDepoBangunanSentryMonitor(TestCase):
         
         # Verify capture_message was called for failure
         mock_capture_message.assert_called_once()
-        message, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
-        self.assertIn("DepoBangunan scraping failed", message)
-        self.assertIn("3 errors", message)
+        _, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
+        self.assertIn("DepoBangunan scraping failed", mock_capture_message.call_args[0][0])
+        self.assertIn("3 errors", mock_capture_message.call_args[0][0])
         self.assertEqual(level, "warning")
 
 
@@ -251,7 +251,7 @@ class TestTrackDepoBangunanTransaction(TestCase):
         mock_transaction = MagicMock()
         mock_start_transaction.return_value = mock_transaction
         
-        transaction = track_depobangunan_transaction("test_transaction")
+        _ = track_depobangunan_transaction("test_transaction")
         
         # Verify transaction was created
         mock_start_transaction.assert_called_once_with(
@@ -356,10 +356,10 @@ class TestDepoBangunanTaskMonitor(TestCase):
         
         # Verify capture_message
         mock_capture_message.assert_called_once()
-        message, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
-        self.assertIn("DepoBangunan task", message)
-        self.assertIn("task_123", message)
-        self.assertIn("completed", message)
+        _, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
+        self.assertIn("DepoBangunan task", mock_capture_message.call_args[0][0])
+        self.assertIn("task_123", mock_capture_message.call_args[0][0])
+        self.assertIn("completed", mock_capture_message.call_args[0][0])
         self.assertEqual(level, "info")
     
     @patch('api.depobangunan.sentry_monitoring.sentry_sdk')
@@ -385,7 +385,7 @@ class TestDepoBangunanTaskMonitor(TestCase):
         self.assertIn("failed", breadcrumb_kwargs["message"])
         
         # Verify capture_message level is warning
-        message, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
+        _, level = mock_capture_message.call_args[0][0], mock_capture_message.call_args[1]['level']
         self.assertEqual(level, "warning")
 
 
@@ -429,7 +429,7 @@ class TestSentryMonitoringIntegration(TestCase):
             def scrape_products():
                 return {"products": [{"name": "Product1"}, {"name": "Product2"}]}
             
-            result = scrape_products()
+            _ = scrape_products()
             
             # Record progress
             task.record_progress(1, 2, "Scraping done")
