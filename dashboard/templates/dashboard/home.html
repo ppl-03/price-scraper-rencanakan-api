@@ -76,12 +76,61 @@
       background:#fff; border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,.10);
       padding:18px 22px; display:flex; align-items:center; gap:12px; border:1px solid #eef2f6;
     }
-    .ring { width:26px; height:26px; border:3px solid #e9eef5; border-top-color:#0d6efd; border-radius:50%; animation:spin .9s linear infinite; }
+    .ring { 
+      width:26px; height:26px; 
+      border:3px solid #e9eef5; 
+      border-top-color:#00365a; 
+      border-radius:50%; 
+      animation:spin .9s linear infinite;
+    }
     @keyframes spin { to { transform:rotate(360deg) } }
+    
+    /* Progress feedback */
+    .progress-feedback {
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      z-index: 1050;
+      min-width: 300px;
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(400px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
 
     /* Controls row (filters like DataTables) */
     .controls { gap:8px; }
     .controls .form-control, .controls .form-select { background:#fff; }
+
+    /* Enhanced focus states for accessibility */
+    .form-control:focus, .form-select:focus, .btn:focus {
+      box-shadow: 0 0 0 0.2rem rgba(0, 54, 90, 0.25);
+      border-color: #00365a;
+      outline: none;
+    }
+    
+    /* Improved input states */
+    .form-control:disabled, .form-select:disabled {
+      background-color: #e9ecef;
+      cursor: not-allowed;
+    }
+    
+    /* Success/error state indicators */
+    .form-control.is-valid {
+      border-color: #28a745;
+      padding-right: calc(1.5em + 0.75rem);
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right calc(0.375em + 0.1875rem) center;
+      background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    }
+    
+    .form-control.is-invalid {
+      border-color: #dc3545;
+      padding-right: calc(1.5em + 0.75rem);
+    }
 
     /* Location badge styling */
     .location-badge { 
@@ -90,7 +139,7 @@
     }
     .location-badge:hover {
       background: #e3f2fd !important;
-      border-color: #2196f3 !important;
+      border-color: #00365a !important;
       transform: translateY(-1px);
     }
 
@@ -99,6 +148,18 @@
       font-weight: 600;
       color: #495057;
       background: #f8f9fa;
+    }
+    
+    /* Tooltips and help text */
+    .form-text {
+      color: #6c757d;
+      margin-top: 0.25rem;
+    }
+    
+    /* Badge and label styling */
+    .badge {
+      font-weight: 500;
+      padding: 0.35em 0.65em;
     }
     
     /* Custom dropdown styling */
@@ -189,15 +250,47 @@
     .page-item .page-link:hover { background:#dfe7ec; color:#00365a; }
 
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
+    
+    /* Help text and hints */
+    .form-text.text-muted {
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+    }
+    
+    /* Keyboard shortcut hints */
+    .keyboard-hint {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.7rem;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 3px;
+      font-family: monospace;
+    }
 
     /* Edit Mode Styles */
     .edit-mode-btn {
       position: relative;
       overflow: hidden;
+      padding: 10px 20px;
+      font-weight: 600;
+      border-radius: 999px;
+      transition: all 0.2s ease;
+    }
+    .edit-mode-btn:not(.active) {
+      background: #fff;
+      border-color: #dee2e6;
+      color: #495057;
+    }
+    .edit-mode-btn:not(.active):hover {
+      background: #f8f9fa;
+      border-color: #adb5bd;
+      color: #212529;
     }
     .edit-mode-btn.active {
       background: #28a745;
       border-color: #28a745;
+      color: #fff;
     }
     .edit-mode-btn.active:hover {
       background: #218838;
@@ -255,8 +348,13 @@
 {% endblock %}
 
 {% block content %}
+  <!-- Skip to main content link for accessibility -->
+  <a href="#mainContent" class="visually-hidden-focusable btn btn-primary" style="position: absolute; top: 10px; left: 10px; z-index: 9999;">
+    Skip to main content
+  </a>
+
   <!-- Main content wrapper -->
-  <div class="container-fluid px-4 py-3">
+  <div class="container-fluid px-4 py-3" id="mainContent">
     <!-- Removed old topbar header since navbar is now in sidebar -->
 
     <!-- Oval warning banner ABOVE the search bar (only if messages exist) -->
@@ -272,66 +370,82 @@
       </div>
     {% endif %}
 
-    <!-- Backend search (hits your scrapers) -->
-    <form id="searchForm" action="{% url 'dashboard:dashboard_home_db' %}" method="get" class="mb-3" novalidate>
-      <div class="input-group">
-        <input id="qInput" type="text" name="q" class="form-control"
-               placeholder="Cari produk (contoh: semen, pasir, batu...)"
-               value="{{ request.GET.q|default_if_none:'' }}" autocomplete="off">
-        <button id="searchBtn" type="submit" class="btn btn-brand btn-pill d-inline-flex align-items-center gap-2">
-          <span class="btn-text">Search</span>
-          <span class="btn-spinner spinner-border spinner-border-sm" style="display:none" aria-hidden="true"></span>
-        </button>
-      </div>
-    </form>
-
-    <!-- Edit Mode Toggle -->
-    <div class="d-flex justify-content-end mb-3">
-      <button id="editModeToggle" class="btn btn-outline-secondary btn-sm edit-mode-btn">
-        <i class="bi bi-pencil-square me-1"></i>
-        <span class="edit-mode-text">Enable Edit Mode</span>
+    <!-- Backend search with Edit Mode Toggle -->
+    <div class="d-flex gap-2 mb-3">
+      <form id="searchForm" action="{% url 'dashboard:dashboard_home_db' %}" method="get" class="flex-grow-1" novalidate>
+        <div class="input-group">
+          <input id="qInput" type="text" name="q" class="form-control"
+                 placeholder="Cari produk (contoh: semen, pasir, batu...)"
+                 value="{{ request.GET.q|default_if_none:'' }}" autocomplete="off">
+          <button id="searchBtn" type="submit" class="btn btn-brand btn-pill d-inline-flex align-items-center gap-2">
+            <span class="btn-text">Search</span>
+            <span class="btn-spinner spinner-border spinner-border-sm" style="display:none" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+      
+      <!-- Edit Mode Toggle -->
+      <button id="editModeToggle" class="btn btn-outline-secondary edit-mode-btn d-inline-flex align-items-center gap-2" style="white-space: nowrap;">
+        <i class="bi bi-pencil-square"></i>
+        <span class="edit-mode-text">Edit Mode</span>
       </button>
     </div>
 
     <!-- Client-side DataTable-like controls -->
     <div class="card mb-3">
       <div class="card-body">
-        <h6 class="card-title mb-3">
-          Filter & Pencarian
-        </h6>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="card-title mb-0 fw-bold text-secondary" style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i class="bi bi-funnel me-2"></i>Filter & Pencarian
+          </h6>
+          <button id="clearFilters" class="btn btn-outline-secondary btn-sm" style="border-radius: 999px; padding: 0.375rem 1rem; font-weight: 500;">
+            <i class="bi bi-x-circle me-1"></i>
+            Hapus Filter
+          </button>
+        </div>
         
         <!-- Row 1: Text filter, Vendor, and Category -->
         <div class="row g-3 mb-3">
-          <div class="col-md-4">
-            <label for="filterInput" class="form-label small text-muted">Filter Hasil</label>
-            <input id="filterInput" type="text" class="form-control" placeholder="Ketik untuk memfilter hasil...">
+          <div class="col-md-5">
+            <label for="filterInput" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-funnel me-1" aria-hidden="true"></i>
+              Filter Hasil
+              <span class="badge bg-light text-muted ms-2" id="activeFilterCount" style="display:none;"></span>
+            </label>
+            <input id="filterInput" 
+                   type="text" 
+                   class="form-control" 
+                   placeholder="Ketik untuk memfilter hasil..."
+                   aria-label="Filter hasil berdasarkan teks"
+                   title="Filter produk berdasarkan nama, vendor, atau lokasi">
           </div>
-          <div class="col-md-4">
-            <label for="vendorSelect" class="form-label small text-muted">Vendor</label>
-            <select id="vendorSelect" class="form-select">
+          <div class="col-md-3">
+            <label for="vendorSelect" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-shop me-1" aria-hidden="true"></i>
+              Vendor
+            </label>
+            <select id="vendorSelect" 
+                    class="form-select"
+                    aria-label="Pilih vendor">
               <option value="">Semua vendor</option>
             </select>
           </div>
           <div class="col-md-4">
-            <label for="categorySelect" class="form-label small text-muted">Kategori</label>
-            <select id="categorySelect" class="form-select">
+            <label for="categorySelect" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-tag me-1" aria-hidden="true"></i>
+              Kategori
+            </label>
+            <select id="categorySelect" 
+                    class="form-select"
+                    aria-label="Pilih kategori produk">
               <option value="">Semua kategori</option>
             </select>
           </div>
         </div>
         
-        <!-- Row 2: Grouping (Category) and Location -->
+        <!-- Row 2: Location and Price Range -->
         <div class="row g-3 mb-3">
-          <div class="col-md-6">
-            <label for="categorySelect" class="form-label small text-muted">Pengelompokan</label>
-            <select id="categorySelect" class="form-select">
-              <option value="">Semua kategori</option>
-              {% for cat in available_categories %}
-                <option value="{{ cat }}">{{ cat }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-6">
+          <div class="col-md-5">
             <label for="locationSelect" class="form-label small text-muted">Lokasi</label>
             <div class="dropdown">
               <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="locationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -346,22 +460,49 @@
             <!-- Hidden input to store the actual selected value -->
             <input type="hidden" id="locationSelect" value="">
           </div>
-          <div class="col-md-6">
-            <label for="minPrice" class="form-label small text-muted">Harga Minimum</label>
-            <input id="minPrice" type="number" class="form-control" placeholder="0">
+          <div class="col-md-3">
+            <label for="minPrice" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-currency-dollar me-1" aria-hidden="true"></i>
+              Harga Minimum
+            </label>
+            <input id="minPrice" 
+                   type="number" 
+                   class="form-control" 
+                   placeholder="0"
+                   min="0"
+                   step="1000"
+                   aria-label="Harga minimum dalam Rupiah"
+                   title="Masukkan harga minimum">
+            <div class="form-text" id="minPriceHelp" style="font-size: 0.75rem;">Min: Rp 0</div>
           </div>
-          <div class="col-md-6">
-            <label for="maxPrice" class="form-label small text-muted">Harga Maksimum</label>
-            <input id="maxPrice" type="number" class="form-control" placeholder="Tidak ada batas">
+          <div class="col-md-4">
+            <label for="maxPrice" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-currency-dollar me-1" aria-hidden="true"></i>
+              Harga Maksimum
+            </label>
+            <input id="maxPrice" 
+                   type="number" 
+                   class="form-control" 
+                   placeholder="Tidak ada batas"
+                   min="0"
+                   step="1000"
+                   aria-label="Harga maksimum dalam Rupiah"
+                   title="Masukkan harga maksimum">
+            <div class="form-text" id="maxPriceHelp" style="font-size: 0.75rem;">Kosongkan untuk tanpa batas</div>
           </div>
         </div>
-        
-        <!-- Clear button -->
-        <div class="d-flex justify-content-end">
-          <button id="clearFilters" class="btn btn-outline-secondary btn-sm">
-            Hapus Semua Filter
-          </button>
-        </div>
+      </div>
+    </div>
+
+    <!-- Results summary -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <output id="resultsInfo" class="text-muted small" aria-live="polite">
+        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+        <span id="resultsCount">Memuat data...</span>
+      </output>
+      <div id="filterStatus" class="text-muted small" style="display:none;">
+        <i class="bi bi-funnel-fill me-1" aria-hidden="true"></i>
+        <span id="filterStatusText">Filter aktif</span>
       </div>
     </div>
 
@@ -459,12 +600,111 @@
       <ul id="pagination" class="pagination"></ul>
     </nav>
 
-    <div class="footer">© 2025 rencanakan.id</div>
+    <div class="footer">
+      © 2025 rencanakan.id
+      <span class="mx-2">•</span>
+      <a href="#" id="showKeyboardShortcuts" class="text-muted text-decoration-none" title="Lihat shortcut keyboard">
+        <i class="bi bi-keyboard me-1"></i>Keyboard Shortcuts
+      </a>
+    </div>
+  </div>
+  
+  <!-- Keyboard Shortcuts Modal -->
+  <div class="modal fade" id="keyboardShortcutsModal" tabindex="-1" aria-labelledby="keyboardShortcutsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="keyboardShortcutsLabel">
+            <i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="list-group list-group-flush">
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Fokus ke pencarian</span>
+              <kbd class="keyboard-hint">/</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Toggle Edit Mode</span>
+              <kbd class="keyboard-hint">Ctrl + E</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Hapus filter (saat di input filter)</span>
+              <kbd class="keyboard-hint">Esc</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Cari (saat di input pencarian)</span>
+              <kbd class="keyboard-hint">Enter</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Urutkan kolom</span>
+              <kbd class="keyboard-hint">Klik header</kbd>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
   </div>
 {% endblock %}
 
 {% block extra_js %}
   <script>
+    // ========== Keyboard Shortcuts (User Control & Efficiency) ==========
+    document.addEventListener('keydown', function(e) {
+      // Focus search with '/' key
+      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        document.getElementById('qInput').focus();
+      }
+      
+      // Toggle edit mode with Ctrl+E
+      if (e.ctrlKey && e.key === 'e') {
+        e.preventDefault();
+        document.getElementById('editModeToggle').click();
+      }
+      
+      // Clear filters with Esc when focus is on filter inputs
+      if (e.key === 'Escape' && ['filterInput', 'vendorSelect', 'categorySelect', 'minPrice', 'maxPrice'].includes(e.target.id)) {
+        document.getElementById('clearFilters').click();
+      }
+      
+      // Show keyboard shortcuts with ?
+      if (e.key === '?' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        const modal = new bootstrap.Modal(document.getElementById('keyboardShortcutsModal'));
+        modal.show();
+      }
+    });
+    
+    // Handle keyboard shortcuts modal link
+    document.addEventListener('DOMContentLoaded', function() {
+      const shortcutsLink = document.getElementById('showKeyboardShortcuts');
+      if (shortcutsLink) {
+        shortcutsLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          const modal = new bootstrap.Modal(document.getElementById('keyboardShortcutsModal'));
+          modal.show();
+        });
+      }
+    });
+
+    // ========== Keyboard navigation for sortable headers ==========
+    document.addEventListener('DOMContentLoaded', function() {
+      const sortHeaders = document.querySelectorAll('th.th-sort');
+      for (const th of sortHeaders) {
+        th.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            this.click();
+          }
+        });
+      }
+    });
+
     // ---------- Price formatting: "IDR 30,400" (code, comma thousands, NO decimals) ----------
     const idf = new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -578,9 +818,8 @@
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
       const data = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
-      const category = tr.querySelector(".c-category")?.textContent?.trim() || "Lainnya";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
-      const category = tr.dataset.category?.trim() || "";
+      const category = tr.dataset.category?.trim() || "Lainnya";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
         const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
       const priceNum = toNumber(priceText);
@@ -620,7 +859,6 @@
     }
     
     // Populate category dropdown (for…of)
-    const categorySelect = document.getElementById("categorySelect");
     const uniqueCategories = [...new Set(data.map(d => d.category).filter(Boolean))].sort();
     for (const c of uniqueCategories) {
       const opt = document.createElement("option");
@@ -761,6 +999,7 @@
     function applyFilters() {
       const q = (filterInput.value || "").toLowerCase();
       const v = vendorSelect.value || "";
+      const c = categorySelect.value || "";
       const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
@@ -799,6 +1038,26 @@
 
       const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
       if (currentPage > pageCount) currentPage = pageCount;
+      
+      // Update results counter (Visibility of system status)
+      const resultsCount = document.getElementById('resultsCount');
+      const totalResults = rows.length;
+      const totalData = data.length;
+      if (resultsCount) {
+        resultsCount.textContent = `Menampilkan ${totalResults} dari ${totalData} produk`;
+      }
+      
+      // Show active filter status
+      const filterStatus = document.getElementById('filterStatus');
+      const hasActiveFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
+                               locationSelect.value || minPrice.value || maxPrice.value;
+      if (filterStatus) {
+        filterStatus.style.display = hasActiveFilters ? 'block' : 'none';
+        const activeCount = [filterInput.value, vendorSelect.value, categorySelect.value, 
+                            locationSelect.value, minPrice.value, maxPrice.value]
+                           .filter(Boolean).length;
+        document.getElementById('filterStatusText').textContent = `${activeCount} filter aktif`;
+      }
 
       // Render tbody
       tbody.innerHTML = "";
@@ -887,7 +1146,23 @@
       }
       if (slice.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="8" class="text-center text-muted py-4">Tidak ada data</td>`;
+        const hasFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
+                          locationSelect.value || minPrice.value || maxPrice.value;
+        const emptyMessage = hasFilters 
+          ? `<div class="empty-state">
+               <div class="empty-state-icon"><i class="bi bi-search"></i></div>
+               <h6>Tidak ada hasil yang cocok</h6>
+               <p class="text-muted mb-3">Coba ubah atau hapus beberapa filter</p>
+               <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('clearFilters').click()">
+                 <i class="bi bi-x-circle me-1"></i>Hapus Semua Filter
+               </button>
+             </div>`
+          : `<div class="empty-state">
+               <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+               <h6>Belum ada data</h6>
+               <p class="text-muted">Data produk akan muncul di sini</p>
+             </div>`;
+        tr.innerHTML = `<td colspan="8" class="text-center py-4">${emptyMessage}</td>`;
         tbody.appendChild(tr);
       }
 
@@ -926,10 +1201,48 @@
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
     }
+    
+    // Price validation (Error prevention)
+    minPrice.addEventListener('input', function() {
+      if (this.value && Number.parseFloat(this.value) < 0) {
+        this.value = 0;
+      }
+      // Validate max price is greater than min
+      if (maxPrice.value && Number.parseFloat(this.value) > Number.parseFloat(maxPrice.value)) {
+        this.classList.add('is-invalid');
+        document.getElementById('minPriceHelp').textContent = 'Harga minimum tidak boleh lebih dari maksimum';
+        document.getElementById('minPriceHelp').classList.add('text-danger');
+      } else {
+        this.classList.remove('is-invalid');
+        document.getElementById('minPriceHelp').textContent = 'Min: Rp 0';
+        document.getElementById('minPriceHelp').classList.remove('text-danger');
+      }
+    });
+    
+    maxPrice.addEventListener('input', function() {
+      if (this.value && Number.parseFloat(this.value) < 0) {
+        this.value = 0;
+      }
+      // Validate max price is greater than min
+      if (minPrice.value && Number.parseFloat(this.value) < Number.parseFloat(minPrice.value)) {
+        this.classList.add('is-invalid');
+        document.getElementById('maxPriceHelp').textContent = 'Harga maksimum tidak boleh kurang dari minimum';
+        document.getElementById('maxPriceHelp').classList.add('text-danger');
+      } else {
+        this.classList.remove('is-invalid');
+        document.getElementById('maxPriceHelp').textContent = 'Kosongkan untuk tanpa batas';
+        document.getElementById('maxPriceHelp').classList.remove('text-danger');
+      }
+    });
 
-    // Clear
+    // Clear (with feedback for user control)
     clearBtn.addEventListener("click", (e) => {
       e.preventDefault();
+      
+      // Store if there were active filters
+      const hadFilters = filterInput.value || vendorSelect.value || categorySelect.value ||
+                        locationSelect.value || minPrice.value || maxPrice.value;
+      
       filterInput.value = ""; 
       vendorSelect.value = ""; 
       categorySelect.value = "";
@@ -939,6 +1252,11 @@
       maxPrice.value = "";
       currentPage = 1; 
       render();
+      
+      // Provide feedback (Visibility of system status)
+      if (hadFilters) {
+        showNotification('Semua filter telah dihapus', 'info');
+      }
     });
 
     // Add click listeners to initially loaded buttons (updated from spans)
@@ -1219,7 +1537,7 @@
     let currentEditingProductUnit = null;
     let unitEditModalInstance = null;
 
-    // Toggle edit mode
+    // Toggle edit mode (User control and freedom)
     document.getElementById('editModeToggle').addEventListener('click', function() {
       editModeEnabled = !editModeEnabled;
       const table = document.getElementById('pricesTable');
@@ -1230,17 +1548,18 @@
         table.classList.add('edit-mode');
         tableBody.classList.add('edit-mode');
         this.classList.add('active');
-        this.classList.remove('btn-outline-secondary');
-        this.classList.add('btn-success');
-        editModeText.textContent = 'Exit Edit Mode';
+        this.setAttribute('aria-pressed', 'true');
+        editModeText.textContent = 'Exit Edit';
         console.log('Edit mode enabled - table classes:', table.className);
+        showNotification('Mode edit diaktifkan. Klik tombol edit pada baris produk.', 'info');
       } else {
         table.classList.remove('edit-mode');
         tableBody.classList.remove('edit-mode');
-        this.classList.remove('active', 'btn-success');
-        this.classList.add('btn-outline-secondary');
-        editModeText.textContent = 'Enable Edit Mode';
+        this.classList.remove('active');
+        this.setAttribute('aria-pressed', 'false');
+        editModeText.textContent = 'Edit Mode';
         console.log('Edit mode disabled');
+        showNotification('Mode edit dinonaktifkan', 'info');
       }
     });
 
@@ -1357,18 +1676,25 @@
       }
     }
 
-    // Show notification
+    // Show notification (Enhanced feedback)
     function showNotification(message, type = 'info') {
       const alertDiv = document.createElement('div');
-      alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-      alertDiv.style.position = 'fixed';
-      alertDiv.style.top = '20px';
-      alertDiv.style.right = '20px';
-      alertDiv.style.zIndex = '9999';
-      alertDiv.style.minWidth = '300px';
+      alertDiv.className = `alert alert-${type} alert-dismissible fade show progress-feedback`;
+      alertDiv.setAttribute('role', 'alert');
+      alertDiv.setAttribute('aria-live', 'polite');
+      
+      // Icon based on type
+      let icon = 'info-circle';
+      if (type === 'success') icon = 'check-circle';
+      if (type === 'warning') icon = 'exclamation-triangle';
+      if (type === 'danger') icon = 'x-circle';
+      
       alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <div class="d-flex align-items-center">
+          <i class="bi bi-${icon} me-2" aria-hidden="true"></i>
+          <div class="flex-grow-1">${message}</div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
       `;
       
       document.body.appendChild(alertDiv);

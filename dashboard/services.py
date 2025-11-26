@@ -115,19 +115,33 @@ class VendorPricingService:
 
         This is intended for templates that perform client-side filtering/pagination
         and therefore need the complete dataset rendered on the page.
+        
+        Args:
+            q: Optional search query to filter by product name or category
+            per_vendor_limit: Maximum items to fetch per vendor
         """
         if per_vendor_limit is None:
             per_vendor_limit = self.per_vendor_limit or 10000
 
-        try:
-            combined = self.repository.fetch_all(per_vendor_limit=per_vendor_limit)
-        except Exception:
+        # If there's a search query, use individual vendor queries that support filtering
+        if q:
             combined = []
             for model, source in self.VENDOR_SPECS:
                 try:
                     combined.extend(self._query_vendor(model, source, q=q))
                 except Exception:
                     continue
+        else:
+            # No search query: use the faster repository fetch_all method
+            try:
+                combined = self.repository.fetch_all(per_vendor_limit=per_vendor_limit)
+            except Exception:
+                combined = []
+                for model, source in self.VENDOR_SPECS:
+                    try:
+                        combined.extend(self._query_vendor(model, source, q=q))
+                    except Exception:
+                        continue
 
         # dedupe & sort (same logic as list_prices)
         seen = set()

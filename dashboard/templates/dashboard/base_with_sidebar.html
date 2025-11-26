@@ -186,7 +186,9 @@
         <!-- Sidebar -->
         <nav class="sidebar">
             <div class="sidebar-logo">
-                <!-- Rencanakan Logo - using text fallback -->
+                {% load static %}
+                <!-- Rencanakan Logo -->
+                <img src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan Logo">
                 <div class="logo-fallback">
                     <div class="logo-icon">
                         <i class="fas fa-cube"></i>
