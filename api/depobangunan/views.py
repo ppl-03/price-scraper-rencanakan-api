@@ -12,7 +12,14 @@ from .security import (
     AccessControlManager,
     RateLimiter
 )
+from .sentry_monitoring import (
+    DepoBangunanSentryMonitor,
+    track_depobangunan_transaction,
+    DepoBangunanTaskMonitor
+)
 import logging
+import uuid
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +28,12 @@ ERROR_KEYWORD_REQUIRED = 'Keyword parameter is required'
 ERROR_PAGE_INVALID = 'Page parameter must be a valid integer'
 ERROR_INTERNAL_SERVER = 'Internal server error occurred'
 ERROR_SAVE_DB_FAILED = 'Failed to save products to database'
+
+# Sentry breadcrumb constants
+BREADCRUMB_STARTING_LOCATION_SCRAPING = 'Starting location scraping'
+CATEGORY_DEPOBANGUNAN_LOCATION = 'depobangunan.location'
+CATEGORY_DEPOBANGUNAN_SCRAPER = 'depobangunan.scraper'
+CATEGORY_DEPOBANGUNAN_ERROR = 'depobangunan.error'
 
 # ---------- Helper functions ----------
 
@@ -307,80 +320,197 @@ def _convert_products_to_dict_with_sold_count(products):
     ]
 
 
+def _convert_products_to_dict_with_sold_count(products):
+    """Convert product objects to dictionary format including sold_count"""
+    return [
+        {
+            'name': product.name,
+            'price': product.price,
+            'url': product.url,
+            'unit': product.unit,
+            'location': product.location if hasattr(product, 'location') else '',
+            'sold_count': product.sold_count if hasattr(product, 'sold_count') and product.sold_count is not None else 0
+        }
+        for product in products
+    ]
+
+
+def _parse_sort_parameters(request):
+    """Parse and validate sort-related parameters from request.
+    
+    Returns:
+        tuple: (sort_type, sort_by_price, final_sort_type, error_response)
+    """
+    sort_type = request.GET.get('sort_type', '').lower()
+    sort_by_price_param = request.GET.get('sort_by_price', 'true')
+    
+    # Validate sort_type if provided
+    if sort_type and sort_type not in ['cheapest', 'popularity']:
+        return None, None, None, _create_error_response('Invalid sort_type. Must be either "cheapest" or "popularity"')
+    
+    # Determine sort_by_price based on sort_type or sort_by_price parameter
+    if sort_type:
+        sort_by_price = (sort_type == 'cheapest')
+        final_sort_type = sort_type
+    else:
+        sort_by_price = _parse_sort_by_price(sort_by_price_param)
+        final_sort_type = 'cheapest' if sort_by_price else 'popularity'
+    
+    return sort_type, sort_by_price, final_sort_type, None
+
+
+def _scrape_and_track_locations():
+    """Scrape locations with monitoring and error handling.
+    
+    Returns:
+        tuple: (location_value, location_time)
+    """
+    DepoBangunanSentryMonitor.add_breadcrumb(
+        BREADCRUMB_STARTING_LOCATION_SCRAPING,
+        category=CATEGORY_DEPOBANGUNAN_LOCATION,
+        level="info"
+    )
+    
+    location_start_time = time.time()
+    try:
+        location_scraper = create_depo_location_scraper()
+        loc_result = location_scraper.scrape_locations(timeout=30)
+        if loc_result.success and loc_result.locations:
+            run_location_value = ', '.join([location.name for location in loc_result.locations])
+        else:
+            run_location_value = ''
+    except Exception as e:
+        logger.warning(f"Failed to scrape locations; continuing without locations: {e}")
+        run_location_value = ''
+    
+    location_time = time.time() - location_start_time
+    
+    # Log location result to Sentry
+    DepoBangunanSentryMonitor.add_breadcrumb(
+        f"Location scraping completed in {location_time:.2f}s - Found: {len(run_location_value.split(', ')) if run_location_value else 0}",
+        category=CATEGORY_DEPOBANGUNAN_LOCATION,
+        level="info",
+        data={
+            "success": bool(run_location_value),
+            "locations_count": len(run_location_value.split(', ')) if run_location_value else 0,
+            "duration": location_time
+        }
+    )
+    
+    return run_location_value, location_time
+
+
 @require_http_methods(["GET"])
 @enforce_resource_limits
 def scrape_products(request):
-    try:
-        # Validate and parse parameters
-        keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
-        if error:
-            return error
-        
-        # Handle both sort_type and sort_by_price parameters
-        sort_type = request.GET.get('sort_type', '').lower()
-        sort_by_price_param = request.GET.get('sort_by_price', 'true')
-        
-        # Validate sort_type if provided
-        if sort_type and sort_type not in ['cheapest', 'popularity']:
-            return _create_error_response('Invalid sort_type. Must be either "cheapest" or "popularity"')
-        
-        # Determine sort_by_price based on sort_type or sort_by_price parameter
-        if sort_type:
-            sort_by_price = (sort_type == 'cheapest')
-            final_sort_type = sort_type
-        else:
-            sort_by_price = _parse_sort_by_price(sort_by_price_param)
-            final_sort_type = 'cheapest' if sort_by_price else 'popularity'
-        
-        page, error = _parse_page(request.GET.get('page', '0'))
-        if error:
-            return error
-        
-        scraper = create_depo_scraper()
-        result = scraper.scrape_products(
-            keyword=keyword,
-            sort_by_price=sort_by_price,
-            page=page
-        )
-        
-        # Scrape locations and get location names
+    # Start Sentry transaction for monitoring
+    with track_depobangunan_transaction("depobangunan_scrape_products"):
         try:
-            location_scraper = create_depo_location_scraper()
-            loc_result = location_scraper.scrape_locations(timeout=30)
-            if loc_result.success and loc_result.locations:
-                # Join location names into a single string
-                run_location_value = ', '.join([location.name for location in loc_result.locations])
-            else:
-                run_location_value = ''
-        except Exception as e:
-            logger.warning(f"Failed to scrape locations; continuing without locations: {e}")
-            run_location_value = ''
-        
-        # Convert products to dict and add location
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit,
-                'location': run_location_value
+            # Validate and parse parameters
+            keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
+            if error:
+                return error
+            
+            # Parse sort parameters
+            sort_type, sort_by_price, final_sort_type, error = _parse_sort_parameters(request)
+            if error:
+                return error
+            
+            page, error = _parse_page(request.GET.get('page', '0'))
+            if error:
+                return error
+            
+            # Set scraping context for Sentry
+            DepoBangunanSentryMonitor.set_scraping_context(
+                keyword=keyword,
+                page=page,
+                additional_data={
+                    'sort_by_price': sort_by_price,
+                    'sort_type': final_sort_type,
+                    'source': 'api_endpoint',
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            
+            # Create task monitor for tracking
+            task_id = f"scrape_{uuid.uuid4().hex[:8]}"
+            task = DepoBangunanTaskMonitor(task_id=task_id, task_type="product_scraping")
+            
+            # Scrape locations with monitoring
+            run_location_value, location_time = _scrape_and_track_locations()
+            
+            # Update task progress
+            task.record_progress(1, 2, "Locations scraped, starting product scraping...")
+            
+            # Track product scraping
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Starting product scraping for keyword: {keyword}",
+                category=CATEGORY_DEPOBANGUNAN_SCRAPER,
+                level="info"
+            )
+            
+            product_start_time = time.time()
+            scraper = create_depo_scraper()
+            result = scraper.scrape_products(
+                keyword=keyword,
+                sort_by_price=sort_by_price,
+                page=page
+            )
+            product_time = time.time() - product_start_time
+            
+            # Update task progress
+            task.record_progress(2, 2, "Product scraping completed")
+            
+            # Track scraping result
+            scraping_result = {
+                'products_count': len(result.products),
+                'success': result.success,
+                'errors_count': 0 if result.success else 1,
+                'location_time': location_time,
+                'product_time': product_time,
+                'total_time': location_time + product_time
             }
-            for product in result.products
-        ]
-        
-        response_data = {
-            'success': result.success,
-            'products': products_data,
-            'error_message': result.error_message,
-            'url': result.url,
-            'sort_type': final_sort_type
-        }
-        
-        return JsonResponse(response_data)
-        
-    except Exception as e:
-        logger.error(f"Unexpected error in Depo Bangunan scraper: {str(e)}")
-        return _create_error_response(ERROR_INTERNAL_SERVER, 500)
+            DepoBangunanSentryMonitor.track_scraping_result(scraping_result)
+            
+            # Convert products to dict and add location
+            products_data = [
+                {
+                    'name': product.name,
+                    'price': product.price,
+                    'url': product.url,
+                    'unit': product.unit,
+                    'location': run_location_value
+                }
+                for product in result.products
+            ]
+            
+            response_data = {
+                'success': result.success,
+                'products': products_data,
+                'error_message': result.error_message,
+                'url': result.url,
+                'sort_type': final_sort_type
+            }
+            
+            # Complete task
+            task.complete(success=result.success, result_data=scraping_result)
+            
+            return JsonResponse(response_data)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in Depo Bangunan scraper: {str(e)}")
+            
+            # Track error in Sentry
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Fatal error in scrape_products: {str(e)}",
+                category=CATEGORY_DEPOBANGUNAN_ERROR,
+                level="error"
+            )
+            
+            if 'task' in locals():
+                task.complete(success=False)
+            
+            return _create_error_response(ERROR_INTERNAL_SERVER, 500)
 
 
 @require_http_methods(["GET"])
@@ -422,97 +552,281 @@ def depobangunan_locations_view(request):
 @require_api_token(required_permission='write')
 @enforce_resource_limits
 def scrape_and_save_products(request):
-    try:
-        keyword, error = _validate_and_parse_keyword(request.POST.get('keyword'))
-        if error:
-            return error
+    # Start Sentry transaction for monitoring
+    with track_depobangunan_transaction("depobangunan_scrape_and_save"):
+        try:
+            keyword, error = _validate_and_parse_keyword(request.POST.get('keyword'))
+            if error:
+                return error
 
-        sort_type, sort_by_price, error = _parse_sorting_params(request)
-        if error:
-            return error
+            sort_type, sort_by_price, error = _parse_sorting_params(request)
+            if error:
+                return error
 
-        page, error = _parse_page(request.POST.get('page', '0'))
-        if error:
-            return error
+            page, error = _parse_page(request.POST.get('page', '0'))
+            if error:
+                return error
 
-        use_price_update = _parse_boolean(request.POST.get('use_price_update', 'false'))
-        scraper = create_depo_scraper()
+            use_price_update = _parse_boolean(request.POST.get('use_price_update', 'false'))
+            
+            # Set scraping context for Sentry
+            DepoBangunanSentryMonitor.set_scraping_context(
+                keyword=keyword,
+                page=page,
+                additional_data={
+                    'sort_by_price': sort_by_price,
+                    'sort_type': sort_type,
+                    'use_price_update': use_price_update,
+                    'source': 'scrape_and_save',
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            
+            # Create task monitor for tracking
+            task_id = f"save_{uuid.uuid4().hex[:8]}"
+            task = DepoBangunanTaskMonitor(task_id=task_id, task_type="scrape_and_save")
+            
+            scraper = create_depo_scraper()
 
-        result = _scrape_products_by_type(scraper, keyword, sort_type, sort_by_price, page)
-        if not result.success:
-            return _create_error_response(result.error_message, 500)
-        if not result.products:
-            return _empty_product_response()
+            # Track product scraping
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Starting product scraping for keyword: {keyword}",
+                category=CATEGORY_DEPOBANGUNAN_SCRAPER,
+                level="info"
+            )
+            
+            scrape_start_time = time.time()
+            result = _scrape_products_by_type(scraper, keyword, sort_type, sort_by_price, page)
+            scrape_time = time.time() - scrape_start_time
+            
+            if not result.success:
+                DepoBangunanSentryMonitor.add_breadcrumb(
+                    f"Scraping failed: {result.error_message}",
+                    category=CATEGORY_DEPOBANGUNAN_ERROR,
+                    level="error"
+                )
+                task.complete(success=False)
+                return _create_error_response(result.error_message, 500)
+            
+            if not result.products:
+                task.complete(success=True, result_data={'products_count': 0})
+                return _empty_product_response()
 
-        run_location_value = _scrape_location_names()
-        products_data = _convert_products(result.products, run_location_value)
+            # Update progress
+            task.record_progress(1, 3, "Products scraped, fetching locations...")
+            
+            # Track location scraping
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                BREADCRUMB_STARTING_LOCATION_SCRAPING,
+                category=CATEGORY_DEPOBANGUNAN_LOCATION,
+                level="info"
+            )
+            
+            location_start_time = time.time()
+            run_location_value = _scrape_location_names()
+            location_time = time.time() - location_start_time
+            
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Location scraping completed in {location_time:.2f}s",
+                category=CATEGORY_DEPOBANGUNAN_LOCATION,
+                level="info",
+                data={"locations_found": bool(run_location_value)}
+            )
+            
+            products_data = _convert_products(result.products, run_location_value)
 
-        db_service = DepoBangunanDatabaseService()
-        response_data, error = _save_products(db_service, products_data, use_price_update, result.url)
-        if error:
-            return error
-        return JsonResponse(response_data)
+            # Update progress
+            task.record_progress(2, 3, "Saving to database...")
+            
+            # Track database save
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Saving {len(products_data)} products to database",
+                category="depobangunan.database",
+                level="info",
+                data={"use_price_update": use_price_update}
+            )
+            
+            db_start_time = time.time()
+            db_service = DepoBangunanDatabaseService()
+            response_data, error = _save_products(db_service, products_data, use_price_update, result.url)
+            db_time = time.time() - db_start_time
+            
+            if error:
+                DepoBangunanSentryMonitor.add_breadcrumb(
+                    "Database save failed",
+                    category=CATEGORY_DEPOBANGUNAN_ERROR,
+                    level="error"
+                )
+                task.complete(success=False)
+                return error
+            
+            # Update progress
+            task.record_progress(3, 3, "Save completed")
+            
+            # Track overall result
+            scraping_result = {
+                'products_count': len(products_data),
+                'success': True,
+                'errors_count': 0,
+                'scrape_time': scrape_time,
+                'location_time': location_time,
+                'db_time': db_time,
+                'total_time': scrape_time + location_time + db_time,
+                'saved': response_data.get('saved', 0),
+                'updated': response_data.get('updated', 0),
+                'inserted': response_data.get('inserted', 0)
+            }
+            DepoBangunanSentryMonitor.track_scraping_result(scraping_result)
+            
+            task.complete(success=True, result_data=scraping_result)
+            
+            return JsonResponse(response_data)
 
-    except Exception as e:
-        logger.error(f"Unexpected error in scrape and save: {str(e)}")
-        return _create_error_response(ERROR_INTERNAL_SERVER, 500)
+        except Exception as e:
+            logger.error(f"Unexpected error in scrape and save: {str(e)}")
+            
+            # Track error in Sentry
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Fatal error in scrape_and_save_products: {str(e)}",
+                category=CATEGORY_DEPOBANGUNAN_ERROR,
+                level="error"
+            )
+            
+            if 'task' in locals():
+                task.complete(success=False)
+            
+            return _create_error_response(ERROR_INTERNAL_SERVER, 500)
 
 @require_http_methods(["GET"])
 @enforce_resource_limits
 def scrape_popularity(request):
     """Scrape products sorted by popularity and return top N best sellers."""
-    try:
-        # Validate and parse parameters
-        keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
-        if error:
-            return error
-        
-        page, error = _parse_page(request.GET.get('page', '0'))
-        if error:
-            return error
-        
-        top_n, error = _parse_top_n(request.GET.get('top_n'))
-        if error:
-            return error
-        
-        # Create scraper and scrape top N products by popularity
-        scraper = create_depo_scraper()
-        result = scraper.scrape_popularity_products(
-            keyword=keyword,
-            top_n=top_n,
-            page=page
-        )
-        
-        # Scrape locations and get location names
-        run_location_value = _scrape_location_names()
-        
-        # Format products data including sold_count and location
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit,
-                'location': run_location_value,
-                'sold_count': product.sold_count if hasattr(product, 'sold_count') and product.sold_count is not None else 0
+    # Start Sentry transaction for monitoring
+    with track_depobangunan_transaction("depobangunan_scrape_popularity"):
+        try:
+            # Validate and parse parameters
+            keyword, error = _validate_and_parse_keyword(request.GET.get('keyword'))
+            if error:
+                return error
+            
+            page, error = _parse_page(request.GET.get('page', '0'))
+            if error:
+                return error
+            
+            top_n, error = _parse_top_n(request.GET.get('top_n'))
+            if error:
+                return error
+            
+            # Set scraping context for Sentry
+            DepoBangunanSentryMonitor.set_scraping_context(
+                keyword=keyword,
+                page=page,
+                additional_data={
+                    'top_n': top_n,
+                    'sort_type': 'popularity',
+                    'source': 'scrape_popularity',
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            
+            # Create task monitor for tracking
+            task_id = f"popularity_{uuid.uuid4().hex[:8]}"
+            task = DepoBangunanTaskMonitor(task_id=task_id, task_type="popularity_scraping")
+            
+            # Track product scraping
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Starting popularity scraping for keyword: {keyword}, top_n: {top_n}",
+                category=CATEGORY_DEPOBANGUNAN_SCRAPER,
+                level="info"
+            )
+            
+            scrape_start_time = time.time()
+            # Create scraper and scrape top N products by popularity
+            scraper = create_depo_scraper()
+            result = scraper.scrape_popularity_products(
+                keyword=keyword,
+                top_n=top_n,
+                page=page
+            )
+            scrape_time = time.time() - scrape_start_time
+            
+            # Update progress
+            task.record_progress(1, 2, "Products scraped, fetching locations...")
+            
+            # Track location scraping
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                BREADCRUMB_STARTING_LOCATION_SCRAPING,
+                category=CATEGORY_DEPOBANGUNAN_LOCATION,
+                level="info"
+            )
+            
+            location_start_time = time.time()
+            # Scrape locations and get location names
+            run_location_value = _scrape_location_names()
+            location_time = time.time() - location_start_time
+            
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Location scraping completed in {location_time:.2f}s",
+                category=CATEGORY_DEPOBANGUNAN_LOCATION,
+                level="info",
+                data={"locations_found": bool(run_location_value)}
+            )
+            
+            # Update progress
+            task.record_progress(2, 2, "Formatting response...")
+            
+            # Format products data including sold_count and location
+            products_data = [
+                {
+                    'name': product.name,
+                    'price': product.price,
+                    'url': product.url,
+                    'unit': product.unit,
+                    'location': run_location_value,
+                    'sold_count': product.sold_count if hasattr(product, 'sold_count') and product.sold_count is not None else 0
+                }
+                for product in result.products
+            ]
+            
+            # Track scraping result
+            scraping_result = {
+                'products_count': len(products_data),
+                'success': result.success,
+                'errors_count': 0 if result.success else 1,
+                'scrape_time': scrape_time,
+                'location_time': location_time,
+                'total_time': scrape_time + location_time
             }
-            for product in result.products
-        ]
-        
-        response_data = {
-            'success': result.success,
-            'products': products_data,
-            'total_products': len(products_data),
-            'error_message': result.error_message,
-            'url': result.url
-        }
-        
-        logger.info(f"DepoBangunan popularity scraping successful for keyword '{keyword}': {len(result.products)} best sellers found")
-        return JsonResponse(response_data)
-        
-    except Exception as e:
-        logger.error(f"Error in scrape_popularity: {str(e)}", exc_info=True)
-        return _create_error_response(ERROR_INTERNAL_SERVER, 500)
+            DepoBangunanSentryMonitor.track_scraping_result(scraping_result)
+            
+            response_data = {
+                'success': result.success,
+                'products': products_data,
+                'total_products': len(products_data),
+                'error_message': result.error_message,
+                'url': result.url
+            }
+            
+            logger.info(f"DepoBangunan popularity scraping successful for keyword '{keyword}': {len(result.products)} best sellers found")
+            
+            task.complete(success=result.success, result_data=scraping_result)
+            
+            return JsonResponse(response_data)
+            
+        except Exception as e:
+            logger.error(f"Error in scrape_popularity: {str(e)}", exc_info=True)
+            
+            # Track error in Sentry
+            DepoBangunanSentryMonitor.add_breadcrumb(
+                f"Fatal error in scrape_popularity: {str(e)}",
+                category=CATEGORY_DEPOBANGUNAN_ERROR,
+                level="error"
+            )
+            
+            if 'task' in locals():
+                task.complete(success=False)
+            
+            return _create_error_response(ERROR_INTERNAL_SERVER, 500)
 
 
 @require_http_methods(["POST"])
