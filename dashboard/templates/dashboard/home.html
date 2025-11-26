@@ -288,9 +288,9 @@
       color: #212529;
     }
     .edit-mode-btn.active {
-      background: #28a745;
-      border-color: #28a745;
-      color: #fff;
+      background: #0b7022;
+      border-color: #0b7022;
+      color: #ffffff;
     }
     .edit-mode-btn.active:hover {
       background: #218838;
@@ -1032,22 +1032,12 @@
       return sorted;
     }
 
-    function render() {
-      let rows = applyFilters();
-      rows = applySort(rows);
-
-      const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
-      if (currentPage > pageCount) currentPage = pageCount;
-      
-      // Update results counter (Visibility of system status)
+    function updateResultsDisplay(filteredCount, totalCount) {
       const resultsCount = document.getElementById('resultsCount');
-      const totalResults = rows.length;
-      const totalData = data.length;
       if (resultsCount) {
-        resultsCount.textContent = `Menampilkan ${totalResults} dari ${totalData} produk`;
+        resultsCount.textContent = `Menampilkan ${filteredCount} dari ${totalCount} produk`;
       }
       
-      // Show active filter status
       const filterStatus = document.getElementById('filterStatus');
       const hasActiveFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
                                locationSelect.value || minPrice.value || maxPrice.value;
@@ -1058,115 +1048,116 @@
                            .filter(Boolean).length;
         document.getElementById('filterStatusText').textContent = `${activeCount} filter aktif`;
       }
+    }
 
-      // Render tbody
-      tbody.innerHTML = "";
-      const start = (currentPage - 1) * perPage;
-      const slice = rows.slice(start, start + perPage);
-      let idx = 0;
-      for (const d of slice) {
-        const tr = document.createElement("tr");
-        tr.dataset.category = d.category || "";
-        
-        // Build location cell content with improved design
-        let locationHtml = `<div class="d-flex align-items-center">
-                             <span class="me-2">${d.location}</span>`;
-        if (d.allLocations && d.allLocations.length > 1) {
-          const moreCount = d.allLocations.length - 1;
-          const locationsStr = d.allLocations.join('|');
-          locationHtml += ` <button type="button" class="btn badge bg-light text-dark border location-badge" 
-                             tabindex="0"
-                             data-vendor="${d.vendor}"
-                             data-locations="${locationsStr}"
-                             title="Click to see all ${d.allLocations.length} locations"
-                             aria-label="Show all ${d.allLocations.length} locations for ${d.vendor}"
-                             style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
-                             +${moreCount}
-                           </button>`;
-        }
-        locationHtml += `</div>`;
-        
-        tr.dataset.productUrl = d.url || '';
-        tr.dataset.vendor = d.vendor || '';
-        
-        tr.innerHTML = `
-          <td>${start + idx + 1}</td>
-          <td class="c-item">${d.item}</td>
-          <td class="c-category category-cell" data-category="${d.category || 'Lainnya'}">
-            <span class="category-text">${d.category || 'Lainnya'}</span>
-          </td>
-          <td class="c-price">${idf.format(Math.round(d.price))}</td>
-          <td class="c-unit unit-cell" data-unit="${d.unit || ''}">
-            <span class="unit-text">${d.unit || '—'}</span>
-          </td>
-          <td class="c-vendor">${d.vendor}</td>
-          <td class="c-location">${locationHtml}</td>
-          <td class="edit-action-cell">
-            <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
-                    onclick="openCategoryEditModal(this)" 
-                    title="Edit Category">
-              <i class="bi bi-pencil"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-success edit-unit-btn" 
-                    onclick="openUnitEditModal(this)" 
-                    title="Edit Unit">
-              <i class="bi bi-rulers"></i>
-            </button>
-          </td>`;
-        tbody.appendChild(tr);
-        
-        // Add click event listener to the location badge if it exists
-        const modalBadge = tr.querySelector('button[data-locations]');
-        if (modalBadge) {
-          const handleLocationModal = function(e) {
-            e.preventDefault(); // Prevent any default behavior
-            e.stopPropagation(); // Stop event bubbling
-            
-            const vendor = this.dataset.vendor;
-            const locationsStr = this.dataset.locations;
-            const locations = locationsStr ? locationsStr.split('|') : [];
-            
-            console.log('DEBUG: Dynamic badge clicked');
-            console.log('DEBUG: Vendor:', vendor);
-            console.log('DEBUG: Locations string:', locationsStr);
-            console.log('DEBUG: Parsed locations:', locations);
-            
-            showLocationModal(vendor, locations);
-          };
+    function createLocationCell(d) {
+      let locationHtml = `<div class="d-flex align-items-center">
+                           <span class="me-2">${d.location}</span>`;
+      if (d.allLocations && d.allLocations.length > 1) {
+        const moreCount = d.allLocations.length - 1;
+        const locationsStr = d.allLocations.join('|');
+        locationHtml += ` <button type="button" class="btn badge bg-light text-dark border location-badge" 
+                           tabindex="0"
+                           data-vendor="${d.vendor}"
+                           data-locations="${locationsStr}"
+                           title="Click to see all ${d.allLocations.length} locations"
+                           aria-label="Show all ${d.allLocations.length} locations for ${d.vendor}"
+                           style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
+                           +${moreCount}
+                         </button>`;
+      }
+      locationHtml += `</div>`;
+      return locationHtml;
+    }
+
+    function attachLocationModalHandlers(tr) {
+      const modalBadge = tr.querySelector('button[data-locations]');
+      if (modalBadge) {
+        const handleLocationModal = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
           
-          modalBadge.addEventListener('click', handleLocationModal);
-          modalBadge.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-              handleLocationModal.call(this, e);
-            }
-          });
-        }
+          const vendor = this.dataset.vendor;
+          const locationsStr = this.dataset.locations;
+          const locations = locationsStr ? locationsStr.split('|') : [];
+          
+          console.log('DEBUG: Dynamic badge clicked');
+          console.log('DEBUG: Vendor:', vendor);
+          console.log('DEBUG: Locations string:', locationsStr);
+          console.log('DEBUG: Parsed locations:', locations);
+          
+          showLocationModal(vendor, locations);
+        };
         
-        idx++;
+        modalBadge.addEventListener('click', handleLocationModal);
+        modalBadge.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleLocationModal.call(this, e);
+          }
+        });
       }
-      if (slice.length === 0) {
-        const tr = document.createElement("tr");
-        const hasFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
-                          locationSelect.value || minPrice.value || maxPrice.value;
-        const emptyMessage = hasFilters 
-          ? `<div class="empty-state">
-               <div class="empty-state-icon"><i class="bi bi-search"></i></div>
-               <h6>Tidak ada hasil yang cocok</h6>
-               <p class="text-muted mb-3">Coba ubah atau hapus beberapa filter</p>
-               <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('clearFilters').click()">
-                 <i class="bi bi-x-circle me-1"></i>Hapus Semua Filter
-               </button>
-             </div>`
-          : `<div class="empty-state">
-               <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
-               <h6>Belum ada data</h6>
-               <p class="text-muted">Data produk akan muncul di sini</p>
-             </div>`;
-        tr.innerHTML = `<td colspan="8" class="text-center py-4">${emptyMessage}</td>`;
-        tbody.appendChild(tr);
-      }
+    }
 
-      // Render pagination
+    function renderTableRow(d, rowIndex) {
+      const tr = document.createElement("tr");
+      tr.dataset.category = d.category || "";
+      tr.dataset.productUrl = d.url || '';
+      tr.dataset.vendor = d.vendor || '';
+      
+      const locationHtml = createLocationCell(d);
+      
+      tr.innerHTML = `
+        <td>${rowIndex + 1}</td>
+        <td class="c-item">${d.item}</td>
+        <td class="c-category category-cell" data-category="${d.category || 'Lainnya'}">
+          <span class="category-text">${d.category || 'Lainnya'}</span>
+        </td>
+        <td class="c-price">${idf.format(Math.round(d.price))}</td>
+        <td class="c-unit unit-cell" data-unit="${d.unit || ''}">
+          <span class="unit-text">${d.unit || '—'}</span>
+        </td>
+        <td class="c-vendor">${d.vendor}</td>
+        <td class="c-location">${locationHtml}</td>
+        <td class="edit-action-cell">
+          <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
+                  onclick="openCategoryEditModal(this)" 
+                  title="Edit Category">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-success edit-unit-btn" 
+                  onclick="openUnitEditModal(this)" 
+                  title="Edit Unit">
+            <i class="bi bi-rulers"></i>
+          </button>
+        </td>`;
+      
+      attachLocationModalHandlers(tr);
+      return tr;
+    }
+
+    function renderEmptyState() {
+      const tr = document.createElement("tr");
+      const hasFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
+                        locationSelect.value || minPrice.value || maxPrice.value;
+      const emptyMessage = hasFilters 
+        ? `<div class="empty-state">
+             <div class="empty-state-icon"><i class="bi bi-search"></i></div>
+             <h6>Tidak ada hasil yang cocok</h6>
+             <p class="text-muted mb-3">Coba ubah atau hapus beberapa filter</p>
+             <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('clearFilters').click()">
+               <i class="bi bi-x-circle me-1"></i>Hapus Semua Filter
+             </button>
+           </div>`
+        : `<div class="empty-state">
+             <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+             <h6>Belum ada data</h6>
+             <p class="text-muted">Data produk akan muncul di sini</p>
+           </div>`;
+      tr.innerHTML = `<td colspan="8" class="text-center py-4">${emptyMessage}</td>`;
+      return tr;
+    }
+
+    function renderPagination(pageCount) {
       pagination.innerHTML = "";
       for (let i = 1; i <= pageCount; i++) {
         const li = document.createElement("li");
@@ -1176,6 +1167,32 @@
         a.addEventListener("click", e => { e.preventDefault(); currentPage = i; render(); });
         li.appendChild(a); pagination.appendChild(li);
       }
+    }
+
+    function render() {
+      let rows = applyFilters();
+      rows = applySort(rows);
+
+      const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
+      if (currentPage > pageCount) currentPage = pageCount;
+      
+      updateResultsDisplay(rows.length, data.length);
+
+      // Render tbody
+      tbody.innerHTML = "";
+      const start = (currentPage - 1) * perPage;
+      const slice = rows.slice(start, start + perPage);
+      
+      if (slice.length === 0) {
+        tbody.appendChild(renderEmptyState());
+      } else {
+        for (let idx = 0; idx < slice.length; idx++) {
+          const tr = renderTableRow(slice[idx], start + idx);
+          tbody.appendChild(tr);
+        }
+      }
+
+      renderPagination(pageCount);
     }
 
     // Header sorting (for…of + dataset)

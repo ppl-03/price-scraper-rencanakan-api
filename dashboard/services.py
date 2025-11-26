@@ -110,6 +110,90 @@ class VendorPricingService:
         except Exception:
             return [], total
 
+    def _fetch_combined_data(self, q: Optional[str], per_vendor_limit: int) -> List[Dict]:
+        """Fetch combined data from all vendors with optional search filtering.
+        
+        Args:
+            q: Optional search query
+            per_vendor_limit: Maximum items per vendor
+            
+        Returns:
+            List of combined product dictionaries
+        """
+        if q:
+            return self._fetch_with_search(q)
+        return self._fetch_without_search(per_vendor_limit, q)
+    
+    def _fetch_with_search(self, q: str) -> List[Dict]:
+        """Fetch data using individual vendor queries with search filtering.
+        
+        Args:
+            q: Search query string
+            
+        Returns:
+            List of filtered products
+        """
+        combined = []
+        for model, source in self.VENDOR_SPECS:
+            try:
+                combined.extend(self._query_vendor(model, source, q=q))
+            except Exception:
+                continue
+        return combined
+    
+    def _fetch_without_search(self, per_vendor_limit: int, q: Optional[str]) -> List[Dict]:
+        """Fetch data using repository fetch_all with fallback to individual queries.
+        
+        Args:
+            per_vendor_limit: Maximum items per vendor
+            q: Search query (used in fallback)
+            
+        Returns:
+            List of products
+        """
+        try:
+            return self.repository.fetch_all(per_vendor_limit=per_vendor_limit)
+        except Exception:
+            return self._fetch_fallback(q)
+    
+    def _fetch_fallback(self, q: Optional[str]) -> List[Dict]:
+        """Fallback to individual vendor queries when repository fails.
+        
+        Args:
+            q: Optional search query
+            
+        Returns:
+            List of products from individual vendor queries
+        """
+        combined = []
+        for model, source in self.VENDOR_SPECS:
+            try:
+                combined.extend(self._query_vendor(model, source, q=q))
+            except Exception:
+                continue
+        return combined
+    
+    def _deduplicate_and_sort(self, combined: List[Dict]) -> List[Dict]:
+        """Remove duplicates and sort by price.
+        
+        Args:
+            combined: List of product dictionaries
+            
+        Returns:
+            Deduplicated and sorted list
+        """
+        seen = set()
+        uniq = []
+        for p in combined:
+            key = (p.get("source"), p.get("url"), p.get("item"), p.get("value"))
+            if key in seen:
+                continue
+            seen.add(key)
+            uniq.append(p)
+        
+        uniq.sort(key=lambda x: x.get("value") or 0)
+        return uniq
+
     def list_all_prices(self, q: Optional[str] = None, per_vendor_limit: Optional[int] = None) -> List[Dict]:
         """Return the full combined, deduplicated and sorted list of prices.
 
@@ -123,38 +207,8 @@ class VendorPricingService:
         if per_vendor_limit is None:
             per_vendor_limit = self.per_vendor_limit or 10000
 
-        # If there's a search query, use individual vendor queries that support filtering
-        if q:
-            combined = []
-            for model, source in self.VENDOR_SPECS:
-                try:
-                    combined.extend(self._query_vendor(model, source, q=q))
-                except Exception:
-                    continue
-        else:
-            # No search query: use the faster repository fetch_all method
-            try:
-                combined = self.repository.fetch_all(per_vendor_limit=per_vendor_limit)
-            except Exception:
-                combined = []
-                for model, source in self.VENDOR_SPECS:
-                    try:
-                        combined.extend(self._query_vendor(model, source, q=q))
-                    except Exception:
-                        continue
-
-        # dedupe & sort (same logic as list_prices)
-        seen = set()
-        uniq = []
-        for p in combined:
-            key = (p.get("source"), p.get("url"), p.get("item"), p.get("value"))
-            if key in seen:
-                continue
-            seen.add(key)
-            uniq.append(p)
-
-        uniq.sort(key=lambda x: x.get("value") or 0)
-        return uniq
+        combined = self._fetch_combined_data(q, per_vendor_limit)
+        return self._deduplicate_and_sort(combined)
 
 
 class CategoryUpdateService:

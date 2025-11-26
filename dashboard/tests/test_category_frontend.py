@@ -61,7 +61,7 @@ class CategoryEditFrontendTest(TestCase):
         """Test that home page includes edit mode toggle button."""
         self.assertEqual(self.status_code, 200)
         self.assertInHTML('id="editModeToggle"')
-        self.assertInHTML('Enable Edit Mode')
+        self.assertInHTML('Edit Mode')
         self.assertInHTML('bi-pencil-square')
     
     def test_home_page_includes_edit_mode_css(self):
