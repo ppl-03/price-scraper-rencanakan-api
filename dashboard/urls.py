@@ -33,4 +33,9 @@ urlpatterns = [
     path("api/category/update/", views_db.update_product_category, name="update_product_category"),
     path("api/category/bulk-update/", views_db.bulk_update_categories, name="bulk_update_categories"),
     path("api/vendors/", views_db.get_available_vendors, name="get_available_vendors"),
+    
+    # Unit update endpoints
+    path("api/unit/update/", views_db.update_product_unit, name="update_product_unit"),
+    path("api/unit/bulk-update/", views_db.bulk_update_units, name="bulk_update_units"),
+    path("api/unit/vendors/", views_db.get_available_vendors_unit, name="get_available_vendors_unit"),
 ]

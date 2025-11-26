@@ -1,12 +1,17 @@
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.conf import settings
 from django.http import JsonResponse
 import json
 
-from .services import VendorPricingService, CategoryUpdateService
+from .services import VendorPricingService, CategoryUpdateService, UnitUpdateService
+
+# Error message constants
+ERROR_INVALID_JSON = "Invalid JSON payload"
 
 
+@ensure_csrf_cookie
 @require_GET
 def home_db(request):
     """Dashboard home view that reads vendor prices from the database.
@@ -55,6 +60,7 @@ def curated_price_list_db(request):
 
     return render(request, "dashboard/curated_price_list.html", {"rows": rows})
 
+@ensure_csrf_cookie
 @require_GET
 def price_anomalies(request):
     """
@@ -96,7 +102,7 @@ def update_product_category(request):
     except json.JSONDecodeError:
         return JsonResponse({
             "success": False,
-            "error": "Invalid JSON payload"
+            "error": ERROR_INVALID_JSON
         }, status=400)
     except Exception as e:
         return JsonResponse({
@@ -148,7 +154,7 @@ def bulk_update_categories(request):
     except json.JSONDecodeError:
         return JsonResponse({
             "success": False,
-            "error": "Invalid JSON payload"
+            "error": ERROR_INVALID_JSON
         }, status=400)
     except Exception as e:
         return JsonResponse({
@@ -166,6 +172,123 @@ def get_available_vendors(request):
     """
     try:
         service = CategoryUpdateService()
+        vendors = service.get_available_vendors()
+        
+        return JsonResponse({
+            "success": True,
+            "vendors": vendors
+        }, status=200)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }, status=500)
+
+
+@require_POST
+def update_product_unit(request):
+    """API endpoint to update a product's unit.
+    
+    Expected JSON payload:
+    {
+        "source": "Gemilang Store",
+        "product_url": "https://example.com/product",
+        "new_unit": "kg"
+    }
+    
+    Returns:
+        JsonResponse with success status and updated product information
+    """
+    try:
+        # Parse JSON body
+        data = json.loads(request.body)
+        
+        source = data.get("source")
+        product_url = data.get("product_url")
+        new_unit = data.get("new_unit")
+        
+        # Use the UnitUpdateService to handle the update
+        service = UnitUpdateService()
+        result = service.update_unit(source, product_url, new_unit)
+        
+        if result.get("success"):
+            return JsonResponse(result, status=200)
+        else:
+            return JsonResponse(result, status=400)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": ERROR_INVALID_JSON
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }, status=500)
+
+
+@require_POST
+def bulk_update_units(request):
+    """API endpoint to update multiple product units at once.
+    
+    Expected JSON payload:
+    {
+        "updates": [
+            {
+                "source": "Gemilang Store",
+                "product_url": "https://example.com/product1",
+                "new_unit": "kg"
+            },
+            {
+                "source": "Mitra10",
+                "product_url": "https://example.com/product2",
+                "new_unit": "m²"
+            }
+        ]
+    }
+    
+    Returns:
+        JsonResponse with bulk update results
+    """
+    try:
+        # Parse JSON body
+        data = json.loads(request.body)
+        updates = data.get("updates", [])
+        
+        if not isinstance(updates, list):
+            return JsonResponse({
+                "success": False,
+                "error": "updates must be a list"
+            }, status=400)
+        
+        # Use the UnitUpdateService to handle bulk updates
+        service = UnitUpdateService()
+        result = service.bulk_update_units(updates)
+        
+        return JsonResponse(result, status=200)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": ERROR_INVALID_JSON
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }, status=500)
+
+
+@require_GET
+def get_available_vendors_unit(request):
+    """API endpoint to get list of available vendor sources for unit updates.
+    
+    Returns:
+        JsonResponse with list of vendor names
+    """
+    try:
+        service = UnitUpdateService()
         vendors = service.get_available_vendors()
         
         return JsonResponse({

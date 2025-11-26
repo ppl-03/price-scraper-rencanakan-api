@@ -329,3 +329,56 @@ class VendorPricingServiceTest(TestCase):
 
                 # Should skip failed vendor and continue with others
                 self.assertGreaterEqual(len(items), 0)
+    
+    @patch.object(PricingRepository, 'fetch_all')
+    def test_list_prices_deduplication(self, mock_fetch):
+        """Test that duplicate entries are properly removed in list_prices"""
+        # Return data with exact duplicates to test continue in deduplication loop
+        duplicate_data = [
+            {"item": "Duplicate Product", "value": 50000, "unit": "pcs", "url": "https://dup.example/1", 
+             "category": "Test", "source": "Gemilang Store", "created_at": None, "updated_at": None},
+            # Exact duplicate - should be skipped
+            {"item": "Duplicate Product", "value": 50000, "unit": "pcs", "url": "https://dup.example/1", 
+             "category": "Test", "source": "Gemilang Store", "created_at": None, "updated_at": None},
+            {"item": "Unique Product", "value": 60000, "unit": "kg", "url": "https://unique.example/1", 
+             "category": "Test", "source": "Mitra10", "created_at": None, "updated_at": None},
+        ]
+        mock_fetch.return_value = duplicate_data
+
+        svc = VendorPricingService(per_vendor_limit=10)
+        items, _ = svc.list_prices(page=1, per_page=10)
+
+        # Should have 2 items after deduplication, not 3
+        self.assertEqual(len(items), 2)
+        # Verify the duplicate was removed
+        item_names = [i['item'] for i in items]
+        self.assertEqual(item_names.count("Duplicate Product"), 1)
+        self.assertEqual(item_names.count("Unique Product"), 1)
+    
+    @patch.object(PricingRepository, 'fetch_all')
+    def test_list_all_prices_deduplication(self, mock_fetch):
+        """Test that duplicate entries are properly removed in list_all_prices"""
+        # Return data with exact duplicates to test continue in deduplication loop
+        duplicate_data = [
+            {"item": "Dup Item", "value": 30000, "unit": "m3", "url": "https://test.example/1", 
+             "category": "Material", "source": "Depo Bangunan", "created_at": None, "updated_at": None},
+            # Exact duplicate - should be skipped by continue statement
+            {"item": "Dup Item", "value": 30000, "unit": "m3", "url": "https://test.example/1", 
+             "category": "Material", "source": "Depo Bangunan", "created_at": None, "updated_at": None},
+            # Another duplicate - should also be skipped
+            {"item": "Dup Item", "value": 30000, "unit": "m3", "url": "https://test.example/1", 
+             "category": "Material", "source": "Depo Bangunan", "created_at": None, "updated_at": None},
+            {"item": "Different Item", "value": 40000, "unit": "sak", "url": "https://test.example/2", 
+             "category": "Material", "source": "Juragan Material", "created_at": None, "updated_at": None},
+        ]
+        mock_fetch.return_value = duplicate_data
+
+        svc = VendorPricingService(per_vendor_limit=10)
+        items = svc.list_all_prices()
+
+        # Should have 2 unique items after deduplication, not 4
+        self.assertEqual(len(items), 2)
+        # Verify the duplicates were removed
+        item_names = [i['item'] for i in items]
+        self.assertEqual(item_names.count("Dup Item"), 1)
+        self.assertEqual(item_names.count("Different Item"), 1)

@@ -13,6 +13,14 @@ from db_pricing.models import (
 
 from .repositories.pricing_repository import PricingRepository
 from .category_validators import CategoryUpdateRequestValidator
+from .unit_validators import UnitUpdateRequestValidator
+
+# Vendor name constants
+VENDOR_GEMILANG = "Gemilang Store"
+VENDOR_DEPO_BANGUNAN = "Depo Bangunan"
+VENDOR_JURAGAN_MATERIAL = "Juragan Material"
+VENDOR_MITRA10 = "Mitra10"
+VENDOR_TOKOPEDIA = "Tokopedia"
 
 
 class VendorPricingService:
@@ -24,11 +32,11 @@ class VendorPricingService:
     """
 
     VENDOR_SPECS = [
-        (GemilangProduct, "Gemilang Store"),
-        (DepoBangunanProduct, "Depo Bangunan"),
-        (JuraganMaterialProduct, "Juragan Material"),
-        (Mitra10Product, "Mitra10"),
-        (TokopediaProduct, "Tokopedia"),
+        (GemilangProduct, VENDOR_GEMILANG),
+        (DepoBangunanProduct, VENDOR_DEPO_BANGUNAN),
+        (JuraganMaterialProduct, VENDOR_JURAGAN_MATERIAL),
+        (Mitra10Product, VENDOR_MITRA10),
+        (TokopediaProduct, VENDOR_TOKOPEDIA),
     ]
 
     def __init__(self, per_vendor_limit: int = 10000):
@@ -145,11 +153,11 @@ class CategoryUpdateService:
 
     # Map source names to their respective models
     VENDOR_MODEL_MAP = {
-        "Gemilang Store": GemilangProduct,
-        "Depo Bangunan": DepoBangunanProduct,
-        "Juragan Material": JuraganMaterialProduct,
-        "Mitra10": Mitra10Product,
-        "Tokopedia": TokopediaProduct,
+        VENDOR_GEMILANG: GemilangProduct,
+        VENDOR_DEPO_BANGUNAN: DepoBangunanProduct,
+        VENDOR_JURAGAN_MATERIAL: JuraganMaterialProduct,
+        VENDOR_MITRA10: Mitra10Product,
+        VENDOR_TOKOPEDIA: TokopediaProduct,
     }
 
     def __init__(self, validator: Optional[CategoryUpdateRequestValidator] = None):
@@ -252,6 +260,142 @@ class CategoryUpdateService:
             new_category = update_data.get("new_category")
             
             result = self.update_category(source, product_url, new_category)
+            
+            if result.get("success"):
+                results["success_count"] += 1
+            else:
+                results["failure_count"] += 1
+            
+            results["updates"].append(result)
+        
+        return results
+    
+    def get_available_vendors(self) -> List[str]:
+        """Get list of available vendor sources.
+        
+        Returns:
+            List of vendor source names
+        """
+        return list(self.VENDOR_MODEL_MAP.keys())
+
+
+class UnitUpdateService:
+    """Service responsible for updating product units across vendor models.
+    
+    This service follows the Single Responsibility Principle by focusing solely on
+    unit update operations. It handles validation, model lookup, and update logic
+    in a clean, testable way.
+    """
+
+    # Map source names to their respective models
+    VENDOR_MODEL_MAP = {
+        VENDOR_GEMILANG: GemilangProduct,
+        VENDOR_DEPO_BANGUNAN: DepoBangunanProduct,
+        VENDOR_JURAGAN_MATERIAL: JuraganMaterialProduct,
+        VENDOR_MITRA10: Mitra10Product,
+        VENDOR_TOKOPEDIA: TokopediaProduct,
+    }
+
+    def __init__(self, validator: Optional[UnitUpdateRequestValidator] = None):
+        """Initialize the unit update service.
+        
+        Args:
+            validator: Optional custom validator instance (for testing/customization)
+        """
+        self.validator = validator or UnitUpdateRequestValidator()
+
+    def update_unit(self, source: str, product_url: str, new_unit: str) -> Dict:
+        """Update the unit of a specific product.
+        
+        Args:
+            source: The vendor source name (e.g., "Gemilang Store")
+            product_url: The URL of the product to update
+            new_unit: The new unit value to set
+            
+        Returns:
+            Dict containing success status and message, or error information
+            
+        Raises:
+            ValueError: If source is invalid or product not found
+        """
+        # Validate inputs using the validator
+        validation_result = self.validator.validate_update_request(
+            source, product_url, new_unit
+        )
+        
+        if not validation_result.get("valid"):
+            return {
+                "success": False,
+                "error": validation_result.get("error", "Validation failed")
+            }
+        
+        # Get the model for this vendor
+        model = self.VENDOR_MODEL_MAP.get(source)
+        if not model:
+            return {
+                "success": False,
+                "error": f"Invalid vendor source: {source}"
+            }
+        
+        # Find the product by URL (unique identifier across vendors)
+        try:
+            product = model.objects.get(url=product_url)
+        except model.DoesNotExist:
+            return {
+                "success": False,
+                "error": f"Product not found with URL: {product_url}"
+            }
+        
+        # Store old unit for logging/auditing
+        old_unit = product.unit
+        
+        # Update the unit
+        product.unit = new_unit.strip()
+        product.save(update_fields=['unit', 'updated_at'])
+        
+        return {
+            "success": True,
+            "message": "Unit updated successfully",
+            "product_name": product.name,
+            "old_unit": old_unit,
+            "new_unit": product.unit,
+            "vendor": source,
+            "updated_at": product.updated_at.isoformat()
+        }
+    
+    def bulk_update_units(self, updates: List[Dict]) -> Dict:
+        """Update multiple product units in a single operation.
+        
+        Args:
+            updates: List of dicts with keys: source, product_url, new_unit
+            
+        Returns:
+            Dict with success count, failure count, and detailed results
+        """
+        # Validate the entire bulk request first
+        bulk_validation = self.validator.validate_bulk_request(updates)
+        
+        if not bulk_validation.get("valid"):
+            return {
+                "success": False,
+                "error": bulk_validation.get("error"),
+                "validation_errors": bulk_validation.get("errors", []),
+                "success_count": 0,
+                "failure_count": len(updates)
+            }
+        
+        results = {
+            "success_count": 0,
+            "failure_count": 0,
+            "updates": []
+        }
+        
+        for update_data in updates:
+            source = update_data.get("source")
+            product_url = update_data.get("product_url")
+            new_unit = update_data.get("new_unit")
+            
+            result = self.update_unit(source, product_url, new_unit)
             
             if result.get("success"):
                 results["success_count"] += 1

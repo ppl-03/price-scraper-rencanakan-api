@@ -1,7 +1,7 @@
 """
-Validators for category update operations.
+Validators for unit update operations.
 
-This module provides validation logic for category updates, following the
+This module provides validation logic for unit updates, following the
 Single Responsibility Principle. Each validator class handles a specific
 type of validation, making the system easily extensible.
 """
@@ -11,21 +11,21 @@ import re
 from .base_validators import BaseUpdateRequestValidator
 
 # Constants
-ERROR_CATEGORY_NONE = "Category cannot be None"
+ERROR_UNIT_NONE = "Unit cannot be None"
 
 
-class CategoryValidator:
-    """Base validator interface for category updates.
+class UnitValidator:
+    """Base validator interface for unit updates.
     
-    This abstract base class defines the interface for all category validators,
+    This abstract base class defines the interface for all unit validators,
     following the Open/Closed Principle - open for extension, closed for modification.
     """
     
-    def validate(self, category: Optional[str]) -> Dict:
-        """Validate a category value.
+    def validate(self, unit: Optional[str]) -> Dict:
+        """Validate a unit value.
         
         Args:
-            category: The category string to validate (can be None for validation testing)
+            unit: The unit string to validate (can be None for validation testing)
             
         Returns:
             Dict with 'valid' (bool) and optional 'error' (str)
@@ -33,43 +33,43 @@ class CategoryValidator:
         raise NotImplementedError("Subclasses must implement validate()")
 
 
-class CategoryLengthValidator(CategoryValidator):
-    """Validates category string length constraints."""
+class UnitLengthValidator(UnitValidator):
+    """Validates unit string length constraints."""
     
-    def __init__(self, min_length: int = 0, max_length: int = 100):
+    def __init__(self, min_length: int = 0, max_length: int = 50):
         """Initialize with length constraints.
         
         Args:
             min_length: Minimum allowed length (default: 0)
-            max_length: Maximum allowed length (default: 100, matches model)
+            max_length: Maximum allowed length (default: 50, matches model)
         """
         self.min_length = min_length
         self.max_length = max_length
     
-    def validate(self, category: Optional[str]) -> Dict:
-        """Validate category length."""
-        if category is None:
-            return {"valid": False, "error": ERROR_CATEGORY_NONE}
+    def validate(self, unit: Optional[str]) -> Dict:
+        """Validate unit length."""
+        if unit is None:
+            return {"valid": False, "error": ERROR_UNIT_NONE}
         
-        length = len(category.strip())
+        length = len(unit.strip())
         
         if length < self.min_length:
             return {
                 "valid": False,
-                "error": f"Category must be at least {self.min_length} characters"
+                "error": f"Unit must be at least {self.min_length} characters"
             }
         
         if length > self.max_length:
             return {
                 "valid": False,
-                "error": f"Category must not exceed {self.max_length} characters"
+                "error": f"Unit must not exceed {self.max_length} characters"
             }
         
         return {"valid": True}
 
 
-class CategoryFormatValidator(CategoryValidator):
-    """Validates category string format and allowed characters."""
+class UnitFormatValidator(UnitValidator):
+    """Validates unit string format and allowed characters."""
     
     def __init__(self, allow_special_chars: bool = True):
         """Initialize format validator.
@@ -79,61 +79,61 @@ class CategoryFormatValidator(CategoryValidator):
         """
         self.allow_special_chars = allow_special_chars
         # Pattern allows letters, numbers, spaces, and common punctuation
-        self.pattern = re.compile(r'^[\w\s\-.,/()&]+$', re.UNICODE)
+        self.pattern = re.compile(r'^[\w\s\-.,/()&²³]+$', re.UNICODE)
     
-    def validate(self, category: Optional[str]) -> Dict:
-        """Validate category format."""
-        if category is None:
-            return {"valid": False, "error": ERROR_CATEGORY_NONE}
+    def validate(self, unit: Optional[str]) -> Dict:
+        """Validate unit format."""
+        if unit is None:
+            return {"valid": False, "error": ERROR_UNIT_NONE}
         
-        category = category.strip()
+        unit = unit.strip()
         
-        if not category:
-            # Empty categories are allowed (will default to "Lainnya")
+        if not unit:
+            # Empty units are allowed (will default to empty string)
             return {"valid": True}
         
-        if not self.allow_special_chars and not self.pattern.match(category):
+        if not self.allow_special_chars and not self.pattern.match(unit):
             return {
                 "valid": False,
-                "error": "Category contains invalid characters"
+                "error": "Unit contains invalid characters"
             }
         
         return {"valid": True}
 
 
-class CategoryBlacklistValidator(CategoryValidator):
-    """Validates category against a blacklist of prohibited values."""
+class UnitBlacklistValidator(UnitValidator):
+    """Validates unit against a blacklist of prohibited values."""
     
     def __init__(self, blacklist: Optional[List[str]] = None):
         """Initialize with blacklist.
         
         Args:
-            blacklist: List of prohibited category values (case-insensitive)
+            blacklist: List of prohibited unit values (case-insensitive)
         """
         self.blacklist = [item.lower() for item in (blacklist or [])]
     
-    def validate(self, category: Optional[str]) -> Dict:
-        """Validate category against blacklist."""
-        if category is None:
-            return {"valid": False, "error": ERROR_CATEGORY_NONE}
+    def validate(self, unit: Optional[str]) -> Dict:
+        """Validate unit against blacklist."""
+        if unit is None:
+            return {"valid": False, "error": ERROR_UNIT_NONE}
         
-        if category.strip().lower() in self.blacklist:
+        if unit.strip().lower() in self.blacklist:
             return {
                 "valid": False,
-                "error": "This category value is not allowed"
+                "error": "This unit value is not allowed"
             }
         
         return {"valid": True}
 
 
-class CompositeValidator(CategoryValidator):
+class CompositeValidator(UnitValidator):
     """Composite validator that runs multiple validators in sequence.
     
     This follows the Composite Pattern, allowing multiple validators to be
     combined into a single validation pipeline.
     """
     
-    def __init__(self, validators: List[CategoryValidator]):
+    def __init__(self, validators: List[UnitValidator]):
         """Initialize with list of validators.
         
         Args:
@@ -141,16 +141,16 @@ class CompositeValidator(CategoryValidator):
         """
         self.validators = validators
     
-    def validate(self, category: Optional[str]) -> Dict:
+    def validate(self, unit: Optional[str]) -> Dict:
         """Run all validators in sequence."""
         for validator in self.validators:
-            result = validator.validate(category)
+            result = validator.validate(unit)
             if not result.get("valid"):
                 return result
         
         return {"valid": True}
     
-    def add_validator(self, validator: CategoryValidator):
+    def add_validator(self, validator: UnitValidator):
         """Add a new validator to the pipeline.
         
         Args:
@@ -159,36 +159,36 @@ class CompositeValidator(CategoryValidator):
         self.validators.append(validator)
 
 
-class CategoryUpdateRequestValidator(BaseUpdateRequestValidator):
-    """Validates complete category update requests.
+class UnitUpdateRequestValidator(BaseUpdateRequestValidator):
+    """Validates complete unit update requests.
     
-    This class validates the entire request payload for category updates,
+    This class validates the entire request payload for unit updates,
     checking all required fields and their values.
     """
     
-    def __init__(self, category_validator: Optional[CategoryValidator] = None):
-        """Initialize with optional category validator.
+    def __init__(self, unit_validator: Optional[UnitValidator] = None):
+        """Initialize with optional unit validator.
         
         Args:
-            category_validator: Validator for category values (default: composite)
+            unit_validator: Validator for unit values (default: composite)
         """
-        if category_validator is None:
+        if unit_validator is None:
             # Default composite validator with common rules
-            self.category_validator = CompositeValidator([
-                CategoryLengthValidator(min_length=0, max_length=100),
-                CategoryFormatValidator(allow_special_chars=True),
+            self.unit_validator = CompositeValidator([
+                UnitLengthValidator(min_length=0, max_length=50),
+                UnitFormatValidator(allow_special_chars=True),
             ])
         else:
-            self.category_validator = category_validator
+            self.unit_validator = unit_validator
     
     def validate_update_request(self, source: Any, product_url: Any, 
-                               new_category: Any) -> Dict:
-        """Validate a complete category update request.
+                               new_unit: Any) -> Dict:
+        """Validate a complete unit update request.
         
         Args:
             source: Vendor source name (validated for type)
             product_url: Product URL (validated for type)
-            new_category: New category value (validated for type)
+            new_unit: New unit value (validated for type)
             
         Returns:
             Dict with 'valid' (bool) and optional 'error' (str)
@@ -203,16 +203,16 @@ class CategoryUpdateRequestValidator(BaseUpdateRequestValidator):
         if not url_result.get("valid"):
             return url_result
         
-        # Validate new_category using the category validator
-        if new_category is None:
-            return {"valid": False, "error": "Category cannot be None"}
+        # Validate new_unit using the unit validator
+        if new_unit is None:
+            return {"valid": False, "error": "Unit cannot be None"}
         
-        if not isinstance(new_category, str):
-            return {"valid": False, "error": "Category must be a string"}
+        if not isinstance(new_unit, str):
+            return {"valid": False, "error": "Unit must be a string"}
         
-        category_result = self.category_validator.validate(new_category)
-        if not category_result.get("valid"):
-            return category_result
+        unit_result = self.unit_validator.validate(new_unit)
+        if not unit_result.get("valid"):
+            return unit_result
         
         return {"valid": True}
     
@@ -243,9 +243,9 @@ class CategoryUpdateRequestValidator(BaseUpdateRequestValidator):
             
             source = update.get("source")
             product_url = update.get("product_url")
-            new_category = update.get("new_category")
+            new_unit = update.get("new_unit")
             
-            result = self.validate_update_request(source, product_url, new_category)
+            result = self.validate_update_request(source, product_url, new_unit)
             if not result.get("valid"):
                 errors.append({
                     "index": i,
