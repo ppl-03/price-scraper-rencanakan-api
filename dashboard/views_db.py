@@ -7,6 +7,9 @@ import json
 
 from .services import VendorPricingService, CategoryUpdateService, UnitUpdateService
 
+# Error message constants
+ERROR_INVALID_JSON = "Invalid JSON payload"
+
 
 @ensure_csrf_cookie
 @require_GET
@@ -99,7 +102,7 @@ def update_product_category(request):
     except json.JSONDecodeError:
         return JsonResponse({
             "success": False,
-            "error": "Invalid JSON payload"
+            "error": ERROR_INVALID_JSON
         }, status=400)
     except Exception as e:
         return JsonResponse({
@@ -151,7 +154,7 @@ def bulk_update_categories(request):
     except json.JSONDecodeError:
         return JsonResponse({
             "success": False,
-            "error": "Invalid JSON payload"
+            "error": ERROR_INVALID_JSON
         }, status=400)
     except Exception as e:
         return JsonResponse({
@@ -216,7 +219,7 @@ def update_product_unit(request):
     except json.JSONDecodeError:
         return JsonResponse({
             "success": False,
-            "error": "Invalid JSON payload"
+            "error": ERROR_INVALID_JSON
         }, status=400)
     except Exception as e:
         return JsonResponse({
@@ -268,7 +271,7 @@ def bulk_update_units(request):
     except json.JSONDecodeError:
         return JsonResponse({
             "success": False,
-            "error": "Invalid JSON payload"
+            "error": ERROR_INVALID_JSON
         }, status=400)
     except Exception as e:
         return JsonResponse({
