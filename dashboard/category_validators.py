@@ -8,6 +8,7 @@ type of validation, making the system easily extensible.
 
 from typing import Dict, Optional, List, Any
 import re
+from .base_validators import BaseUpdateRequestValidator
 
 # Constants
 ERROR_CATEGORY_NONE = "Category cannot be None"
@@ -158,7 +159,7 @@ class CompositeValidator(CategoryValidator):
         self.validators.append(validator)
 
 
-class CategoryUpdateRequestValidator:
+class CategoryUpdateRequestValidator(BaseUpdateRequestValidator):
     """Validates complete category update requests.
     
     This class validates the entire request payload for category updates,
@@ -192,23 +193,15 @@ class CategoryUpdateRequestValidator:
         Returns:
             Dict with 'valid' (bool) and optional 'error' (str)
         """
-        # Validate source
-        if not source or not isinstance(source, str):
-            return {"valid": False, "error": "Invalid or missing source"}
+        # Validate source using base class method
+        source_result = self.validate_source(source)
+        if not source_result.get("valid"):
+            return source_result
         
-        if not source.strip():
-            return {"valid": False, "error": "Source cannot be empty"}
-        
-        # Validate product_url
-        if not product_url or not isinstance(product_url, str):
-            return {"valid": False, "error": "Invalid or missing product_url"}
-        
-        if not product_url.strip():
-            return {"valid": False, "error": "Product URL cannot be empty"}
-        
-        # Validate URL format - only accept HTTPS for security
-        if not product_url.startswith("https://"):
-            return {"valid": False, "error": "Product URL must be a valid HTTPS URL"}
+        # Validate product_url using base class method
+        url_result = self.validate_product_url(product_url)
+        if not url_result.get("valid"):
+            return url_result
         
         # Validate new_category using the category validator
         if new_category is None:
@@ -232,24 +225,19 @@ class CategoryUpdateRequestValidator:
         Returns:
             Dict with 'valid' (bool), optional 'error' (str), and 'errors' (list)
         """
-        if not isinstance(updates, list):
-            return {"valid": False, "error": "Updates must be a list"}
-        
-        if not updates:
-            return {"valid": False, "error": "Updates list cannot be empty"}
-        
-        if len(updates) > 100:
-            return {
-                "valid": False, 
-                "error": "Bulk updates limited to 100 items at a time"
-            }
+        # Validate bulk request structure using base class method
+        structure_result = self.validate_bulk_request_structure(updates)
+        if not structure_result.get("valid"):
+            return structure_result
         
         errors = []
         for i, update in enumerate(updates):
-            if not isinstance(update, dict):
+            # Validate update item structure using base class method
+            item_result = self.validate_update_item_structure(update, i)
+            if not item_result.get("valid"):
                 errors.append({
-                    "index": i,
-                    "error": "Each update must be a dictionary"
+                    "index": item_result["index"],
+                    "error": item_result["error"]
                 })
                 continue
             
