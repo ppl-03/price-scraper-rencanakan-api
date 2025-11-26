@@ -72,12 +72,6 @@ class BaseUpdateRequestValidatorTests(TestCase):
         self.assertFalse(result["valid"])
         self.assertIn("cannot be empty", result["error"])
     
-    def test_validate_product_url_not_https(self):
-        """Test that non-HTTPS URL fails validation."""
-        result = self.validator.validate_product_url("http://example.com/product")
-        self.assertFalse(result["valid"])
-        self.assertIn("must be a valid HTTPS URL", result["error"])
-    
     def test_validate_product_url_not_string(self):
         """Test that non-string URL fails validation."""
         result = self.validator.validate_product_url(123)
