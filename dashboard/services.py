@@ -15,6 +15,13 @@ from .repositories.pricing_repository import PricingRepository
 from .category_validators import CategoryUpdateRequestValidator
 from .unit_validators import UnitUpdateRequestValidator
 
+# Vendor name constants
+VENDOR_GEMILANG = "Gemilang Store"
+VENDOR_DEPO_BANGUNAN = "Depo Bangunan"
+VENDOR_JURAGAN_MATERIAL = "Juragan Material"
+VENDOR_MITRA10 = "Mitra10"
+VENDOR_TOKOPEDIA = "Tokopedia"
+
 
 class VendorPricingService:
     """Service that returns a unified list of vendor product prices from the DB.
@@ -25,11 +32,11 @@ class VendorPricingService:
     """
 
     VENDOR_SPECS = [
-        (GemilangProduct, "Gemilang Store"),
-        (DepoBangunanProduct, "Depo Bangunan"),
-        (JuraganMaterialProduct, "Juragan Material"),
-        (Mitra10Product, "Mitra10"),
-        (TokopediaProduct, "Tokopedia"),
+        (GemilangProduct, VENDOR_GEMILANG),
+        (DepoBangunanProduct, VENDOR_DEPO_BANGUNAN),
+        (JuraganMaterialProduct, VENDOR_JURAGAN_MATERIAL),
+        (Mitra10Product, VENDOR_MITRA10),
+        (TokopediaProduct, VENDOR_TOKOPEDIA),
     ]
 
     def __init__(self, per_vendor_limit: int = 10000):
@@ -146,11 +153,11 @@ class CategoryUpdateService:
 
     # Map source names to their respective models
     VENDOR_MODEL_MAP = {
-        "Gemilang Store": GemilangProduct,
-        "Depo Bangunan": DepoBangunanProduct,
-        "Juragan Material": JuraganMaterialProduct,
-        "Mitra10": Mitra10Product,
-        "Tokopedia": TokopediaProduct,
+        VENDOR_GEMILANG: GemilangProduct,
+        VENDOR_DEPO_BANGUNAN: DepoBangunanProduct,
+        VENDOR_JURAGAN_MATERIAL: JuraganMaterialProduct,
+        VENDOR_MITRA10: Mitra10Product,
+        VENDOR_TOKOPEDIA: TokopediaProduct,
     }
 
     def __init__(self, validator: Optional[CategoryUpdateRequestValidator] = None):
@@ -282,11 +289,11 @@ class UnitUpdateService:
 
     # Map source names to their respective models
     VENDOR_MODEL_MAP = {
-        "Gemilang Store": GemilangProduct,
-        "Depo Bangunan": DepoBangunanProduct,
-        "Juragan Material": JuraganMaterialProduct,
-        "Mitra10": Mitra10Product,
-        "Tokopedia": TokopediaProduct,
+        VENDOR_GEMILANG: GemilangProduct,
+        VENDOR_DEPO_BANGUNAN: DepoBangunanProduct,
+        VENDOR_JURAGAN_MATERIAL: JuraganMaterialProduct,
+        VENDOR_MITRA10: Mitra10Product,
+        VENDOR_TOKOPEDIA: TokopediaProduct,
     }
 
     def __init__(self, validator: Optional[UnitUpdateRequestValidator] = None):
