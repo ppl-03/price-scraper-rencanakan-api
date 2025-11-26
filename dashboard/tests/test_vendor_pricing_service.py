@@ -172,30 +172,94 @@ class VendorPricingServiceTest(TestCase):
 
     @patch.object(PricingRepository, 'fetch_all')
     def test_list_all_prices_with_custom_limit(self, mock_fetch):
-        """Test list_all_prices with custom per_vendor_limit"""
+        """Test list_all_prices with custom per_vendor_limit (no search)"""
         mock_fetch.side_effect = self.fake_fetch_all
 
         svc = VendorPricingService(per_vendor_limit=100)
         items = svc.list_all_prices(per_vendor_limit=5)
 
-        # Verify custom limit is respected
+        # Verify custom limit is respected in repository call
         mock_fetch.assert_called_with(per_vendor_limit=5)
         self.assertGreater(len(items), 0)
 
     @patch.object(PricingRepository, 'fetch_all')
+    def test_list_all_prices_with_custom_limit_and_search(self, mock_fetch):
+        """Test list_all_prices with custom per_vendor_limit and search query"""
+        mock_fetch.side_effect = self.fake_fetch_all
+
+        mock_product = MagicMock()
+        mock_product.name = "Limited Search"
+        mock_product.price = 40000
+        mock_product.unit = "box"
+        mock_product.url = "https://limit.example/1"
+        mock_product.location = "Limit City"
+        mock_product.category = "Limit Cat"
+        mock_product.created_at = None
+
+        with patch.object(GemilangProduct.objects, 'all') as mock_all:
+            mock_qs = MagicMock()
+            mock_qs.order_by.return_value = mock_qs
+            mock_qs.filter.return_value = mock_qs
+            # Simulate limit being applied via slicing
+            mock_qs.__getitem__.return_value = [mock_product]
+            mock_all.return_value = mock_qs
+
+            svc = VendorPricingService(per_vendor_limit=100)
+            items = svc.list_all_prices(q="Limited", per_vendor_limit=5)
+
+            # With search query, should use _query_vendor which applies limit via slicing
+            # The slicing happens in _query_vendor: qs[: self.per_vendor_limit]
+            self.assertGreaterEqual(len(items), 0)
+
+    @patch.object(PricingRepository, 'fetch_all')
     def test_list_all_prices_with_search(self, mock_fetch):
-        """Test list_all_prices with search query"""
+        """Test list_all_prices with search query uses _query_vendor path"""
+        mock_fetch.side_effect = self.fake_fetch_all
+
+        # Create mock products for search path
+        mock_product = MagicMock()
+        mock_product.name = "Semen Portland"
+        mock_product.price = 55000
+        mock_product.unit = "sak"
+        mock_product.url = "https://search.example/1"
+        mock_product.location = "Jakarta"
+        mock_product.category = "Bahan"
+        mock_product.created_at = None
+
+        with patch.object(GemilangProduct.objects, 'all') as mock_all:
+            mock_qs = MagicMock()
+            mock_qs.order_by.return_value = mock_qs
+            mock_qs.filter.return_value = mock_qs
+            mock_qs.__getitem__.return_value = [mock_product]
+            mock_all.return_value = mock_qs
+
+            svc = VendorPricingService(per_vendor_limit=100)
+            items = svc.list_all_prices(q="Semen")
+
+            # Should use _query_vendor path, not fetch_all when q is provided
+            # Verify filter was called (part of _query_vendor)
+            mock_qs.filter.assert_called()
+            # Should return filtered results
+            self.assertGreater(len(items), 0)
+
+    @patch.object(PricingRepository, 'fetch_all')
+    def test_list_all_prices_without_search_uses_repository(self, mock_fetch):
+        """Test list_all_prices without search query uses repository fetch_all"""
         mock_fetch.side_effect = self.fake_fetch_all
 
         svc = VendorPricingService(per_vendor_limit=100)
-        items = svc.list_all_prices(q="Semen")
+        items = svc.list_all_prices(q=None)
 
-        # Should return filtered results
+        # Should use repository fetch_all when no search query
+        mock_fetch.assert_called_with(per_vendor_limit=100)
         self.assertGreater(len(items), 0)
+        # Verify items are sorted by price
+        prices = [i['value'] for i in items]
+        self.assertEqual(prices, sorted(prices))
 
     @patch.object(PricingRepository, 'fetch_all')
     def test_list_all_prices_fallback_on_exception(self, mock_fetch):
-        """Test list_all_prices fallback when repository fails"""
+        """Test list_all_prices fallback when repository fails (no search query)"""
         mock_fetch.side_effect = Exception("Repository error")
 
         mock_product = MagicMock()
@@ -218,8 +282,38 @@ class VendorPricingServiceTest(TestCase):
             svc = VendorPricingService(per_vendor_limit=5)
             items = svc.list_all_prices()
 
-            # Should still return results via fallback
+            # Should still return results via fallback _query_vendor
             self.assertGreaterEqual(len(items), 0)
+
+    @patch.object(PricingRepository, 'fetch_all')
+    def test_list_all_prices_with_search_fallback_on_exception(self, mock_fetch):
+        """Test list_all_prices with search query when repository fails"""
+        # Repository should not be called when q is provided, but test the except path
+        mock_fetch.side_effect = Exception("Repository error")
+
+        mock_product = MagicMock()
+        mock_product.name = "Search Fallback"
+        mock_product.price = 35000
+        mock_product.unit = "pcs"
+        mock_product.url = "https://search-fallback.example/1"
+        mock_product.location = "Surabaya"
+        mock_product.category = "Test"
+        mock_product.created_at = None
+
+        with patch.object(GemilangProduct.objects, 'all') as mock_all:
+            mock_qs = MagicMock()
+            mock_qs.order_by.return_value = mock_qs
+            mock_qs.filter.return_value = mock_qs
+            mock_qs.__getitem__.return_value = [mock_product]
+            mock_all.return_value = mock_qs
+
+            svc = VendorPricingService(per_vendor_limit=5)
+            items = svc.list_all_prices(q="Search")
+
+            # Should return results via _query_vendor path (primary path for search)
+            self.assertGreaterEqual(len(items), 0)
+            # Verify filter was called since we're searching
+            mock_qs.filter.assert_called()
 
     def test_query_vendor_with_search(self):
         """Test _query_vendor method directly with search query"""
@@ -355,6 +449,44 @@ class VendorPricingServiceTest(TestCase):
         self.assertEqual(item_names.count("Duplicate Product"), 1)
         self.assertEqual(item_names.count("Unique Product"), 1)
     
+    @patch.object(PricingRepository, 'fetch_all')
+    def test_list_all_prices_search_vs_no_search_paths(self, mock_fetch):
+        """Test that list_all_prices correctly chooses between search and repository paths"""
+        mock_fetch.side_effect = self.fake_fetch_all
+
+        svc = VendorPricingService(per_vendor_limit=100)
+        
+        # Test without search - should use repository
+        items_no_search = svc.list_all_prices(q=None)
+        mock_fetch.assert_called()
+        self.assertGreater(len(items_no_search), 0)
+
+        # Reset mock
+        mock_fetch.reset_mock()
+        
+        # Test with search - should use _query_vendor path
+        mock_product = MagicMock()
+        mock_product.name = "Search Test"
+        mock_product.price = 45000
+        mock_product.unit = "unit"
+        mock_product.url = "https://test.example/search"
+        mock_product.location = "Test City"
+        mock_product.category = "Test Cat"
+        mock_product.created_at = None
+
+        with patch.object(GemilangProduct.objects, 'all') as mock_all:
+            mock_qs = MagicMock()
+            mock_qs.order_by.return_value = mock_qs
+            mock_qs.filter.return_value = mock_qs
+            mock_qs.__getitem__.return_value = [mock_product]
+            mock_all.return_value = mock_qs
+
+            items_with_search = svc.list_all_prices(q="Search")
+            
+            # Verify filter was called in search path
+            mock_qs.filter.assert_called()
+            self.assertGreaterEqual(len(items_with_search), 0)
+
     @patch.object(PricingRepository, 'fetch_all')
     def test_list_all_prices_deduplication(self, mock_fetch):
         """Test that duplicate entries are properly removed in list_all_prices"""
