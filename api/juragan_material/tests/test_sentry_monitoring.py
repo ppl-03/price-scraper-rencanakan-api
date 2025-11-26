@@ -355,13 +355,25 @@ class TestViewsIntegration(TestCase):
     @patch('api.juragan_material.views.JuraganMaterialTaskMonitor')
     @patch('api.juragan_material.views.JuraganMaterialSentryMonitor')
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')
-    @patch('api.juragan_material.views.validate_scraping_request')
+    @patch('api.juragan_material.views.InputValidator')
+    @patch('api.gemilang.security.AccessControlManager.validate_token')
     def test_scrape_products_with_monitoring(
-        self, mock_validate, mock_scraper, mock_monitor, mock_task, mock_transaction
+        self, mock_validate_token, mock_input_validator, mock_scraper, mock_monitor, mock_task, mock_transaction
     ):
         """Test scrape_products view has Sentry monitoring."""
-        # Setup mocks
-        mock_validate.return_value = ("test", True, 0, None)
+        # Setup security mocks
+        mock_validate_token.return_value = (True, '', {'name': 'test-token', 'permissions': ['read', 'write']})
+        
+        # Setup InputValidator mocks
+        mock_input_validator.validate_keyword.return_value = (True, None, 'test')
+        mock_input_validator.validate_integer_param.return_value = (True, 0, None)
+        mock_input_validator.validate_boolean_param.side_effect = [
+            (True, True, None),  # sort_by_price
+            (True, False, None)  # save_to_db
+        ]
+        mock_input_validator.sanitize_for_logging.return_value = 'test'
+        
+        # Setup scraper mocks
         mock_scraper_instance = Mock()
         mock_scraper.return_value = mock_scraper_instance
         
@@ -380,8 +392,9 @@ class TestViewsIntegration(TestCase):
         mock_task_instance = Mock()
         mock_task.return_value = mock_task_instance
         
-        # Create request
+        # Create request with security header
         request = self.factory.get('/scrape/', {'keyword': 'test', 'page': '0'})
+        request.headers = {'X-API-Token': 'test-token'}
         
         # Call view
         scrape_products(request)
@@ -397,11 +410,22 @@ class TestViewsIntegration(TestCase):
     @patch('api.juragan_material.views.JuraganMaterialTaskMonitor')
     @patch('api.juragan_material.views.JuraganMaterialSentryMonitor')
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')
+    @patch('api.juragan_material.views.InputValidator')
+    @patch('api.gemilang.security.AccessControlManager.validate_token')
     def test_scrape_and_save_with_monitoring(
-        self, mock_scraper, mock_monitor, mock_task, mock_transaction
+        self, mock_validate_token, mock_input_validator, mock_scraper, mock_monitor, mock_task, mock_transaction
     ):
         """Test scrape_and_save_products view has Sentry monitoring."""
-        # Setup mocks
+        # Setup security mocks
+        mock_validate_token.return_value = (True, '', {'name': 'test-token', 'permissions': ['read', 'write']})
+        
+        # Setup InputValidator mocks
+        mock_input_validator.validate_keyword.return_value = (True, None, 'test')
+        mock_input_validator.validate_sort_type.return_value = (True, 'cheapest', None)
+        mock_input_validator.validate_integer_param.return_value = (True, 0, None)
+        mock_input_validator.sanitize_for_logging.return_value = 'test'
+        
+        # Setup scraper mocks
         mock_scraper_instance = Mock()
         mock_scraper.return_value = mock_scraper_instance
         
@@ -420,8 +444,9 @@ class TestViewsIntegration(TestCase):
         mock_task_instance = Mock()
         mock_task.return_value = mock_task_instance
         
-        # Create request
+        # Create request with security header
         request = self.factory.get('/scrape-save/', {'keyword': 'test', 'page': '0'})
+        request.headers = {'X-API-Token': 'test-token'}
         
         # Call view
         scrape_and_save_products(request)
@@ -436,11 +461,24 @@ class TestViewsIntegration(TestCase):
     @patch('api.juragan_material.views.JuraganMaterialTaskMonitor')
     @patch('api.juragan_material.views.JuraganMaterialSentryMonitor')
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')
+    @patch('api.juragan_material.views.InputValidator')
+    @patch('api.gemilang.security.AccessControlManager.validate_token')
     def test_scrape_popularity_with_monitoring(
-        self, mock_scraper, mock_monitor, mock_task, mock_transaction
+        self, mock_validate_token, mock_input_validator, mock_scraper, mock_monitor, mock_task, mock_transaction
     ):
         """Test scrape_popularity view has Sentry monitoring."""
-        # Setup mocks
+        # Setup security mocks
+        mock_validate_token.return_value = (True, '', {'name': 'test-token', 'permissions': ['read', 'write']})
+        
+        # Setup InputValidator mocks
+        mock_input_validator.validate_keyword.return_value = (True, None, 'test')
+        mock_input_validator.validate_integer_param.side_effect = [
+            (True, 0, None),  # page
+            (True, 5, None)   # top_n
+        ]
+        mock_input_validator.sanitize_for_logging.return_value = 'test'
+        
+        # Setup scraper mocks
         mock_scraper_instance = Mock()
         mock_scraper.return_value = mock_scraper_instance
         
@@ -459,8 +497,9 @@ class TestViewsIntegration(TestCase):
         mock_task_instance = Mock()
         mock_task.return_value = mock_task_instance
         
-        # Create request
+        # Create request with security header
         request = self.factory.get('/scrape-popularity/', {'keyword': 'test', 'page': '0'})
+        request.headers = {'X-API-Token': 'test-token'}
         
         # Call view
         scrape_popularity(request)
@@ -476,13 +515,28 @@ class TestViewsIntegration(TestCase):
     @patch('api.juragan_material.views.JuraganMaterialTaskMonitor')
     @patch('api.juragan_material.views.JuraganMaterialSentryMonitor')
     @patch('api.juragan_material.views.create_juraganmaterial_scraper')
-    @patch('api.juragan_material.views.validate_scraping_request')
+    @patch('api.juragan_material.views.InputValidator')
+    @patch('api.gemilang.security.AccessControlManager.validate_token')
     def test_monitoring_on_error(
-        self, mock_validate, mock_scraper, mock_monitor, mock_task, mock_transaction
+        self, mock_validate_token, mock_input_validator, mock_scraper, mock_monitor, mock_task, mock_transaction
     ):
         """Test monitoring tracks errors properly."""
-        # Setup mocks to raise an exception
-        mock_validate.side_effect = Exception("Test error")
+        # Setup security mocks
+        mock_validate_token.return_value = (True, '', {'name': 'test-token', 'permissions': ['read', 'write']})
+        
+        # Setup InputValidator to succeed initially, then scraper to fail
+        mock_input_validator.validate_keyword.return_value = (True, None, 'test')
+        mock_input_validator.validate_integer_param.return_value = (True, 0, None)
+        mock_input_validator.validate_boolean_param.side_effect = [
+            (True, True, None),  # sort_by_price
+            (True, False, None)  # save_to_db
+        ]
+        mock_input_validator.sanitize_for_logging.return_value = 'test'
+        
+        # Setup mocks to raise an exception during scraping
+        mock_scraper_instance = Mock()
+        mock_scraper.return_value = mock_scraper_instance
+        mock_scraper_instance.scrape_products.side_effect = Exception("Test error")
         
         mock_transaction_ctx = MagicMock()
         mock_transaction.return_value.__enter__ = Mock(return_value=mock_transaction_ctx)
@@ -491,15 +545,16 @@ class TestViewsIntegration(TestCase):
         mock_task_instance = Mock()
         mock_task.return_value = mock_task_instance
         
-        # Create request
+        # Create request with security header
         request = self.factory.get('/scrape/', {'keyword': 'test'})
+        request.headers = {'X-API-Token': 'test-token'}
         
         # Call view - should handle exception
         scrape_products(request)
         
         # Verify error breadcrumb was added
         breadcrumb_calls = [str(call) for call in mock_monitor.add_breadcrumb.call_args_list]
-        has_error_breadcrumb = any("error" in call.lower() for call in breadcrumb_calls)
+        has_error_breadcrumb = any("error" in call.lower() or "fatal" in call.lower() for call in breadcrumb_calls)
         self.assertTrue(has_error_breadcrumb)
 
 

@@ -14,6 +14,7 @@ from .sentry_monitoring import (
     track_tokopedia_transaction,
     TokopediaTaskMonitor
 )
+from .security import require_api_token, enforce_resource_limits
 import logging
 import uuid
 import time
@@ -361,6 +362,8 @@ def _handle_scraping_result(result):
     return result, db_result
 
 
+@require_api_token(required_permission='scrape')
+@enforce_resource_limits
 @require_http_methods(["GET"])
 def scrape_products(request):
     """Scrape products with basic parameters (query, sort, page, limit)"""
@@ -482,6 +485,8 @@ def _parse_filter_parameters(request) -> Tuple[Optional[dict], Optional[JsonResp
     }, None
 
 
+@require_api_token(required_permission='scrape')
+@enforce_resource_limits
 @require_http_methods(["GET"])
 def scrape_products_with_filters(request):
     """Scrape products with advanced filters (price range, location, limit)"""
@@ -587,6 +592,8 @@ def scrape_products_with_filters(request):
             )
 
 
+@require_api_token(required_permission='scrape')
+@enforce_resource_limits
 @require_http_methods(["GET"])
 def scrape_products_ulasan(request):
     """Scrape products sorted by 'ulasan' (popularity/reviews).
