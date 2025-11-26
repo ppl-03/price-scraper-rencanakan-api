@@ -218,7 +218,7 @@ def _validate_scrape_parameters(request):
     # SECURITY: Validate page parameter
     page_raw = request.GET.get('page', '0')
     is_valid, page, error_msg = InputValidator.validate_integer_param(
-        page_raw, 'page', min_val=0, max_val=100
+        page_raw, 'page', min_val=None, max_val=100
     )
     
     if not is_valid:
@@ -279,7 +279,7 @@ def _validate_scrape_and_save_parameters(request):
     # SECURITY: Validate page parameter
     page_raw = request.GET.get('page', '0')
     is_valid, page, error_msg = InputValidator.validate_integer_param(
-        page_raw, 'page', min_val=0, max_val=100
+        page_raw, 'page', min_val=None, max_val=100
     )
     
     if not is_valid:
