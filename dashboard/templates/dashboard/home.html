@@ -816,10 +816,12 @@
 
     // ---------- Build data from table ----------
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
-      const data = allRows.map(tr => {
+    // Make data globally accessible for updates
+    window.tableData = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
-      const category = tr.dataset.category?.trim() || "Lainnya";
+      const categoryCell = tr.querySelector(".c-category");
+      const category = categoryCell?.dataset.category?.trim() || "Lainnya";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
         const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
       const priceNum = toNumber(priceText);
@@ -851,7 +853,7 @@
     // Populate vendor dropdown (for…of)
     const vendorSelect = document.getElementById("vendorSelect");
     const categorySelect = document.getElementById("categorySelect");
-    const uniqueVendors = [...new Set(data.map(d => d.vendor).filter(Boolean))].sort();
+    const uniqueVendors = [...new Set(window.tableData.map(d => d.vendor).filter(Boolean))].sort();
     for (const v of uniqueVendors) {
       const opt = document.createElement("option");
       opt.value = v; opt.textContent = v;
@@ -859,7 +861,7 @@
     }
     
     // Populate category dropdown (for…of)
-    const uniqueCategories = [...new Set(data.map(d => d.category).filter(Boolean))].sort();
+    const uniqueCategories = [...new Set(window.tableData.map(d => d.category).filter(Boolean))].sort();
     for (const c of uniqueCategories) {
       const opt = document.createElement("option");
       opt.value = c; opt.textContent = c;
@@ -873,7 +875,7 @@
     const locationsByVendor = {};
     
     // Group locations by vendor
-    for (const d of data) {
+    for (const d of window.tableData) {
       if (!locationsByVendor[d.vendor]) {
         locationsByVendor[d.vendor] = new Set();
       }
@@ -1003,7 +1005,7 @@
       const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
-      return data.filter(d => {
+      return window.tableData.filter(d => {
         const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q) || d.category.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
         const cm = !c || d.category === c;
@@ -1176,7 +1178,7 @@
       const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
       if (currentPage > pageCount) currentPage = pageCount;
       
-      updateResultsDisplay(rows.length, data.length);
+      updateResultsDisplay(rows.length, window.tableData.length);
 
       // Render tbody
       tbody.innerHTML = "";
@@ -1669,6 +1671,15 @@
           const categoryTextSpan = currentEditingProduct.categoryCell.querySelector('.category-text');
           categoryTextSpan.textContent = data.new_category;
           
+          // Update the data array to reflect the change
+          const dataIndex = allRows.indexOf(currentEditingProduct.row);
+          if (dataIndex !== -1 && window.tableData && window.tableData[dataIndex]) {
+            window.tableData[dataIndex].category = data.new_category;
+          }
+          
+          // Re-render to update filters and display
+          render();
+          
           // Close modal
           categoryEditModalInstance.hide();
           
@@ -1827,6 +1838,15 @@
           currentEditingProductUnit.unitCell.dataset.unit = data.new_unit;
           const unitTextSpan = currentEditingProductUnit.unitCell.querySelector('.unit-text');
           unitTextSpan.textContent = data.new_unit || '—';
+          
+          // Update the data array to reflect the change
+          const dataIndex = allRows.indexOf(currentEditingProductUnit.row);
+          if (dataIndex !== -1 && window.tableData && window.tableData[dataIndex]) {
+            window.tableData[dataIndex].unit = data.new_unit || '—';
+          }
+          
+          // Re-render to update filters and display
+          render();
           
           // Close modal
           unitEditModalInstance.hide();
