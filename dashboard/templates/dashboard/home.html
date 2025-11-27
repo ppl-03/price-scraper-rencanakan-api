@@ -747,8 +747,8 @@
 
       const httpIdx = raw.toLowerCase().indexOf("http error");
       if (httpIdx !== -1) {
-        const windowStr = raw.slice(httpIdx, httpIdx + 40);
-        const m = windowStr.match(/HTTP error\s+(\d{3})/i);
+        const globalThisStr = raw.slice(httpIdx, httpIdx + 40);
+        const m = globalThisStr.match(/HTTP error\s+(\d{3})/i);
         if (m) {
           const code = m[1];
           return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak tersedia (HTTP ${code}). Data dari vendor lain tetap ditampilkan. Coba lagi beberapa menit lagi.`;
@@ -817,7 +817,7 @@
     // ---------- Build data from table ----------
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
     // Make data globally accessible for updates
-    window.tableData = allRows.map(tr => {
+    globalThis.tableData = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
       const categoryCell = tr.querySelector(".c-category");
@@ -853,7 +853,7 @@
     // Populate vendor dropdown (for…of)
     const vendorSelect = document.getElementById("vendorSelect");
     const categorySelect = document.getElementById("categorySelect");
-    const uniqueVendors = [...new Set(window.tableData.map(d => d.vendor).filter(Boolean))].sort();
+    const uniqueVendors = [...new Set(globalThis.tableData.map(d => d.vendor).filter(Boolean))].sort();
     for (const v of uniqueVendors) {
       const opt = document.createElement("option");
       opt.value = v; opt.textContent = v;
@@ -861,7 +861,7 @@
     }
     
     // Populate category dropdown (for…of)
-    const uniqueCategories = [...new Set(window.tableData.map(d => d.category).filter(Boolean))].sort();
+    const uniqueCategories = [...new Set(globalThis.tableData.map(d => d.category).filter(Boolean))].sort();
     for (const c of uniqueCategories) {
       const opt = document.createElement("option");
       opt.value = c; opt.textContent = c;
@@ -875,7 +875,7 @@
     const locationsByVendor = {};
     
     // Group locations by vendor
-    for (const d of window.tableData) {
+    for (const d of globalThis.tableData) {
       if (!locationsByVendor[d.vendor]) {
         locationsByVendor[d.vendor] = new Set();
       }
@@ -1005,7 +1005,7 @@
       const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
-      return window.tableData.filter(d => {
+      return globalThis.tableData.filter(d => {
         const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q) || d.category.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
         const cm = !c || d.category === c;
@@ -1178,7 +1178,7 @@
       const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
       if (currentPage > pageCount) currentPage = pageCount;
       
-      updateResultsDisplay(rows.length, window.tableData.length);
+      updateResultsDisplay(rows.length, globalThis.tableData.length);
 
       // Render tbody
       tbody.innerHTML = "";
@@ -1673,8 +1673,8 @@
           
           // Update the data array to reflect the change
           const dataIndex = allRows.indexOf(currentEditingProduct.row);
-          if (dataIndex !== -1 && window.tableData && window.tableData[dataIndex]) {
-            window.tableData[dataIndex].category = data.new_category;
+          if (dataIndex !== -1 && globalThis.tableData && globalThis.tableData[dataIndex]) {
+            globalThis.tableData[dataIndex].category = data.new_category;
           }
           
           // Re-render to update filters and display
@@ -1841,8 +1841,8 @@
           
           // Update the data array to reflect the change
           const dataIndex = allRows.indexOf(currentEditingProductUnit.row);
-          if (dataIndex !== -1 && window.tableData && window.tableData[dataIndex]) {
-            window.tableData[dataIndex].unit = data.new_unit || '—';
+          if (dataIndex !== -1 && globalThis.tableData && globalThis.tableData[dataIndex]) {
+            globalThis.tableData[dataIndex].unit = data.new_unit || '—';
           }
           
           // Re-render to update filters and display
