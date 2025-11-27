@@ -9,6 +9,7 @@ from .url_builder_ulasan import TokopediaUrlBuilderUlasan
 from .http_client import TokopediaHttpClient
 from .html_parser import TokopediaHtmlParser
 from .scraper import TokopediaPriceScraper
+from .security import require_api_token, enforce_resource_limits
 import logging
 logger = logging.getLogger(__name__)
 
@@ -349,6 +350,8 @@ def _handle_scraping_result(result):
     return result, db_result
 
 
+@require_api_token(required_permission='scrape')
+@enforce_resource_limits
 @require_http_methods(["GET"])
 def scrape_products(request):
     """Scrape products with basic parameters (query, sort, page, limit)"""
@@ -412,6 +415,8 @@ def _parse_filter_parameters(request) -> Tuple[Optional[dict], Optional[JsonResp
     }, None
 
 
+@require_api_token(required_permission='scrape')
+@enforce_resource_limits
 @require_http_methods(["GET"])
 def scrape_products_with_filters(request):
     """Scrape products with advanced filters (price range, location, limit)"""
@@ -451,6 +456,8 @@ def scrape_products_with_filters(request):
         )
 
 
+@require_api_token(required_permission='scrape')
+@enforce_resource_limits
 @require_http_methods(["GET"])
 def scrape_products_ulasan(request):
     """Scrape products sorted by 'ulasan' (popularity/reviews).

@@ -37,12 +37,18 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         # start patches once per test, stop via addCleanup
         self.p_create_scraper = patch('api.depobangunan.views.create_depo_scraper')
         self.p_db_service_cls = patch('api.depobangunan.views.DepoBangunanDatabaseService')
+        self.p_security_validate = patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
 
         self.mock_create_scraper = self.p_create_scraper.start()
         self.mock_db_service_cls = self.p_db_service_cls.start()
+        self.mock_security_validate = self.p_security_validate.start()
+        
+        # By default, security validation passes
+        self.mock_security_validate.return_value = (True, "")
 
         self.addCleanup(self.p_create_scraper.stop)
         self.addCleanup(self.p_db_service_cls.stop)
+        self.addCleanup(self.p_security_validate.stop)
 
         # by default, create_scraper returns a mock with a stubbed scrape_products attr
         self.mock_scraper = MagicMock()
@@ -64,7 +70,7 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
             self.mock_db.save.side_effect = side_effect
 
     def post_json(self, data):
-        resp = self.client.post(self.url, data)
+        resp = self.client.post(self.url, data, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         # Return both raw response and parsed JSON for flexible assertions
         try:
             parsed = json.loads(resp.content)
@@ -184,9 +190,10 @@ class TestDepoBangunanScrapeAndSaveAPI(TestCase):
         self.given_scraper(success=True, products=[self.sample_product_1])
         self.given_db(save_return=True)
 
-        resp, _ = self.post_json({'keyword': 'semen & cat', 'sort_by_price': 'true', 'page': '0'})
+        # Use valid special characters allowed by security validator (hyphens, underscores, periods)
+        resp, _ = self.post_json({'keyword': 'semen-cat_test.material', 'sort_by_price': 'true', 'page': '0'})
         self.assertEqual(resp.status_code, 200)
-        self.mock_scraper.scrape_products.assert_called_with(keyword='semen & cat', sort_by_price=True, page=0)
+        self.mock_scraper.scrape_products.assert_called_with(keyword='semen-cat_test.material', sort_by_price=True, page=0)
 
     def test_scrape_and_save_large_page_number(self):
         self.given_scraper(success=True, products=[self.sample_product_1])

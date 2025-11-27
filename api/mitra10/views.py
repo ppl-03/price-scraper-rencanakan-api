@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .factory import create_mitra10_scraper, create_mitra10_location_scraper
 from .database_service import Mitra10DatabaseService
+from .security import SecurityDesignPatterns, enforce_resource_limits, validate_input, InputValidator, require_api_token
 from db_pricing.models import Mitra10Product
 from db_pricing.auto_categorization_service import AutoCategorizationService
 import logging
@@ -63,43 +64,26 @@ def _validate_api_token(request) -> tuple[bool, str]:
     return True, ''
 
 
+def _validate_sort_by_price(v):
+    """Validate sort_by_price parameter."""
+    if v is None:
+        return (True, '', True)
+    if isinstance(v, str) and v.lower() in ['true', '1', 'yes', 'false', '0', 'no']:
+        return InputValidator.validate_boolean(v, 'sort_by_price')
+    return (True, '', False)
+
 @require_http_methods(["GET"])
+@validate_input({
+    'q': lambda v: InputValidator.validate_keyword(v or '', max_length=100),
+    'page': lambda v: (False, 'page must be a valid integer', None) if v == '' else InputValidator.validate_integer(v or '0', 'page', min_value=0, max_value=1000),
+    'sort_by_price': _validate_sort_by_price
+})
+@enforce_resource_limits
 def scrape_products(request):
     try:
-        query = request.GET.get('q')
-        if query is None:
-            return JsonResponse({
-                'success': False,
-                'products': [],
-                'error_message': ERROR_QUERY_REQUIRED,
-                'url': ''
-            }, status=400)
-        
-        if not query.strip():
-            return JsonResponse({
-                'success': False,
-                'products': [],
-                'error_message': ERROR_QUERY_EMPTY,
-                'url': ''
-            }, status=400)
-        
-        query = query.strip()
-        
-        # Parse sort_by_price parameter
-        sort_by_price_param = request.GET.get('sort_by_price', 'true').lower()
-        sort_by_price = sort_by_price_param in ['true', '1', 'yes']
-        
-        # Parse page parameter
-        page_param = request.GET.get('page', '0')
-        try:
-            page = int(page_param)
-        except ValueError:
-            return JsonResponse({
-                'success': False,
-                'products': [],
-                'error_message': ERROR_PAGE_INVALID,
-                'url': ''
-            }, status=400)
+        query = request.validated_data.get('q')
+        page = request.validated_data.get('page', 0)
+        sort_by_price = request.validated_data.get('sort_by_price', True)
         
         # Create scraper and scrape products
         scraper = create_mitra10_scraper()
@@ -140,6 +124,7 @@ def scrape_products(request):
         }, status=500)
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_locations(request):
     """Django view to scrape Mitra10 store locations."""
     try:
@@ -193,34 +178,6 @@ def _create_error_response(error_message, status_code=400):
         'error_message': error_message
     }, status=status_code)
 
-
-def _validate_query_parameter(request):
-    """Validate and return query parameter."""
-    query = request.GET.get('q')
-    if query is None:
-        return None, _create_error_response(ERROR_QUERY_REQUIRED)
-    
-    if not query.strip():
-        return None, _create_error_response(ERROR_QUERY_EMPTY)
-    
-    return query.strip(), None
-
-
-def _parse_scraping_parameters(request):
-    """Parse and validate scraping parameters from request."""
-    sort_type = request.GET.get('sort_type', 'cheapest').lower()
-    sort_by_price_param = request.GET.get('sort_by_price', 'true').lower()
-    sort_by_price = sort_by_price_param in ['true', '1', 'yes']
-    
-    page_param = request.GET.get('page', '0')
-    try:
-        page = int(page_param)
-    except ValueError:
-        return None, _create_error_response(ERROR_PAGE_INVALID)
-    
-    return {'sort_type': sort_type, 'sort_by_price': sort_by_price, 'page': page}, None
-
-
 def _perform_scraping(query, params):
     """Execute scraping based on sort type."""
     scraper = create_mitra10_scraper()
@@ -268,21 +225,49 @@ def _format_products_data(products, location_value):
     return products_data
 
 
-@require_http_methods(["POST"])
-def scrape_and_save_products(request):
-    # Validate API token
-    is_valid, error_message = _validate_api_token(request)
-    if not is_valid:
-        return _create_error_response(error_message, status_code=401)
+def _auto_categorize_new_products(save_result):
+    """Auto-categorize newly inserted products."""
+    if not (save_result.get('success') and save_result.get('inserted', 0) > 0):
+        return 0
     
     try:
-        query, error_response = _validate_query_parameter(request)
-        if error_response:
-            return error_response
+        # Get recently inserted products (ones without category)
+        uncategorized_products = Mitra10Product.objects.filter(category='').order_by('-id')[:save_result['inserted']]
+        product_ids = list(uncategorized_products.values_list('id', flat=True))
         
-        params, error_response = _parse_scraping_parameters(request)
-        if error_response:
-            return error_response
+        if product_ids:
+            categorization_service = AutoCategorizationService()
+            categorization_result = categorization_service.categorize_products('mitra10', product_ids)
+            categorized_count = categorization_result.get('categorized', 0)
+            
+            logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new Mitra10 products")
+            return categorized_count
+    except Exception as cat_error:
+        logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+        # Don't fail the entire operation if categorization fails
+    
+    return 0
+
+
+@require_http_methods(["POST"])
+@require_api_token('write')
+@validate_input({
+    'q': lambda v: InputValidator.validate_keyword(v or '', max_length=100),
+    'page': lambda v: (False, 'page must be a valid integer', None) if v == '' else InputValidator.validate_integer(v or '0', 'page', min_value=0, max_value=1000),
+    'sort_type': lambda v: (True, '', (v or 'cheapest').lower()) if (v or 'cheapest').lower() in ['cheapest', 'popularity'] else (False, 'sort_type must be cheapest or popularity', None)
+})
+@enforce_resource_limits
+def scrape_and_save_products(request):
+    try:
+        query = request.validated_data.get('q')
+        page = request.validated_data.get('page', 0)
+        sort_type = request.validated_data.get('sort_type', 'cheapest')
+        
+        params = {
+            'sort_type': sort_type,
+            'sort_by_price': None,
+            'page': page
+        }
         
         try:
             result = _perform_scraping(query, params)
@@ -303,23 +288,7 @@ def scrape_and_save_products(request):
             logger.error(f"Database error: {str(e)}")
             return _create_error_response(f'Database error: {str(e)}', status_code=500)
         
-        # Auto-categorize newly inserted products
-        categorized_count = 0
-        if save_result.get('success') and save_result.get('inserted', 0) > 0:
-            try:                
-                # Get recently inserted products (ones without category)
-                uncategorized_products = Mitra10Product.objects.filter(category='').order_by('-id')[:save_result['inserted']]
-                product_ids = list(uncategorized_products.values_list('id', flat=True))
-                
-                if product_ids:
-                    categorization_service = AutoCategorizationService()
-                    categorization_result = categorization_service.categorize_products('mitra10', product_ids)
-                    categorized_count = categorization_result.get('categorized', 0)
-                    
-                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new Mitra10 products")
-            except Exception as cat_error:
-                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
-                # Don't fail the entire operation if categorization fails
+        _auto_categorize_new_products(save_result)
         
         logger.info(f"Mitra10 saved {save_result['inserted']} new, updated {save_result['updated']}, detected {len(save_result['anomalies'])} anomalies for query '{query}'")
         
@@ -337,39 +306,16 @@ def scrape_and_save_products(request):
         return _create_error_response(f'Internal server error: {str(e)}', status_code=500)
     
 @require_http_methods(["GET"])
+@validate_input({
+    'q': lambda v: InputValidator.validate_keyword(v or '', max_length=100),
+    'page': lambda v: (False, 'page must be a valid integer', None) if v == '' else InputValidator.validate_integer(v or '0', 'page', min_value=0, max_value=1000)
+})
+@enforce_resource_limits
 def scrape_popularity(request):
     """Scrape products sorted by popularity and return top 5 best sellers."""
     try:
-        query = request.GET.get('q')
-        if query is None:
-            return JsonResponse({
-                'success': False,
-                'products': [],
-                'error_message': ERROR_QUERY_REQUIRED,
-                'url': ''
-            }, status=400)
-        
-        if not query.strip():
-            return JsonResponse({
-                'success': False,
-                'products': [],
-                'error_message': ERROR_QUERY_EMPTY,
-                'url': ''
-            }, status=400)
-        
-        query = query.strip()
-        
-        # Parse page parameter
-        page_param = request.GET.get('page', '0')
-        try:
-            page = int(page_param)
-        except ValueError:
-            return JsonResponse({
-                'success': False,
-                'products': [],
-                'error_message': ERROR_PAGE_INVALID,
-                'url': ''
-            }, status=400)
+        query = request.validated_data.get('q')
+        page = request.validated_data.get('page', 0)
         
         # Create scraper and scrape top 5 products by popularity
         scraper = create_mitra10_scraper()

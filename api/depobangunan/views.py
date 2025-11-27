@@ -3,6 +3,15 @@ from django.views.decorators.http import require_http_methods
 from .factory import create_depo_scraper, create_depo_location_scraper
 from .database_service import DepoBangunanDatabaseService
 from db_pricing.auto_categorization_service import AutoCategorizationService
+from .security import (
+    SecurityDesignPatterns,
+    require_api_token,
+    validate_input,
+    enforce_resource_limits,
+    InputValidator,
+    AccessControlManager,
+    RateLimiter
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,6 +40,13 @@ def _save_products_to_database(products):
     try:
         # Convert products to dict format if needed
         products_data = _convert_products_to_dict(products)
+        
+        # Validate business logic for each product
+        for product_data in products_data:
+            is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product_data)
+            if not is_valid:
+                logger.warning(f"Product validation failed: {error_msg}")
+                return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0, 'error': error_msg}
         
         # Save to database with price update
         db_service = DepoBangunanDatabaseService()
@@ -117,30 +133,49 @@ def _convert_products(products, location_value):
     ]
 
 
+def _auto_categorize_products(product_count):
+    """Auto-categorize newly inserted products.
+    
+    Args:
+        product_count: Number of products to categorize
+        
+    Returns:
+        int: Number of products successfully categorized
+    """
+    try:
+        from db_pricing.models import DepoBangunanProduct
+        
+        # Get recently inserted products (ones without category)
+        uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:product_count]
+        product_ids = list(uncategorized_products.values_list('id', flat=True))
+        
+        if product_ids:
+            categorization_service = AutoCategorizationService()
+            categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
+            categorized_count = categorization_result.get('categorized', 0)
+            logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
+            return categorized_count
+    except Exception as cat_error:
+        logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+    
+    return 0
+
+
 def _save_products(db_service, products_data, use_price_update, result_url):
+    # Validate business logic for each product
+    for product_data in products_data:
+        is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product_data)
+        if not is_valid:
+            logger.warning(f"Product validation failed: {error_msg}")
+            return None, _create_error_response(f"Validation error: {error_msg}", 400)
+    
     if use_price_update:
         save_result = db_service.save_with_price_update(products_data)
         if not save_result.get('success'):
             return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
         
         # Auto-categorize newly inserted products
-        categorized_count = 0
-        if save_result.get('new_count', 0) > 0:
-            try:
-                from db_pricing.models import DepoBangunanProduct
-                
-                # Get recently inserted products (ones without category)
-                uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:save_result['new_count']]
-                product_ids = list(uncategorized_products.values_list('id', flat=True))
-                
-                if product_ids:
-                    categorization_service = AutoCategorizationService()
-                    categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
-                    categorized_count = categorization_result.get('categorized', 0)
-                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
-            except Exception as cat_error:
-                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
-                # Don't fail the entire operation if categorization fails
+        categorized_count = _auto_categorize_products(save_result.get('new_count', 0))
         
         return ({
             'success': True,
@@ -158,22 +193,7 @@ def _save_products(db_service, products_data, use_price_update, result_url):
         return None, _create_error_response(ERROR_SAVE_DB_FAILED, 500)
     
     # Auto-categorize newly saved products
-    categorized_count = 0
-    try:
-        from db_pricing.models import DepoBangunanProduct
-        
-        # Get recently inserted products (ones without category)
-        uncategorized_products = DepoBangunanProduct.objects.filter(category='').order_by('-id')[:len(products_data)]
-        product_ids = list(uncategorized_products.values_list('id', flat=True))
-        
-        if product_ids:
-            categorization_service = AutoCategorizationService()
-            categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
-            categorized_count = categorization_result.get('categorized', 0)
-            logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
-    except Exception as cat_error:
-        logger.warning(f"Auto-categorization failed: {str(cat_error)}")
-        # Don't fail the entire operation if categorization fails
+    categorized_count = _auto_categorize_products(len(products_data))
     
     return ({
         'success': True,
@@ -192,10 +212,17 @@ def _create_error_response(message, status=400):
 
 
 def _validate_and_parse_keyword(keyword):
-    """Validate and parse keyword parameter"""
+    """Validate and parse keyword parameter with security checks"""
     if not keyword or not keyword.strip():
         return None, _create_error_response(ERROR_KEYWORD_REQUIRED)
-    return keyword.strip(), None
+    
+    # Validate keyword for SQL injection and XSS
+    validator = InputValidator()
+    is_valid, error_msg, sanitized_keyword = validator.validate_keyword(keyword.strip())
+    if not is_valid:
+        return None, _create_error_response(error_msg)
+    
+    return sanitized_keyword, None
 
 
 def _parse_sort_by_price(sort_by_price_param):
@@ -281,6 +308,7 @@ def _convert_products_to_dict_with_sold_count(products):
 
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_products(request):
     try:
         # Validate and parse parameters
@@ -356,6 +384,7 @@ def scrape_products(request):
 
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def depobangunan_locations_view(request):
     """View function for fetching Depo Bangunan store locations"""
     try:
@@ -390,6 +419,8 @@ def depobangunan_locations_view(request):
 
 
 @require_http_methods(["POST"])
+@require_api_token(required_permission='write')
+@enforce_resource_limits
 def scrape_and_save_products(request):
     try:
         keyword, error = _validate_and_parse_keyword(request.POST.get('keyword'))
@@ -427,6 +458,7 @@ def scrape_and_save_products(request):
         return _create_error_response(ERROR_INTERNAL_SERVER, 500)
 
 @require_http_methods(["GET"])
+@enforce_resource_limits
 def scrape_popularity(request):
     """Scrape products sorted by popularity and return top N best sellers."""
     try:
@@ -484,6 +516,8 @@ def scrape_popularity(request):
 
 
 @require_http_methods(["POST"])
+@require_api_token(required_permission='write')
+@enforce_resource_limits
 def scrape_and_save_popularity(request):
     """Scrape products by popularity and save to database with location data."""
     try:

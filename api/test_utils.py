@@ -17,6 +17,7 @@ class BaseScraperAPITestCase(TestCase):
     endpoint_url = None
     patch_path = None
     scraper_name = None
+    api_token = 'dev-token-12345'  # Default API token for testing
     
     @classmethod
     def __subclasshook__(cls, candidate):
@@ -27,14 +28,19 @@ class BaseScraperAPITestCase(TestCase):
         if not self.endpoint_url or not self.patch_path or not self.scraper_name:
             self.skipTest("Base test case should not be run directly")
     
+    def get(self, url, data=None, **extra):
+        """Helper method to make GET requests with API token."""
+        extra['HTTP_X_API_TOKEN'] = self.api_token
+        return self.client.get(url, data, **extra)
+    
     def test_scrape_endpoint_exists(self):
         """Test that the scrape endpoint exists."""
-        response = self.client.get(self.endpoint_url)
+        response = self.get(self.endpoint_url)
         self.assertNotEqual(response.status_code, 404)
         
     def test_scrape_missing_keyword_returns_400(self):
         """Test that missing keyword parameter returns 400."""
-        response = self.client.get(self.endpoint_url)
+        response = self.get(self.endpoint_url)
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertIn('error', data)
@@ -56,7 +62,7 @@ class BaseScraperAPITestCase(TestCase):
             mock_scraper.scrape_products.return_value = mock_result
             mock_create_scraper.return_value = mock_scraper
             
-            response = self.client.get(self.endpoint_url, {'keyword': 'test'})
+            response = self.get(self.endpoint_url, {'keyword': 'test'})
             
             self.assertEqual(response.status_code, 200)
             data = json.loads(response.content)
@@ -87,7 +93,7 @@ class BaseScraperAPITestCase(TestCase):
             mock_scraper.scrape_products.return_value = mock_result
             mock_create_scraper.return_value = mock_scraper
             
-            response = self.client.get(self.endpoint_url, {
+            response = self.get(self.endpoint_url, {
                 'keyword': 'test',
                 'sort_by_price': 'false',
                 'page': '2'
@@ -113,7 +119,7 @@ class BaseScraperAPITestCase(TestCase):
             mock_scraper.scrape_products.return_value = mock_result
             mock_create_scraper.return_value = mock_scraper
             
-            response = self.client.get(self.endpoint_url, {'keyword': 'test'})
+            response = self.get(self.endpoint_url, {'keyword': 'test'})
             
             self.assertEqual(response.status_code, 200)
             data = json.loads(response.content)
@@ -124,7 +130,7 @@ class BaseScraperAPITestCase(TestCase):
 
     def test_scrape_invalid_page_parameter(self):
         """Test invalid page parameter returns 400."""
-        response = self.client.get(self.endpoint_url, {
+        response = self.get(self.endpoint_url, {
             'keyword': 'test',
             'page': 'invalid'
         })
@@ -141,7 +147,7 @@ class BaseScraperAPITestCase(TestCase):
             mock_scraper.scrape_products.side_effect = Exception("Unexpected error")
             mock_create_scraper.return_value = mock_scraper
             
-            response = self.client.get(self.endpoint_url, {'keyword': 'test'})
+            response = self.get(self.endpoint_url, {'keyword': 'test'})
             
             self.assertEqual(response.status_code, 500)
             data = json.loads(response.content)
@@ -155,14 +161,14 @@ class BaseScraperAPITestCase(TestCase):
         
     def test_empty_keyword_returns_400(self):
         """Test that empty keyword returns 400."""
-        response = self.client.get(self.endpoint_url, {'keyword': ''})
+        response = self.get(self.endpoint_url, {'keyword': ''})
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertEqual(data['error'], 'Keyword parameter is required')
         
     def test_whitespace_only_keyword_returns_400(self):
         """Test that whitespace-only keyword returns 400."""
-        response = self.client.get(self.endpoint_url, {'keyword': '   '})
+        response = self.get(self.endpoint_url, {'keyword': '   '})
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertEqual(data['error'], 'Keyword parameter is required')
@@ -175,7 +181,7 @@ class BaseScraperAPITestCase(TestCase):
             mock_scraper.scrape_products.return_value = mock_result
             mock_create_scraper.return_value = mock_scraper
             
-            response = self.client.get(self.endpoint_url, {
+            response = self.get(self.endpoint_url, {
                 'keyword': 'test',
                 'page': '-1'
             })
@@ -190,17 +196,17 @@ class BaseScraperAPITestCase(TestCase):
     def test_sort_by_price_variations(self):
         """Test various sort_by_price parameter values."""
         test_cases = [
-            ('1', True),
-            ('yes', True),
-            ('True', True),
-            ('false', False),
-            ('0', False),
-            ('no', False),
-            ('invalid', False),
-            ('', False)
+            ('1', True, 200),
+            ('yes', True, 200),
+            ('True', True, 200),
+            ('false', False, 200),
+            ('0', False, 200),
+            ('no', False, 200),
+            ('invalid', None, 400),  # Invalid values should return 400
+            ('', None, 400)  # Empty values should return 400
         ]
         
-        for sort_value, expected in test_cases:
+        for sort_value, expected, expected_status in test_cases:
             with self.subTest(sort_value=sort_value, expected=expected):
                 with patch(self.patch_path) as mock_create_scraper:
                     mock_scraper = Mock()
@@ -208,17 +214,22 @@ class BaseScraperAPITestCase(TestCase):
                     mock_scraper.scrape_products.return_value = mock_result
                     mock_create_scraper.return_value = mock_scraper
                     
-                    response = self.client.get(self.endpoint_url, {
+                    response = self.get(self.endpoint_url, {
                         'keyword': 'test',
                         'sort_by_price': sort_value
                     })
                     
-                    self.assertEqual(response.status_code, 200)
-                    mock_scraper.scrape_products.assert_called_once_with(
-                        keyword='test',
-                        sort_by_price=expected,
-                        page=0
-                    )
+                    self.assertEqual(response.status_code, expected_status)
+                    
+                    if expected_status == 200:
+                        mock_scraper.scrape_products.assert_called_once_with(
+                            keyword='test',
+                            sort_by_price=expected,
+                            page=0
+                        )
+                    else:
+                        # For validation errors, scraper should not be called
+                        mock_scraper.scrape_products.assert_not_called()
 
     def test_keyword_with_leading_trailing_spaces(self):
         """Test keyword trimming functionality."""
@@ -228,7 +239,7 @@ class BaseScraperAPITestCase(TestCase):
             mock_scraper.scrape_products.return_value = mock_result
             mock_create_scraper.return_value = mock_scraper
             
-            response = self.client.get(self.endpoint_url, {
+            response = self.get(self.endpoint_url, {
                 'keyword': '  test keyword  '
             })
             
