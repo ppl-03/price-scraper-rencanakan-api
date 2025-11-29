@@ -28,8 +28,8 @@
     
     /* Fixed column widths for consistent table layout */
     .table { table-layout: fixed; width: 100%; }
-    .table th:nth-child(1), .table td:nth-child(1) { width: 35%; } /* Nama Produk */
-    .table th:nth-child(2), .table td:nth-child(2) { width: 12%; } /* Kategori */
+    .table th:nth-child(1), .table td:nth-child(1) { width: 32%; } /* Nama Produk */
+    .table th:nth-child(2), .table td:nth-child(2) { width: 15%; } /* Kategori */
     .table th:nth-child(3), .table td:nth-child(3) { width: 12%; } /* Vendor */
     .table th:nth-child(4), .table td:nth-child(4) { width: 10%; } /* Harga */
     .table th:nth-child(5), .table td:nth-child(5) { width: 8%; }  /* Unit */
@@ -867,6 +867,30 @@
       opt.value = c; opt.textContent = c;
       categorySelect.appendChild(opt);
     }
+    
+    // Function to refresh category dropdown after edits
+    function refreshCategoryDropdown() {
+      const currentValue = categorySelect.value;
+      const uniqueCategories = [...new Set(globalThis.tableData.map(d => d.category).filter(Boolean))].sort();
+      
+      // Clear existing options except the first one (All categories)
+      while (categorySelect.options.length > 1) {
+        categorySelect.remove(1);
+      }
+      
+      // Repopulate with updated categories
+      for (const c of uniqueCategories) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        categorySelect.appendChild(opt);
+      }
+      
+      // Restore previous selection if it still exists
+      if (currentValue && [...categorySelect.options].some(opt => opt.value === currentValue)) {
+        categorySelect.value = currentValue;
+      }
+    }
 
     // Populate location dropdown with vendor grouping and submenus
     const locationSelect = document.getElementById("locationSelect");
@@ -1510,15 +1534,32 @@
             <p id="currentCategory" class="text-muted mb-2"></p>
           </div>
           <div class="mb-3">
-            <label for="newCategoryInput" class="form-label fw-bold">Kategori Baru:</label>
+            <label for="newCategorySelect" class="form-label fw-bold">Kategori Baru:</label>
+            <select class="form-select" id="newCategorySelect">
+              <option value="">-- Pilih Kategori --</option>
+              <option value="Baja dan Besi Tulangan">Baja dan Besi Tulangan</option>
+              <option value="Material Interior">Material Interior</option>
+              <option value="Tanah, Pasir, Batu, dan Semen">Tanah, Pasir, Batu, dan Semen</option>
+              <option value="Peralatan Kerja">Peralatan Kerja</option>
+              <option value="Material Pipa Air">Material Pipa Air</option>
+              <option value="Material Sanitair">Material Sanitair</option>
+              <option value="Material Listrik">Material Listrik</option>
+              <option value="Alat Berat">Alat Berat</option>
+              <option value="Lainnya">Lainnya</option>
+              <option value="__custom__">✏️ Tambah Kategori Sendiri...</option>
+            </select>
+            <div class="form-text">Pilih kategori yang sesuai untuk produk ini</div>
+            <div id="categoryError" class="text-danger mt-2" style="display: none;"></div>
+          </div>
+          <div class="mb-3" id="customCategoryContainer" style="display: none;">
+            <label for="customCategoryInput" class="form-label fw-bold">Nama Kategori Custom:</label>
             <input type="text" 
                    class="form-control" 
-                   id="newCategoryInput" 
+                   id="customCategoryInput" 
                    maxlength="100" 
-                   placeholder="Masukkan kategori baru..."
+                   placeholder="Masukkan nama kategori..."
                    autocomplete="off">
             <div class="form-text">Maksimal 100 karakter</div>
-            <div id="categoryError" class="text-danger mt-2" style="display: none;"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -1578,11 +1619,76 @@
         this.setAttribute('aria-pressed', 'false');
         editModeText.textContent = 'Edit Mode';
         console.log('Edit mode disabled');
+        
+        // Refresh the table to show all updates made during edit mode
+        render();
         showNotification('Mode edit dinonaktifkan', 'info');
       }
     });
 
     // ========== Category Edit Modal Functions ==========
+    
+    // Helper function to validate category input
+    function validateCategoryInput(newCategory, errorDiv) {
+      if (newCategory === '__custom__') {
+        const customValue = document.getElementById('customCategoryInput').value.trim();
+        if (!customValue) {
+          errorDiv.textContent = 'Silakan masukkan nama kategori custom';
+          errorDiv.style.display = 'block';
+          return { valid: false, category: null };
+        }
+        if (customValue.length > 100) {
+          errorDiv.textContent = 'Nama kategori tidak boleh lebih dari 100 karakter';
+          errorDiv.style.display = 'block';
+          return { valid: false, category: null };
+        }
+        return { valid: true, category: customValue };
+      }
+      
+      if (!newCategory) {
+        errorDiv.textContent = 'Silakan pilih kategori';
+        errorDiv.style.display = 'block';
+        return { valid: false, category: null };
+      }
+      
+      return { valid: true, category: newCategory };
+    }
+    
+    // Helper function to apply optimistic category update
+    function applyOptimisticCategoryUpdate(editingContext, newCategory) {
+      editingContext.categoryCell.dataset.category = newCategory;
+      const categoryTextSpan = editingContext.categoryCell.querySelector('.category-text');
+      categoryTextSpan.textContent = newCategory;
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].category = newCategory;
+      }
+      
+      refreshCategoryDropdown();
+      render();
+    }
+    
+    // Helper function to rollback category changes
+    function rollbackCategoryUpdate(editingContext, oldCategory, errorMessage) {
+      editingContext.categoryCell.dataset.category = oldCategory;
+      const categoryTextSpan = editingContext.categoryCell.querySelector('.category-text');
+      categoryTextSpan.textContent = oldCategory;
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].category = oldCategory;
+      }
+      
+      refreshCategoryDropdown();
+      render();
+      showNotification(errorMessage, 'danger');
+    }
+    
     function openCategoryEditModal(button) {
       if (!editModeEnabled) return;
       
@@ -1607,7 +1713,23 @@
       document.getElementById('editProductName').textContent = productName;
       document.getElementById('editVendor').textContent = vendor;
       document.getElementById('currentCategory').textContent = currentCategory;
-      document.getElementById('newCategoryInput').value = currentCategory;
+      
+      // Check if current category is in predefined list
+      const select = document.getElementById('newCategorySelect');
+      const predefinedCategories = ['Baja dan Besi Tulangan', 'Material Interior', 'Tanah, Pasir, Batu, dan Semen', 
+                                     'Peralatan Kerja', 'Material Pipa Air', 'Material Sanitair', 
+                                     'Material Listrik', 'Alat Berat', 'Lainnya'];
+      
+      if (predefinedCategories.includes(currentCategory)) {
+        select.value = currentCategory;
+        document.getElementById('customCategoryContainer').style.display = 'none';
+        document.getElementById('customCategoryInput').value = '';
+      } else {
+        select.value = '__custom__';
+        document.getElementById('customCategoryContainer').style.display = 'block';
+        document.getElementById('customCategoryInput').value = currentCategory;
+      }
+      
       document.getElementById('categoryError').style.display = 'none';
       
       // Show modal
@@ -1618,29 +1740,27 @@
       categoryEditModalInstance = new bootstrap.Modal(modalElement);
       categoryEditModalInstance.show();
       
-      // Focus on input
+      // Focus on select
       setTimeout(() => {
-        document.getElementById('newCategoryInput').focus();
-        document.getElementById('newCategoryInput').select();
+        document.getElementById('newCategorySelect').focus();
       }, 500);
     }
 
-    // Save category changes
+    // Save category changes 
     async function saveCategory() {
       if (!currentEditingProduct) return;
       
-      const newCategory = document.getElementById('newCategoryInput').value.trim();
       const errorDiv = document.getElementById('categoryError');
       const saveBtn = document.getElementById('saveCategoryBtn');
       const saveText = saveBtn.querySelector('.save-text');
       const saveSpinner = saveBtn.querySelector('.save-spinner');
       
-      // Validation
-      if (newCategory.length > 100) {
-        errorDiv.textContent = 'Kategori tidak boleh lebih dari 100 karakter';
-        errorDiv.style.display = 'block';
-        return;
-      }
+      // Validate input
+      let categoryInput = document.getElementById('newCategorySelect').value.trim();
+      const validation = validateCategoryInput(categoryInput, errorDiv);
+      if (!validation.valid) return;
+      
+      const newCategory = validation.category;
       
       // Show loading state
       saveBtn.disabled = true;
@@ -1648,6 +1768,19 @@
       saveSpinner.style.display = 'inline-block';
       errorDiv.style.display = 'none';
       
+      // Store context and old value
+      const oldCategory = currentEditingProduct.currentCategory;
+      const editingContext = currentEditingProduct;
+      currentEditingProduct = null;
+      
+      // Apply optimistic update
+      applyOptimisticCategoryUpdate(editingContext, newCategory);
+      
+      // Close modal and show success
+      categoryEditModalInstance.hide();
+      showNotification('Kategori berhasil diperbarui!', 'success');
+      
+      // Sync with server in background
       try {
         const csrftoken = getCookie('csrftoken');
         const response = await fetch('/api/category/update/', {
@@ -1657,47 +1790,21 @@
             'X-CSRFToken': csrftoken,
           },
           body: JSON.stringify({
-            source: currentEditingProduct.vendor,
-            product_url: currentEditingProduct.productUrl,
+            source: editingContext.vendor,
+            product_url: editingContext.productUrl,
             new_category: newCategory
           })
         });
         
         const data = await response.json();
         
-        if (data.success) {
-          // Update the UI
-          currentEditingProduct.categoryCell.dataset.category = data.new_category;
-          const categoryTextSpan = currentEditingProduct.categoryCell.querySelector('.category-text');
-          categoryTextSpan.textContent = data.new_category;
-          
-          // Update the data array to reflect the change
-          const dataIndex = allRows.indexOf(currentEditingProduct.row);
-          if (dataIndex !== -1 && globalThis.tableData && globalThis.tableData[dataIndex]) {
-            globalThis.tableData[dataIndex].category = data.new_category;
-          }
-          
-          // Re-render to update filters and display
-          render();
-          
-          // Close modal
-          categoryEditModalInstance.hide();
-          
-          // Show success message
-          showNotification('Kategori berhasil diperbarui!', 'success');
-          
-          // Reset
-          currentEditingProduct = null;
-        } else {
-          errorDiv.textContent = data.error || 'Gagal memperbarui kategori';
-          errorDiv.style.display = 'block';
+        if (!data.success) {
+          rollbackCategoryUpdate(editingContext, oldCategory, data.error || 'Gagal memperbarui kategori. Perubahan dibatalkan.');
         }
       } catch (error) {
         console.error('Error updating category:', error);
-        errorDiv.textContent = 'Terjadi kesalahan jaringan. Silakan coba lagi.';
-        errorDiv.style.display = 'block';
+        rollbackCategoryUpdate(editingContext, oldCategory, 'Terjadi kesalahan jaringan. Perubahan dibatalkan.');
       } finally {
-        // Reset button state
         saveBtn.disabled = false;
         saveText.textContent = 'Simpan Perubahan';
         saveSpinner.style.display = 'none';
@@ -1734,8 +1841,32 @@
       }, 5000);
     }
 
-    // Handle Enter key in category input
-    document.getElementById('newCategoryInput').addEventListener('keypress', function(e) {
+    // Handle category select change to show/hide custom input
+    document.getElementById('newCategorySelect').addEventListener('change', function(e) {
+      const customContainer = document.getElementById('customCategoryContainer');
+      const customInput = document.getElementById('customCategoryInput');
+      
+      if (this.value === '__custom__') {
+        customContainer.style.display = 'block';
+        setTimeout(() => {
+          customInput.focus();
+        }, 100);
+      } else {
+        customContainer.style.display = 'none';
+        customInput.value = '';
+      }
+    });
+    
+    // Handle Enter key in category select
+    document.getElementById('newCategorySelect').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveCategory();
+      }
+    });
+    
+    // Handle Enter key in custom category input
+    document.getElementById('customCategoryInput').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         saveCategory();
@@ -1751,6 +1882,40 @@
     });
 
     // ========== Unit Edit Modal Functions ==========
+    
+    // Helper function to apply optimistic unit update
+    function applyOptimisticUnitUpdate(editingContext, newUnit) {
+      editingContext.unitCell.dataset.unit = newUnit;
+      const unitTextSpan = editingContext.unitCell.querySelector('.unit-text');
+      unitTextSpan.textContent = newUnit || '—';
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].unit = newUnit || '—';
+      }
+      
+      render();
+    }
+    
+    // Helper function to rollback unit changes
+    function rollbackUnitUpdate(editingContext, oldUnit, errorMessage) {
+      editingContext.unitCell.dataset.unit = oldUnit;
+      const unitTextSpan = editingContext.unitCell.querySelector('.unit-text');
+      unitTextSpan.textContent = oldUnit || '—';
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].unit = oldUnit || '—';
+      }
+      
+      render();
+      showNotification(errorMessage, 'danger');
+    }
+    
     function openUnitEditModal(button) {
       if (!editModeEnabled) return;
       
@@ -1793,7 +1958,7 @@
       }, 500);
     }
 
-    // Save unit changes
+    // Save unit changes (Optimized for reduced complexity)
     async function saveUnit() {
       if (!currentEditingProductUnit) return;
       
@@ -1816,6 +1981,19 @@
       saveSpinner.style.display = 'inline-block';
       errorDiv.style.display = 'none';
       
+      // Store context and old value
+      const oldUnit = currentEditingProductUnit.currentUnit;
+      const editingContext = currentEditingProductUnit;
+      currentEditingProductUnit = null;
+      
+      // Apply optimistic update
+      applyOptimisticUnitUpdate(editingContext, newUnit);
+      
+      // Close modal and show success
+      unitEditModalInstance.hide();
+      showNotification('Unit berhasil diperbarui!', 'success');
+      
+      // Sync with server in background
       try {
         const csrftoken = getCookie('csrftoken');
         const response = await fetch('/api/unit/update/', {
@@ -1825,47 +2003,21 @@
             'X-CSRFToken': csrftoken,
           },
           body: JSON.stringify({
-            source: currentEditingProductUnit.vendor,
-            product_url: currentEditingProductUnit.productUrl,
+            source: editingContext.vendor,
+            product_url: editingContext.productUrl,
             new_unit: newUnit
           })
         });
         
         const data = await response.json();
         
-        if (data.success) {
-          // Update the UI
-          currentEditingProductUnit.unitCell.dataset.unit = data.new_unit;
-          const unitTextSpan = currentEditingProductUnit.unitCell.querySelector('.unit-text');
-          unitTextSpan.textContent = data.new_unit || '—';
-          
-          // Update the data array to reflect the change
-          const dataIndex = allRows.indexOf(currentEditingProductUnit.row);
-          if (dataIndex !== -1 && globalThis.tableData && globalThis.tableData[dataIndex]) {
-            globalThis.tableData[dataIndex].unit = data.new_unit || '—';
-          }
-          
-          // Re-render to update filters and display
-          render();
-          
-          // Close modal
-          unitEditModalInstance.hide();
-          
-          // Show success message
-          showNotification('Unit berhasil diperbarui!', 'success');
-          
-          // Reset
-          currentEditingProductUnit = null;
-        } else {
-          errorDiv.textContent = data.error || 'Gagal memperbarui unit';
-          errorDiv.style.display = 'block';
+        if (!data.success) {
+          rollbackUnitUpdate(editingContext, oldUnit, data.error || 'Gagal memperbarui unit. Perubahan dibatalkan.');
         }
       } catch (error) {
         console.error('Error updating unit:', error);
-        errorDiv.textContent = 'Terjadi kesalahan jaringan. Silakan coba lagi.';
-        errorDiv.style.display = 'block';
+        rollbackUnitUpdate(editingContext, oldUnit, 'Terjadi kesalahan jaringan. Perubahan dibatalkan.');
       } finally {
-        // Reset button state
         saveBtn.disabled = false;
         saveText.textContent = 'Simpan Perubahan';
         saveSpinner.style.display = 'none';
