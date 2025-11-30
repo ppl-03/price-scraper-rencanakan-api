@@ -343,7 +343,9 @@ class TestMitra10API(TestCase):
         # Assert
         self.assertEqual(response.status_code, 200)
         mock_logger.info.assert_called_once_with(
-            "Mitra10 scraping successful for query 'test': 2 products found"
+            "Mitra10 scraping successful for query '%s': %s products found",
+            'test', 2,
+            extra={'operation': 'scrape_products'}
         )
 
     @patch('api.mitra10.views.create_mitra10_scraper')
@@ -367,7 +369,9 @@ class TestMitra10API(TestCase):
         # Assert
         self.assertEqual(response.status_code, 200)
         mock_logger.info.assert_called_once_with(
-            "Mitra10 scraping successful for query 'test': 0 products found"
+            "Mitra10 scraping successful for query '%s': %s products found",
+            'test', 0,
+            extra={'operation': 'scrape_products'}
         )
 
     @patch('api.mitra10.views.create_mitra10_scraper')
