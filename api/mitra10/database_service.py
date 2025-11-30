@@ -2,9 +2,9 @@ from django.db import connection, transaction
 from django.utils import timezone
 from db_pricing.anomaly_service import PriceAnomalyService
 from .security import SecurityDesignPatterns
-import logging
+from .logging_utils import get_mitra10_logger
 
-logger = logging.getLogger(__name__)
+logger = get_mitra10_logger("database_service")
 
 class Mitra10DatabaseService:
     def _validate_data(self, data):
@@ -29,7 +29,10 @@ class Mitra10DatabaseService:
             # Business logic validation using SecurityDesignPatterns
             is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(item)
             if not is_valid:
-                logger.warning(f"Business logic validation failed: {error_msg}")
+                logger.warning(
+                    "Business logic validation failed: %s", error_msg,
+                    extra={"operation": "validate_data"}
+                )
                 return False, error_msg
         
         return True, ""
@@ -71,11 +74,10 @@ class Mitra10DatabaseService:
             if anomaly:
                 # Price change detected - save anomaly for admin approval
                 anomalies.append(anomaly)
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(
-                    f"Price anomaly detected for {item['name']}: "
-                    f"{existing_price} -> {new_price}. Pending admin approval."
+                    "Price anomaly detected for %s: %s -> %s. Pending admin approval.",
+                    item['name'], existing_price, new_price,
+                    extra={"operation": "update_price_if_needed"}
                 )
                 # Do NOT update price - wait for admin approval
                 return 0
@@ -114,9 +116,10 @@ class Mitra10DatabaseService:
         
         anomaly_result = PriceAnomalyService.save_anomalies('mitra10', anomalies)
         if not anomaly_result['success']:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+            logger.error(
+                "Failed to save some anomalies: %s", anomaly_result['errors'],
+                extra={"operation": "save_detected_anomalies"}
+            )
 
     # =========================
     # Public Methods

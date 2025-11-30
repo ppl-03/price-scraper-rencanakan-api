@@ -1,9 +1,9 @@
 import asyncio
-import logging
 from api.playwright_client import BatchPlaywrightClient
 from .location_parser import Mitra10LocationParser
+from .logging_utils import get_mitra10_logger
 
-logger = logging.getLogger(__name__)
+logger = get_mitra10_logger("location_scraper")
 
 class Mitra10LocationScraper:
     def scrape_locations(self):
@@ -19,7 +19,11 @@ class Mitra10LocationScraper:
                 "error_message": ""
             }
         except Exception as e:
-            logging.exception(f"Error while scraping Mitra10 locations: {e}")
+            logger.error(
+                "Error while scraping Mitra10 locations: %s",
+                e, exc_info=True,
+                extra={"operation": "scrape_locations"}
+            )
             return {
                 "success": False,
                 "locations": [],

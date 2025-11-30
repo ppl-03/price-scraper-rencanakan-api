@@ -1,10 +1,10 @@
 from typing import List
-import logging
 from api.core import BasePriceScraper
 from api.interfaces import IHttpClient, IUrlBuilder, IHtmlParser, Product, ScrapingResult
 from api.playwright_client import BatchPlaywrightClient
+from .logging_utils import get_mitra10_logger
 
-logger = logging.getLogger(__name__)
+logger = get_mitra10_logger("scraper")
 
 
 class Mitra10PriceScraper(BasePriceScraper):
@@ -23,7 +23,11 @@ class Mitra10PriceScraper(BasePriceScraper):
                 html_content = batch_client.get(url, timeout=60)
                 products = self.html_parser.parse_products(html_content)
             
-            logger.info(f"Successfully scraped {len(products)} products for keyword '{keyword}'")
+            logger.info(
+                "Successfully scraped %s products for keyword '%s'",
+                len(products), keyword,
+                extra={"operation": "scrape_products"}
+            )
             return ScrapingResult(
                 products=products,
                 success=True,
@@ -32,7 +36,11 @@ class Mitra10PriceScraper(BasePriceScraper):
             
         except Exception as e:
             error_msg = f"Scraping failed for keyword '{keyword}': {str(e)}"
-            logger.error(error_msg)
+            logger.error(
+                "Scraping failed for keyword '%s': %s",
+                keyword, str(e),
+                extra={"operation": "scrape_products"}
+            )
             return ScrapingResult(
                 products=[],
                 success=False,
@@ -75,7 +83,11 @@ class Mitra10PriceScraper(BasePriceScraper):
             # Get top N best sellers
             top_products = products_with_sales[:top_n]
             
-            logger.info(f"Successfully scraped {len(products)} products, returning top {len(top_products)} best sellers for keyword '{keyword}'")
+            logger.info(
+                "Successfully scraped %s products, returning top %s best sellers for keyword '%s'",
+                len(products), len(top_products), keyword,
+                extra={"operation": "scrape_by_popularity"}
+            )
             return ScrapingResult(
                 products=top_products,
                 success=True,
@@ -84,7 +96,11 @@ class Mitra10PriceScraper(BasePriceScraper):
             
         except Exception as e:
             error_msg = f"Scraping by popularity failed for keyword '{keyword}': {str(e)}"
-            logger.error(error_msg)
+            logger.error(
+                "Scraping by popularity failed for keyword '%s': %s",
+                keyword, str(e),
+                extra={"operation": "scrape_by_popularity"}
+            )
             return ScrapingResult(
                 products=[],
                 success=False,
