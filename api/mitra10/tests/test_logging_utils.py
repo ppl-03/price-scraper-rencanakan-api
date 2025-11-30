@@ -79,7 +79,7 @@ class Mitra10LoggerTest(TestCase):
     
     def test_process_adds_component_prefix(self):
         """Should add component to log message prefix."""
-        msg, kwargs = self.logger.process("Test message", {})
+        msg, _ = self.logger.process("Test message", {})
         self.assertIn("[mitra10]", msg)
         self.assertIn(f"[component={self.component}]", msg)
         self.assertIn("Test message", msg)
@@ -87,37 +87,37 @@ class Mitra10LoggerTest(TestCase):
     def test_process_adds_operation_from_extra(self):
         """Should add operation to prefix when provided in extra."""
         kwargs = {"extra": {"operation": "scrape_products"}}
-        msg, processed_kwargs = self.logger.process("Starting scrape", kwargs)
+        msg, _ = self.logger.process("Starting scrape", kwargs)
         self.assertIn("[op=scrape_products]", msg)
     
     def test_process_adds_operation_from_logger_extra(self):
         """Should use operation from logger's extra if not in kwargs."""
         logger = Mitra10Logger("scraper", extra={"operation": "default_op"})
-        msg, kwargs = logger.process("Test", {})
+        msg, _ = logger.process("Test", {})
         self.assertIn("[op=default_op]", msg)
     
     def test_process_sanitizes_message(self):
         """Should sanitize message content."""
-        msg, kwargs = self.logger.process("Message\nwith\nnewlines", {})
+        msg, _ = self.logger.process("Message\nwith\nnewlines", {})
         self.assertNotIn("\n", msg)
     
     def test_process_sanitizes_component(self):
         """Should sanitize component name."""
         logger = Mitra10Logger("component\nwith\nnewlines")
-        msg, kwargs = logger.process("Test", {})
+        msg, _ = logger.process("Test", {})
         self.assertNotIn("\n", msg)
     
     def test_process_sanitizes_operation(self):
         """Should sanitize operation name."""
         kwargs = {"extra": {"operation": "op\nwith\nnewlines"}}
-        msg, processed_kwargs = self.logger.process("Test", kwargs)
+        msg, _ = self.logger.process("Test", kwargs)
         self.assertNotIn("\n", msg)
     
     def test_process_merges_extra_context(self):
         """Should merge extra context from kwargs with logger extra."""
         logger = Mitra10Logger("scraper", extra={"static": "value"})
         kwargs = {"extra": {"dynamic": "data"}}
-        msg, processed_kwargs = logger.process("Test", kwargs)
+        _, processed_kwargs = logger.process("Test", kwargs)
         
         self.assertIn("static", processed_kwargs["extra"])
         self.assertIn("dynamic", processed_kwargs["extra"])
