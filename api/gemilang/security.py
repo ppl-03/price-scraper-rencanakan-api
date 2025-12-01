@@ -676,8 +676,12 @@ def validate_input(validators: Dict[str, callable]):
             errors, validated_data = _validate_fields(validators, data_source)
             
             if errors:
+                # Create a descriptive error message including field details
+                error_messages = [f"{field}: {msg}" for field, msg in errors.items()]
+                combined_error = "Validation failed - " + "; ".join(error_messages)
+                
                 return JsonResponse({
-                    'error': 'Validation failed',
+                    'error': combined_error,
                     'details': errors
                 }, status=400)
             
