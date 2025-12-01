@@ -30,7 +30,7 @@ class TestSanitizeLogInput(unittest.TestCase):
     def test_sanitize_non_string_returns_unchanged(self):
         """Test that non-string values are returned unchanged"""
         self.assertEqual(_sanitize_log_input(123), 123)
-        self.assertEqual(_sanitize_log_input(None), None)
+        self.assertIsNone(_sanitize_log_input(None))
         self.assertEqual(_sanitize_log_input([1, 2, 3]), [1, 2, 3])
         self.assertEqual(_sanitize_log_input({"key": "value"}), {"key": "value"})
     
@@ -71,14 +71,14 @@ class TestJuraganMaterialLogger(unittest.TestCase):
     def test_process_adds_component_prefix(self):
         """Test that process method adds component prefix"""
         logger = JuraganMaterialLogger("scraper")
-        msg, kwargs = logger.process("Test message", {})
+        msg, _ = logger.process("Test message", {})
         self.assertIn("[juragan_material][component=scraper]", msg)
         self.assertIn("Test message", msg)
     
     def test_process_adds_operation_prefix(self):
         """Test that process method adds operation prefix when provided"""
         logger = JuraganMaterialLogger("scraper")
-        msg, kwargs = logger.process("Test message", {"extra": {"operation": "parse_html"}})
+        msg, _ = logger.process("Test message", {"extra": {"operation": "parse_html"}})
         self.assertIn("[juragan_material][component=scraper]", msg)
         self.assertIn("[op=parse_html]", msg)
         self.assertIn("Test message", msg)
@@ -86,21 +86,21 @@ class TestJuraganMaterialLogger(unittest.TestCase):
     def test_process_sanitizes_message(self):
         """Test that process method sanitizes the message"""
         logger = JuraganMaterialLogger("scraper")
-        msg, kwargs = logger.process("Test\nmessage", {})
+        msg, _ = logger.process("Test\nmessage", {})
         self.assertNotIn("\n", msg)
         self.assertIn("Test message", msg)
     
     def test_process_sanitizes_component(self):
         """Test that component name is sanitized"""
         logger = JuraganMaterialLogger("test\ncomponent")
-        msg, kwargs = logger.process("Test message", {})
+        msg, _ = logger.process("Test message", {})
         self.assertNotIn("\n", msg)
         self.assertIn("component=test component", msg)
     
     def test_process_sanitizes_operation(self):
         """Test that operation name is sanitized"""
         logger = JuraganMaterialLogger("scraper")
-        msg, kwargs = logger.process("Test message", {"extra": {"operation": "parse\nhtml"}})
+        msg, _ = logger.process("Test message", {"extra": {"operation": "parse\nhtml"}})
         self.assertNotIn("\n", msg)
         self.assertIn("op=parse html", msg)
     
