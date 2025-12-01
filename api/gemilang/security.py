@@ -300,7 +300,7 @@ class InputValidator:
         
         # SQL injection detection
         if cls._detect_sql_injection(keyword):
-            logger.critical("SQL injection attempt detected in keyword: %s", keyword)
+            logger.critical("SQL injection attempt detected in keyword field")
             return False, "Invalid keyword format", None
         
         # HTML sanitization (defense in depth)
