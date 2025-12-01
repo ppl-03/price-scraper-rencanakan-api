@@ -60,6 +60,40 @@ class ScenarioContext:
 # Scenario 1: Complete Product Search with Location Enrichment
 # =============================================================================
 
+def _validate_product_structure(product: Dict[str, Any], idx: int) -> List[str]:
+    """Validate individual product structure and return errors."""
+    errors = []
+    required_fields = ['name', 'price', 'url', 'unit', 'location']
+    
+    for field in required_fields:
+        if field not in product:
+            errors.append(f"Product {idx} missing '{field}' field")
+    
+    # Validate price is numeric and positive
+    if 'price' in product:
+        try:
+            price = int(product['price'])
+            if price < 0:
+                errors.append(f"Product {idx} has negative price: {price}")
+        except (ValueError, TypeError):
+            errors.append(f"Product {idx} has invalid price format")
+    
+    return errors
+
+
+def _validate_response_structure(response_data: Dict[str, Any]) -> List[str]:
+    """Validate basic response structure and return errors."""
+    errors = []
+    
+    if 'success' not in response_data:
+        errors.append("Response missing 'success' field")
+    
+    if 'products' not in response_data:
+        errors.append("Response missing 'products' field")
+    
+    return errors
+
+
 def scenario_complete_product_search(
     context: ScenarioContext,
     keyword: str,
@@ -82,7 +116,6 @@ def scenario_complete_product_search(
     - Price data is validated and formatted correctly
     """
     start_time = datetime.now()
-    validation_errors = []
     
     # Execute request
     response = context.client.get(API_SCRAPE_ENDPOINT, {
@@ -94,32 +127,17 @@ def scenario_complete_product_search(
     response_data = json.loads(response.content) if response.content else {}
     
     # Validate response structure
-    if 'success' not in response_data:
-        validation_errors.append("Response missing 'success' field")
-    
-    if 'products' not in response_data:
-        validation_errors.append("Response missing 'products' field")
+    validation_errors = _validate_response_structure(response_data)
     
     # Validate product data structure
-    if response_data.get('products'):
-        for idx, product in enumerate(response_data['products']):
-            required_fields = ['name', 'price', 'url', 'unit', 'location']
-            for field in required_fields:
-                if field not in product:
-                    validation_errors.append(f"Product {idx} missing '{field}' field")
-            
-            # Validate price is numeric and positive
-            if 'price' in product:
-                try:
-                    price = int(product['price'])
-                    if price < 0:
-                        validation_errors.append(f"Product {idx} has negative price: {price}")
-                except (ValueError, TypeError):
-                    validation_errors.append(f"Product {idx} has invalid price format")
+    products = response_data.get('products', [])
+    for idx, product in enumerate(products):
+        validation_errors.extend(_validate_product_structure(product, idx))
     
     # Validate location enrichment occurred
-    if response_data.get('products') and response_data.get('success'):
-        has_location = any(p.get('location') for p in response_data['products'])
+    has_location = False
+    if products and response_data.get('success'):
+        has_location = any(p.get('location') for p in products)
         if not has_location:
             validation_errors.append("Products missing location enrichment")
     
@@ -134,8 +152,8 @@ def scenario_complete_product_search(
         execution_time_ms=execution_time,
         side_effects={
             'keyword_searched': keyword,
-            'products_returned': len(response_data.get('products', [])),
-            'location_enriched': has_location if response_data.get('products') else False
+            'products_returned': len(products),
+            'location_enriched': has_location
         }
     )
 
@@ -239,7 +257,7 @@ def scenario_invalid_input_rejection(
     if sort_by_price is not None:
         params['sort_by_price'] = sort_by_price
     
-    response = context.client.get('/api/gemilang/scrape/', params)
+    response = context.client.get(API_SCRAPE_ENDPOINT, params)
     response_data = json.loads(response.content) if response.content else {}
     
     # Validate error response structure
@@ -371,7 +389,7 @@ def scenario_price_data_persistence(
     side_effects = {}
     
     # Execute scraping request
-    response = context.client.get('/api/gemilang/scrape/', {'keyword': keyword})
+    response = context.client.get(API_SCRAPE_ENDPOINT, {'keyword': keyword})
     response_data = json.loads(response.content) if response.content else {}
     
     # Validate successful scraping
@@ -602,7 +620,7 @@ def scenario_price_change_detection(
     changes_detected = []
     
     # Scrape current prices
-    response = context.client.get('/api/gemilang/scrape/', {'keyword': keyword})
+    response = context.client.get(API_SCRAPE_ENDPOINT, {'keyword': keyword})
     response_data = json.loads(response.content) if response.content else {}
     
     if response.status_code != 200:
