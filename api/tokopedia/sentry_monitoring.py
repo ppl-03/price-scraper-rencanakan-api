@@ -65,70 +65,63 @@ class TokopediaSentryMonitor:
     @staticmethod
     def _capture_result_message(success: bool, success_msg: str, failure_msg: str):
         """Helper to capture appropriate message based on success."""
-        level = "info" if success else "warning"
-        message = success_msg if success else failure_msg
-        capture_message(message, level=level)
+        # Only capture messages for failures to reduce noise in Sentry.
+        if not success:
+            capture_message(failure_msg, level="warning")
     
     @staticmethod
     def track_scraping_result(result: Dict[str, Any]):
         """Track the result of a scraping operation."""
-        products_count = result.get('products_count', 0)
+        # Only record failures to reduce noise. Do not count successful products.
         success = result.get('success', False)
         errors_count = result.get('errors_count', 0)
-        
-        # Set metrics
-        measurements = {
-            "products_scraped": products_count,
-            "scraping_errors": errors_count
-        }
-        TokopediaSentryMonitor._set_measurements(measurements)
-        sentry_sdk.set_tag("scraping_success", str(success))
-        
-        # Add context
-        context = {
-            "products_found": products_count,
-            "success": success,
-            "errors": errors_count,
-            "timestamp": time.time()
-        }
-        sentry_sdk.set_context("scraping_result", context)
-        
-        # Log to Sentry
-        success_msg = f"Tokopedia scraping completed: {products_count} products found"
-        failure_msg = f"Tokopedia scraping failed with {errors_count} errors"
-        TokopediaSentryMonitor._capture_result_message(success, success_msg, failure_msg)
+
+        if not success:
+            # Set only error-related measurements
+            measurements = {
+                "scraping_errors": errors_count
+            }
+            TokopediaSentryMonitor._set_measurements(measurements)
+            sentry_sdk.set_tag("scraping_success", "False")
+
+            # Add context for failure
+            context = {
+                "success": False,
+                "errors": errors_count,
+                "timestamp": time.time()
+            }
+            sentry_sdk.set_context("scraping_result", context)
+
+            # Log failure to Sentry
+            failure_msg = f"Tokopedia scraping failed with {errors_count} errors"
+            TokopediaSentryMonitor._capture_result_message(False, "", failure_msg)
     
     @staticmethod
     def track_database_operation(operation: str, result: Dict[str, Any]):
         """Track database operation results."""
+        # Only record database failures to reduce noise.
         success = result.get('success', False)
-        inserted = result.get('inserted', 0)
-        updated = result.get('updated', 0)
         anomalies_count = len(result.get('anomalies', []))
-        
-        # Set metrics
-        measurements = {
-            "db_inserted": inserted,
-            "db_updated": updated,
-            "anomalies_detected": anomalies_count
-        }
-        TokopediaSentryMonitor._set_measurements(measurements)
-        
-        # Add context
-        context = {
-            "operation": operation,
-            "success": success,
-            "inserted": inserted,
-            "updated": updated,
-            "anomalies": anomalies_count,
-            "timestamp": time.time()
-        }
-        sentry_sdk.set_context("database_operation", context)
-        
-        # Log to Sentry
-        success_msg = f"Tokopedia database {operation} completed: {inserted} inserted, {updated} updated"
-        failure_msg = f"Tokopedia database {operation} failed"
-        TokopediaSentryMonitor._capture_result_message(success, success_msg, failure_msg)
+
+        if not success:
+            # Set only anomaly/error related measurements
+            measurements = {
+                "anomalies_detected": anomalies_count
+            }
+            TokopediaSentryMonitor._set_measurements(measurements)
+
+            # Add failure context
+            context = {
+                "operation": operation,
+                "success": False,
+                "anomalies": anomalies_count,
+                "timestamp": time.time()
+            }
+            sentry_sdk.set_context("database_operation", context)
+
+            # Log failure
+            failure_msg = f"Tokopedia database {operation} failed"
+            TokopediaSentryMonitor._capture_result_message(False, "", failure_msg)
 
 
 def monitor_tokopedia_function(operation_name: str, component: str = TokopediaSentryMonitor.COMPONENT_SCRAPER):
@@ -189,11 +182,9 @@ def _track_span_completion(span, execution_time: float, status: str, operation_n
     span.set_data("status", status)
     
     if status == "success":
-        TokopediaSentryMonitor.add_breadcrumb(
-            f"Completed {operation_name} in {execution_time:.2f}s",
-            category=f"tokopedia.{component}",
-            level="info"
-        )
+        # Do not emit breadcrumbs for successful operations to reduce Sentry noise.
+        # Only execution metadata is attached to the span; no Sentry events for success.
+        pass
     else:
         span.set_data("error_type", type(exception).__name__)
         
@@ -283,24 +274,22 @@ class TokopediaTaskMonitor:
     def complete(self, success: bool = True, result_data: Optional[Dict] = None):
         """Mark task as completed."""
         execution_time = time.time() - self.start_time
-        
-        sentry_sdk.set_measurement("task_duration", execution_time)
-        sentry_sdk.set_tag("task_status", "success" if success else "failed")
-        
-        level = "info" if success else "warning"
-        status = "success" if success else "failed"
-        
-        TokopediaSentryMonitor.add_breadcrumb(
-            f"Task completed: {self.task_id} ({status})",
-            category="task",
-            level=level,
-            data={
-                "execution_time": execution_time,
-                "result": result_data or {}
-            }
-        )
-        
-        capture_message(
-            f"Tokopedia task {self.task_id} completed in {execution_time:.2f}s",
-            level=level
-        )
+        # Only report to Sentry when the task failed to reduce noise.
+        if not success:
+            sentry_sdk.set_measurement("task_duration", execution_time)
+            sentry_sdk.set_tag("task_status", "failed")
+
+            TokopediaSentryMonitor.add_breadcrumb(
+                f"Task completed: {self.task_id} (failed)",
+                category="task",
+                level="warning",
+                data={
+                    "execution_time": execution_time,
+                    "result": result_data or {}
+                }
+            )
+
+            capture_message(
+                f"Tokopedia task {self.task_id} failed after {execution_time:.2f}s",
+                level="warning"
+            )
