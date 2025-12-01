@@ -1,6 +1,9 @@
 from django.db import transaction, connection
 from django.utils import timezone
 from db_pricing.anomaly_service import PriceAnomalyService
+from .logging_utils import get_depobangunan_logger
+
+logger = get_depobangunan_logger("database_service")
 
 
 class DepoBangunanDatabaseService:
@@ -63,9 +66,10 @@ class DepoBangunanDatabaseService:
             if anomaly:
                 # Price change detected - save anomaly for admin approval
                 anomalies.append(anomaly)
-                self.logger.warning(
+                logger.warning(
                     f"Price anomaly detected for {item['name']}: "
-                    f"{existing_price} -> {new_price}. Pending admin approval."
+                    f"{existing_price} -> {new_price}. Pending admin approval.",
+                    extra={"operation": "update_product_price"}
                 )
                 # Do NOT update price - wait for admin approval
                 return 0
@@ -127,7 +131,7 @@ class DepoBangunanDatabaseService:
         
         anomaly_result = PriceAnomalyService.save_anomalies('depobangunan', anomalies)
         if not anomaly_result['success']:
-            self.logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}", extra={"operation": "save_anomalies"})
 
     def save(self, data):
         """Bulk save products to database

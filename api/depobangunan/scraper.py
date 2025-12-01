@@ -1,10 +1,10 @@
-import logging
 from typing import Optional
 from api.core import BasePriceScraper
 from api.interfaces import IHttpClient, IUrlBuilder, IHtmlParser, Product, ScrapingResult
 from .unit_parser import DepoBangunanUnitParser
+from .logging_utils import get_depobangunan_logger
 
-logger = logging.getLogger(__name__)
+logger = get_depobangunan_logger("scraper")
 
 
 class DepoPriceScraper(BasePriceScraper):
@@ -56,7 +56,7 @@ class DepoPriceScraper(BasePriceScraper):
         try:
             # Build URL for popularity sorting
             url = self.url_builder.build_popularity_url(keyword, page)
-            logger.info(f"Scraping popularity products from: {url}")
+            logger.info(f"Scraping popularity products from: {url}", extra={"operation": "scrape_popularity"})
             
             # Fetch HTML content
             html_content = self.http_client.get(url, timeout=30)
@@ -80,11 +80,11 @@ class DepoPriceScraper(BasePriceScraper):
                 products_with_sales.sort(key=lambda x: x.sold_count, reverse=True)
                 # Get top N products
                 top_products = products_with_sales[:top_n]
-                logger.info(f"Found {len(products_with_sales)} products with sales data, returning top {len(top_products)}")
+                logger.info(f"Found {len(products_with_sales)} products with sales data, returning top {len(top_products)}", extra={"operation": "scrape_popularity"})
             else:
                 # No products have sold_count, just return first top_n products
                 top_products = products[:top_n]
-                logger.warning(f"No products with sold_count found, returning first {len(top_products)} products")
+                logger.warning(f"No products with sold_count found, returning first {len(top_products)} products", extra={"operation": "scrape_popularity"})
             
             return ScrapingResult(
                 products=top_products,
@@ -95,7 +95,7 @@ class DepoPriceScraper(BasePriceScraper):
             
         except Exception as e:
             error_msg = f"Failed to scrape popularity products: {str(e)}"
-            logger.error(error_msg)
+            logger.error(error_msg, extra={"operation": "scrape_popularity"})
             return ScrapingResult(
                 products=[],
                 success=False,

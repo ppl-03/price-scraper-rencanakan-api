@@ -256,7 +256,7 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
             'keyword': 'semen',
             'sort_type': 'cheapest',
             'page': 0
-        })
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -290,7 +290,7 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
             'keyword': 'semen',
             'sort_type': 'popularity',
             'page': 0
-        })
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -324,7 +324,7 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
         response = self.client.post(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_type': 'popularity'
-        })
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 200)
         # Check that products are sorted correctly (highest sold_count first)
@@ -373,7 +373,7 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
             'keyword': 'semen',
             'sort_type': 'cheapest',
             'use_price_update': 'true'
-        })
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -388,7 +388,7 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
         response = self.client.post(self.scrape_and_save_url, {
             'keyword': 'semen',
             'sort_type': 'invalid'
-        })
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -404,7 +404,7 @@ class TestScrapeAndSaveWithSortType(DepoBangunanPopularitySortingTests):
         response = self.client.post(self.scrape_and_save_url, {
             'keyword': 'nonexistent',
             'sort_type': 'cheapest'
-        })
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 200)
         data = response.json()

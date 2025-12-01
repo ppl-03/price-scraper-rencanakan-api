@@ -241,15 +241,16 @@ class DepoBangunanAPITest(TestCase):
         
         mock_scraper.scrape_products.return_value = mock_result
         
+        # Use valid special characters (hyphens, underscores, periods allowed by security validator)
         response = self.client.get(self.scrape_url, {
-            'keyword': 'cat & dog',
+            'keyword': 'cat-dog_test.material',
             'sort_by_price': 'true',
             'page': '0'
         })
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products.assert_called_with(
-            keyword='cat & dog',
+            keyword='cat-dog_test.material',
             sort_by_price=True,
             page=0
         )
@@ -811,9 +812,6 @@ class TestDepoBangunanScrapeLocationNames(TestCase):
         # Verify empty string returned
         self.assertEqual(result, '')
     
-    @patch('api.depobangunan.views.create_depo_location_scraper')
-    def test_scrape_location_names_failure(self, mock_create_scraper):
-        pass
 
 
 class TestDepoBangunanSecurityValidation(TestCase):
@@ -868,7 +866,7 @@ class TestDepoBangunanSecurityValidation(TestCase):
             'keyword': 'cement',
             'sort_by_price': 'true',
             'page': '0'
-        })
+        }, HTTP_AUTHORIZATION='depobangunan-dev-token-xyz789')
         
         self.assertEqual(response.status_code, 400)
         response_data = json.loads(response.content)
@@ -893,3 +891,215 @@ class TestDepoBangunanScrapeLocationNamesOriginal(TestCase):
         
         # Verify empty string returned
         self.assertEqual(result, '')
+
+
+class TestDepoBangunanViewsCoverageImprovement(TestCase):
+    """Additional tests to improve coverage of views.py to 100%"""
+    
+    def setUp(self):
+        self.client = Client()
+    
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
+    @patch('api.depobangunan.views.DepoBangunanDatabaseService')
+    def test_save_products_validation_failure_returns_error(self, mock_db_service_cls, mock_validate):
+        """Test _save_products_to_database when business logic validation fails (lines 61-62)"""
+        from api.depobangunan.views import _save_products_to_database
+        
+        # Mock validation to fail
+        mock_validate.return_value = (False, "Invalid price: must be positive")
+        
+        # Create test products
+        products = [create_mock_product("Test", 0, "https://test.com", "PCS")] 
+        
+        result = _save_products_to_database(products)
+        
+        # Verify error is returned
+        self.assertFalse(result['success'])
+        self.assertEqual(result['updated'], 0)
+        self.assertEqual(result['inserted'], 0)
+        self.assertIn('error', result)
+        self.assertEqual(result['error'], "Invalid price: must be positive")
+    
+    @patch('api.depobangunan.views.AutoCategorizationService')
+    @patch('api.depobangunan.views.SecurityDesignPatterns.validate_business_logic')
+    @patch('api.depobangunan.views.DepoBangunanDatabaseService')
+    def test_save_products_categorization_db_query_exception(self, mock_db_service_cls, mock_validate, mock_cat_service_cls):
+        """Test _save_products_to_database when querying uncategorized products raises exception (lines 83-84)"""
+        from api.depobangunan.views import _save_products_to_database
+        
+        # Mock validation to succeed
+        mock_validate.return_value = (True, "")
+        
+        # Mock database service
+        mock_db_service = MagicMock()
+        mock_db_service.save_with_price_update.return_value = {
+            'success': True,
+            'updated': 0,
+            'new_count': 5,
+            'total_count': 5
+        }
+        mock_db_service_cls.return_value = mock_db_service
+        
+        # Mock DepoBangunanProduct.objects.filter to raise exception
+        with patch('db_pricing.models.DepoBangunanProduct') as mock_product_model:
+            mock_product_model.objects.filter.side_effect = Exception("Database query failed")
+            
+            products = [create_mock_product("Test", 5000, "https://test.com", "PCS")] 
+            result = _save_products_to_database(products)
+            
+            # Should continue despite categorization failure
+            self.assertTrue(result['success'])
+            self.assertEqual(result['categorized'], 0)
+    
+    @patch('api.depobangunan.views.InputValidator')
+    def test_validate_and_parse_keyword_validation_fails(self, mock_validator_cls):
+        """Test _validate_and_parse_keyword when validator returns is_valid=False (line 188)"""
+        from api.depobangunan.views import _validate_and_parse_keyword
+        
+        # Mock validator to fail
+        mock_validator = MagicMock()
+        mock_validator.validate_keyword.return_value = (False, "SQL injection detected", None)
+        mock_validator_cls.return_value = mock_validator
+        
+        keyword, error = _validate_and_parse_keyword("malicious'; DROP TABLE--")
+        
+        # Verify error response is returned
+        self.assertIsNone(keyword)
+        self.assertIsNotNone(error)
+        self.assertEqual(error.status_code, 400)
+    
+    def test_parse_page_with_invalid_value(self):
+        """Test _parse_page with non-numeric value (line 236)"""
+        from api.depobangunan.views import _parse_page
+        
+        page, error = _parse_page("not_a_number")
+        
+        # Verify error response is returned
+        self.assertIsNone(page)
+        self.assertIsNotNone(error)
+        self.assertEqual(error.status_code, 400)
+    
+    def test_parse_top_n_with_zero_value(self):
+        """Test _parse_top_n with zero value (line 245)"""
+        from api.depobangunan.views import _parse_top_n
+        
+        top_n, error = _parse_top_n("0")
+        
+        # Verify error response is returned
+        self.assertIsNone(top_n)
+        self.assertIsNotNone(error)
+        self.assertEqual(error.status_code, 400)
+    
+    def test_parse_top_n_with_negative_value(self):
+        """Test _parse_top_n with negative value (line 245)"""
+        from api.depobangunan.views import _parse_top_n
+        
+        top_n, error = _parse_top_n("-5")
+        
+        # Verify error response is returned
+        self.assertIsNone(top_n)
+        self.assertIsNotNone(error)
+        self.assertEqual(error.status_code, 400)
+    
+    def test_parse_top_n_with_invalid_value(self):
+        """Test _parse_top_n with non-numeric value (line 261)"""
+        from api.depobangunan.views import _parse_top_n
+        
+        top_n, error = _parse_top_n("invalid")
+        
+        # Verify error response is returned
+        self.assertIsNone(top_n)
+        self.assertIsNotNone(error)
+        self.assertEqual(error.status_code, 400)
+    
+    @patch('api.depobangunan.views.create_depo_location_scraper')
+    def test_scrape_location_names_exception_during_scraping(self, mock_create_scraper):
+        """Test _scrape_location_names when exception occurs during scraping (lines 381-384)"""
+        from api.depobangunan.views import _scrape_location_names
+        
+        # Mock scraper to raise exception
+        mock_scraper = MagicMock()
+        mock_scraper.scrape_locations.side_effect = Exception("Network timeout")
+        mock_create_scraper.return_value = mock_scraper
+        
+        result = _scrape_location_names()
+        
+        # Verify empty string is returned on exception
+        self.assertEqual(result, '')
+    
+    @patch('api.depobangunan.views.create_depo_scraper')
+    @patch('api.depobangunan.views.enforce_resource_limits')
+    def test_scrape_popularity_validation_error_return(self, mock_enforce_limits, mock_create_scraper):
+        """Test scrape_popularity when validation returns error (line 714)"""
+        mock_enforce_limits.side_effect = lambda f: f
+        
+        # Test with missing keyword
+        response = self.client.get('/api/depobangunan/scrape-popularity/')
+        
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+    
+    @patch('api.depobangunan.views.create_depo_scraper')
+    @patch('api.depobangunan.views.enforce_resource_limits')
+    def test_scrape_popularity_unexpected_exception(self, mock_enforce_limits, mock_create_scraper):
+        """Test scrape_popularity exception handling (lines 816-829)"""
+        mock_enforce_limits.side_effect = lambda f: f
+        
+        # Mock scraper to raise exception
+        mock_scraper = MagicMock()
+        mock_scraper.scrape_popularity_products.side_effect = Exception("Unexpected error")
+        mock_create_scraper.return_value = mock_scraper
+        
+        response = self.client.get('/api/depobangunan/scrape-popularity/', {
+            'keyword': 'cement',
+            'page': '0',
+            'top_n': '5'
+        })
+        
+        self.assertEqual(response.status_code, 500)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+    
+    def test_scrape_and_save_popularity_endpoint_not_tested(self):
+        """Note: scrape_and_save_popularity endpoint doesn't exist in urls.py
+        
+        Lines 837-904 contain the scrape_and_save_popularity view function,
+        but this endpoint is not registered in urls.py and is therefore unreachable.
+        These lines cannot be covered by tests until the endpoint is registered.
+        """
+        # This test documents that the endpoint is not registered in urls.py
+        pass
+    
+    @patch('api.depobangunan.views.create_depo_scraper')
+    @patch('api.depobangunan.views.enforce_resource_limits')
+    def test_scrape_popularity_top_n_validation_errors(self, mock_enforce_limits, mock_create_scraper):
+        """Test scrape_popularity endpoint with invalid top_n to trigger validation error returns (line 714, 245)"""
+        mock_enforce_limits.side_effect = lambda f: f
+        
+        # Test with zero top_n (line 245)
+        response = self.client.get('/api/depobangunan/scrape-popularity/', {
+            'keyword': 'cement',
+            'top_n': '0'
+        })
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+        
+        # Test with negative top_n (line 245)  
+        response = self.client.get('/api/depobangunan/scrape-popularity/', {
+            'keyword': 'cement',
+            'top_n': '-5'
+        })
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)
+        
+        # Test with invalid top_n (line 714)
+        response = self.client.get('/api/depobangunan/scrape-popularity/', {
+            'keyword': 'cement',
+            'top_n': 'invalid'
+        })
+        self.assertEqual(response.status_code, 400)
+        response_data = json.loads(response.content)
+        self.assertIn('error', response_data)

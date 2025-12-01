@@ -400,5 +400,234 @@ class TestUnitParserPCSDefault(unittest.TestCase):
                 self.assertEqual(result, 'PCS')
 
 
+class TestDepoBangunanUnitExtractorEdgeCases(unittest.TestCase):
+    """Test edge cases and error handling for 100% coverage"""
+    
+    def setUp(self):
+        self.extractor = DepoBangunanUnitExtractor()
+        self.parser = DepoBangunanUnitParser()
+    
+    def test_extract_unit_from_name_with_long_product_name(self):
+        """Test handling of very long product names - covers lines 78-79"""
+        long_name = "A" * 1500 + " CEMENT 50KG"
+        with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+            self.extractor.extract_unit_from_name(long_name)
+            # The name is truncated to 1000 chars, should still work
+            mock_log.assert_called_once()
+            self.assertIn("Product name too long", mock_log.call_args[0][0])
+    
+    def test_extract_unit_from_specification_with_long_spec_text(self):
+        """Test handling of very long specification text - covers lines 112-113"""
+        long_spec = "A" * 600 + "KG"
+        with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+            self.extractor.extract_unit_from_specification(long_spec)
+            # May or may not extract unit, but should log warning
+            mock_log.assert_called_once()
+            self.assertIn("Specification text too long", mock_log.call_args[0][0])
+    
+    def test_extract_unit_from_specification_exception_handling(self):
+        """Test exception handling in extract_unit_from_specification - covers lines 147-149"""
+        # Create a mock pattern that raises exception
+        mock_pattern = Mock()
+        mock_pattern.search.side_effect = Exception("Test error")
+        
+        # Temporarily replace the pattern
+        original_pattern = self.extractor._SPEC_UNIT_PATTERN
+        self.extractor._SPEC_UNIT_PATTERN = mock_pattern
+        
+        try:
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.extractor.extract_unit_from_specification("50KG")
+                self.assertIsNone(result)
+                mock_log.assert_called_once()
+                self.assertIn("Error extracting unit from specification", mock_log.call_args[0][0])
+        finally:
+            # Restore original pattern
+            self.extractor._SPEC_UNIT_PATTERN = original_pattern
+    
+    def test_extract_unit_from_name_exception_handling(self):
+        """Test exception handling in extract_unit_from_name"""
+        # This will trigger an exception in the processing
+        with patch.object(self.extractor, '_extract_area_unit', side_effect=Exception("Test error")):
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.extractor.extract_unit_from_name("Test Product 50KG")
+                self.assertIsNone(result)
+                mock_log.assert_called_once()
+                self.assertIn("Error extracting unit", mock_log.call_args[0][0])
+    
+    def test_extract_by_priority_patterns_timeout_error(self):
+        """Test TimeoutError handling in _extract_by_priority_patterns - covers lines 224-225"""
+        # Mock compiled pattern to raise TimeoutError
+        mock_pattern = Mock()
+        mock_pattern.search.side_effect = TimeoutError("Regex timeout")
+        
+        self.extractor._compiled_patterns = {'KG': mock_pattern}
+        
+        with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+            self.extractor._extract_by_priority_patterns("test 50kg")
+            # Should continue to next pattern or return None
+            mock_log.assert_called()
+            self.assertIn("Regex timeout", mock_log.call_args[0][0])
+    
+    def test_extract_by_priority_patterns_general_exception(self):
+        """Test general exception handling in _extract_by_priority_patterns - covers lines 228-230"""
+        # Create a scenario that causes exception in the try block
+        original_priority_order = self.extractor.priority_order
+        self.extractor.priority_order = None  # This will cause TypeError when iterating
+        
+        with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+            result = self.extractor._extract_by_priority_patterns("test")
+            self.assertIsNone(result)
+            mock_log.assert_called_once()
+            self.assertIn("Error in priority pattern extraction", mock_log.call_args[0][0])
+        
+        # Restore
+        self.extractor.priority_order = original_priority_order
+    
+    def test_parse_unit_from_detail_page_exception_handling(self):
+        """Test exception handling in parse_unit_from_detail_page - covers lines 282-284"""
+        # Create invalid HTML that will cause an exception in parsing
+        invalid_html = None
+        
+        with patch('api.depobangunan.unit_parser.logger.warning'):
+            result = self.parser.parse_unit_from_detail_page(invalid_html)
+            self.assertEqual(result, 'PCS')  # Should default to PCS on error
+            # Logger may be called for the error
+    
+    def test_extract_unit_from_table_exception_handling(self):
+        """Test exception handling in _extract_unit_from_table - covers lines 303-306"""
+        from bs4 import BeautifulSoup
+        
+        # Create a mock table that will cause an exception
+        html = '<table><tr><td>Test</td></tr></table>'
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        
+        # Mock the find_all to raise an exception
+        with patch.object(table, 'find_all', side_effect=Exception("Test error")):
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.parser._extract_unit_from_table(table)
+                self.assertIsNone(result)
+                mock_log.assert_called_once()
+                self.assertIn("Error extracting unit from table", mock_log.call_args[0][0])
+    
+    def test_extract_unit_near_element_exception_handling(self):
+        """Test exception handling in _extract_unit_near_element - covers lines 320-329"""
+        from bs4 import BeautifulSoup
+        
+        # Create a scenario where getting text fails
+        html = '<div>Test<span>KG</span></div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        element = soup.find('div')
+        
+        # Mock the extractor method to raise an exception
+        with patch.object(self.parser.extractor, 'extract_unit_from_specification', side_effect=Exception("Test error")):
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.parser._extract_unit_near_element(element)
+                self.assertIsNone(result)
+                mock_log.assert_called_once()
+                self.assertIn("Error extracting unit near element", mock_log.call_args[0][0])
+    
+    def test_extract_unit_near_element_with_siblings(self):
+        """Test extracting unit from sibling elements - covers sibling iteration logic"""
+        from bs4 import BeautifulSoup
+        
+        html = '<div>Size:<span>50KG</span></div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        element = soup.find('div')
+        
+        # This should extract unit from the sibling - result may vary but shouldn't crash
+        self.parser._extract_unit_near_element(element)
+    
+    def test_extract_unit_near_element_from_parent(self):
+        """Test extracting unit from parent element"""
+        from bs4 import BeautifulSoup
+        
+        html = '<div>50KG<span></span></div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        element = soup.find('span')
+        
+        # Should check parent for unit - result may vary but shouldn't crash
+        self.parser._extract_unit_near_element(element)
+    
+    def test_extract_unit_near_element_no_unit_found(self):
+        """Test _extract_unit_near_element when no unit is found - covers line 326"""
+        from bs4 import BeautifulSoup
+        
+        html = '<div><span></span></div>'
+        soup = BeautifulSoup(html, 'html.parser')
+        element = soup.find('span')
+        
+        result = self.parser._extract_unit_near_element(element)
+        self.assertIsNone(result)
+    
+    def test_extract_area_unit_exception_handling(self):
+        """Test exception handling in _extract_area_unit - covers lines 159-161"""
+        # Create a mock pattern that raises exception
+        mock_pattern = Mock()
+        mock_pattern.search.side_effect = Exception("Test error")
+        
+        # Temporarily replace the pattern
+        original_pattern = self.extractor._AREA_PATTERN
+        self.extractor._AREA_PATTERN = mock_pattern
+        
+        try:
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.extractor._extract_area_unit("60x60cm")
+                self.assertIsNone(result)
+                mock_log.assert_called_once()
+                self.assertIn("Error in area pattern extraction", mock_log.call_args[0][0])
+        finally:
+            # Restore original pattern
+            self.extractor._AREA_PATTERN = original_pattern
+    
+    def test_extract_adjacent_unit_exception_handling(self):
+        """Test exception handling in _extract_adjacent_unit - covers lines 182-184"""
+        with patch.object(self.extractor, '_extract_inch_patterns', side_effect=Exception("Test error")):
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.extractor._extract_adjacent_unit("25kg")
+                self.assertIsNone(result)
+                mock_log.assert_called_once()
+                self.assertIn("Error in adjacent pattern extraction", mock_log.call_args[0][0])
+    
+    def test_parse_unit_from_detail_page_returns_pcs_on_exception(self):
+        """Test that parse_unit_from_detail_page returns PCS on exception - covers lines 282-284"""
+        # Create HTML that will cause exception when parsing
+        with patch('api.depobangunan.unit_parser.BeautifulSoup', side_effect=Exception("Parse error")):
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.parser.parse_unit_from_detail_page('<div>test</div>')
+                self.assertEqual(result, 'PCS')
+                mock_log.assert_called_once()
+                self.assertIn("Error parsing unit from detail page", mock_log.call_args[0][0])
+    
+    def test_extract_unit_from_table_returns_none_on_exception(self):
+        """Test that _extract_unit_from_table returns None on exception - covers line 303"""
+        from bs4 import BeautifulSoup
+        
+        html = '<table><tr><td>Weight</td><td>50KG</td></tr></table>'
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        
+        # Patch find_all to cause exception during processing
+        with patch.object(table, 'find_all', side_effect=Exception("Test error")):
+            with patch('api.depobangunan.unit_parser.logger.warning') as mock_log:
+                result = self.parser._extract_unit_from_table(table)
+                self.assertIsNone(result)
+                mock_log.assert_called_once()
+                self.assertIn("Error extracting unit from table", mock_log.call_args[0][0])
+    
+    def test_extract_unit_from_table_returns_none_when_no_match(self):
+        """Test that _extract_unit_from_table returns None when no unit keyword matches"""
+        from bs4 import BeautifulSoup
+        
+        html = '<table><tr><td>Color</td><td>Red</td></tr><tr><td>Brand</td><td>Test</td></tr></table>'
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        
+        result = self.parser._extract_unit_from_table(table)
+        # Should return None because no spec keywords match
+        self.assertIsNone(result)
+
+
 if __name__ == '__main__':
     unittest.main()

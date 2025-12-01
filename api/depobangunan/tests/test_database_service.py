@@ -286,11 +286,11 @@ class TestDepoBangunanDatabaseService(TestCase):
         
         self.assertIsNone(result)
 
+    @patch('api.depobangunan.database_service.logger')
     @patch('api.depobangunan.database_service.PriceAnomalyService.save_anomalies')
-    def test_update_product_price_with_anomaly_detected(self, mock_save_anomalies):
+    def test_update_product_price_with_anomaly_detected(self, mock_save_anomalies, mock_logger):
         """Lines 65-71: anomaly detected, warning logged, price not updated"""
         service = DepoBangunanDatabaseService()
-        service.logger = Mock()
         
         cursor = Mock()
         item = {
@@ -316,16 +316,16 @@ class TestDepoBangunanDatabaseService(TestCase):
         self.assertEqual(anomalies[0]["name"], "Test Product")
         
         # Should log warning
-        service.logger.warning.assert_called_once()
+        mock_logger.warning.assert_called_once()
         
         # Should NOT execute UPDATE query
         cursor.execute.assert_not_called()
     
+    @patch('api.depobangunan.database_service.logger')
     @patch('api.depobangunan.database_service.PriceAnomalyService.save_anomalies')
-    def test_save_detected_anomalies_with_errors(self, mock_save_anomalies):
+    def test_save_detected_anomalies_with_errors(self, mock_save_anomalies, mock_logger):
         """Lines 128-130: logs error when anomaly save fails"""
         service = DepoBangunanDatabaseService()
-        service.logger = Mock()
         
         # Mock save_anomalies to return failure
         mock_save_anomalies.return_value = {
@@ -350,4 +350,4 @@ class TestDepoBangunanDatabaseService(TestCase):
         mock_save_anomalies.assert_called_once_with('depobangunan', anomalies)
         
         # Should log error
-        service.logger.error.assert_called_once()
+        mock_logger.error.assert_called_once()

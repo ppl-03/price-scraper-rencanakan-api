@@ -502,7 +502,6 @@ class TestLocationParserEdgeCases(TestCase):
         headers = soup.find_all('h2')
         
         # Mock get_text to fail on second header
-        original_get_text = headers[1].get_text
         def bad_get_text(*args, **kwargs):
             raise ValueError("Simulated header error")
         headers[1].get_text = bad_get_text
