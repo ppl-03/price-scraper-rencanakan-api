@@ -9,8 +9,13 @@ from django.db import transaction, connection
 from django.utils import timezone
 from db_pricing.models import PriceAnomaly
 import logging
+from db_pricing.sentry_monitoring import PriceAnomalySentryMonitor
 
 logger = logging.getLogger(__name__)
+
+# Error message constants
+ERROR_ANOMALY_NOT_FOUND = 'Anomaly not found'
+ERROR_NO_MATCHING_PRODUCT = 'No matching product found to update'
 
 
 class PriceAnomalyService:
@@ -62,6 +67,13 @@ class PriceAnomalyService:
                 'saved_count': 0,
                 'errors': [error_msg]
             }
+        # Set initial Sentry context for anomalies batch
+        try:
+            sample = anomalies[0] if anomalies else None
+            PriceAnomalySentryMonitor.set_anomaly_context(vendor, len(anomalies), sample=sample)
+        except Exception:
+            # Do not fail main flow if monitoring fails
+            logger.debug("Failed to set anomaly Sentry context")
         
         saved_count = 0
         errors = []
@@ -110,8 +122,18 @@ class PriceAnomalyService:
                         error_msg = f"Error saving anomaly {anomaly.get('name', 'unknown')}: {str(e)}"
                         logger.error(error_msg)
                         errors.append(error_msg)
+                        try:
+                            PriceAnomalySentryMonitor.capture_exception(e, context={"anomaly": anomaly.get('name', '')})
+                        except Exception:
+                            logger.debug("Failed to capture anomaly save exception to Sentry")
                         
             logger.info(f"Successfully saved {saved_count} anomalies for {vendor}")
+            # Only track errors - success is normal operation
+            if errors:
+                try:
+                    PriceAnomalySentryMonitor.track_save_result(False, saved_count, errors)
+                except Exception:
+                    logger.debug("Failed to report save errors to Sentry")
             return {
                 'success': True,
                 'saved_count': saved_count,
@@ -121,6 +143,10 @@ class PriceAnomalyService:
         except Exception as e:
             error_msg = f"Transaction error saving anomalies for {vendor}: {str(e)}"
             logger.error(error_msg)
+            try:
+                PriceAnomalySentryMonitor.capture_exception(e, context={"vendor": vendor})
+            except Exception:
+                logger.debug("Failed to capture transaction exception to Sentry")
             return {
                 'success': False,
                 'saved_count': 0,
@@ -169,10 +195,18 @@ class PriceAnomalyService:
             return True
             
         except PriceAnomaly.DoesNotExist:
-            logger.error(f"Anomaly {anomaly_id} not found")
+            logger.error(f"Anomaly {anomaly_id} not found for review")
+            try:
+                PriceAnomalySentryMonitor.track_review_error(anomaly_id, ERROR_ANOMALY_NOT_FOUND, {"status": status})
+            except Exception:
+                logger.debug("Failed to report review error to Sentry")
             return False
         except Exception as e:
             logger.error(f"Error marking anomaly {anomaly_id} as reviewed: {str(e)}")
+            try:
+                PriceAnomalySentryMonitor.capture_exception(e, {"anomaly_id": anomaly_id, "operation": "mark_as_reviewed"})
+            except Exception:
+                logger.debug("Failed to capture review exception to Sentry")
             return False
     
     @classmethod
@@ -261,12 +295,12 @@ class PriceAnomalyService:
                         # Mark anomaly as applied
                         anomaly.status = 'applied'
                         anomaly.save()
-                        
+
                         logger.info(
                             f"Applied approved price for {anomaly.vendor}: {anomaly.product_name} "
                             f"updated to {anomaly.new_price}"
                         )
-                        
+
                         return {
                             'success': True,
                             'message': f'Price updated successfully for {updated_count} product(s)',
@@ -277,21 +311,33 @@ class PriceAnomalyService:
                             f"No matching product found for anomaly {anomaly_id}: "
                             f"{anomaly.product_name}"
                         )
+                        try:
+                            PriceAnomalySentryMonitor.track_apply_result(anomaly.id, False, 0, message=ERROR_NO_MATCHING_PRODUCT)
+                        except Exception:
+                            logger.debug("Failed to report anomaly apply failure to Sentry")
                         return {
                             'success': False,
-                            'message': 'No matching product found to update',
+                            'message': ERROR_NO_MATCHING_PRODUCT,
                             'updated': 0
                         }
                         
         except PriceAnomaly.DoesNotExist:
             logger.error(f"Anomaly {anomaly_id} not found")
+            try:
+                PriceAnomalySentryMonitor.track_apply_result(anomaly_id, False, 0, message=ERROR_ANOMALY_NOT_FOUND)
+            except Exception:
+                logger.debug("Failed to report missing anomaly to Sentry")
             return {
                 'success': False,
-                'message': 'Anomaly not found',
+                'message': ERROR_ANOMALY_NOT_FOUND,
                 'updated': 0
             }
         except Exception as e:
             logger.error(f"Error applying anomaly {anomaly_id}: {str(e)}")
+            try:
+                PriceAnomalySentryMonitor.capture_exception(e, context={"anomaly_id": anomaly_id})
+            except Exception:
+                logger.debug("Failed to capture anomaly apply exception to Sentry")
             return {
                 'success': False,
                 'message': f'Error applying price: {str(e)}',
