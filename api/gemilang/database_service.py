@@ -1,10 +1,10 @@
 from django.db import connection, transaction
 from django.utils import timezone
 from typing import List, Dict, Any, Tuple
-import logging
 from db_pricing.anomaly_service import PriceAnomalyService
+from .logging_utils import get_gemilang_logger
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("database_service")
 
 
 class GemilangDatabaseService:
@@ -70,7 +70,7 @@ class GemilangDatabaseService:
         if not url.startswith('https://'):
             return False, f"Item {idx}: url must use HTTPS protocol for security"
         if any(x in url.lower() for x in ['localhost', '127.0.0.1', '0.0.0.0']):
-            logger.critical(f"SSRF attempt detected: {url}")
+            logger.critical("SSRF attempt detected: %s", url)
             return False, f"Item {idx}: invalid URL"
         return True, ""
     
@@ -121,7 +121,7 @@ class GemilangDatabaseService:
     def save(self, data: List[Dict[str, Any]]) -> Tuple[bool, str]:
         is_valid, error_msg = self._validate_data(data)
         if not is_valid:
-            logger.warning(f"Data validation failed: {error_msg}")
+            logger.warning("Data validation failed: %s", error_msg)
             return False, error_msg
         
         try:
@@ -151,18 +151,22 @@ class GemilangDatabaseService:
             
             if params_list:
                 sample_location = params_list[0][4]
-                logger.info(f"Saving {len(data)} products. Sample location value: '{sample_location}' (length: {len(sample_location)})")
+                logger.info(
+                    "Saving %s products. Sample location value: '%s' (length: %s)",
+                    len(data),
+                    sample_location,
+                    len(sample_location)
+                )
             
             with transaction.atomic():
                 with connection.cursor() as cursor:
                     cursor.executemany(sql, params_list)
             
-            logger.info(f"Successfully saved {len(data)} products")
+            logger.info("Successfully saved %s products", len(data))
             return True, ""
             
         except Exception as e:
-            logger.error(f"Database save failed: {type(e).__name__}: {str(e)}")
-            logger.exception("Full traceback:")
+            logger.exception("Database save failed: %s", type(e).__name__)
             return False, f"Database operation failed: {str(e)}"
     
     def _check_anomaly(
@@ -194,7 +198,7 @@ class GemilangDatabaseService:
         
         anomaly_result = PriceAnomalyService.save_anomalies('gemilang', anomalies)
         if not anomaly_result['success']:
-            logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
+            logger.error("Failed to save some anomalies: %s", anomaly_result['errors'])
 
     def save_with_price_update(
         self, 
@@ -202,7 +206,7 @@ class GemilangDatabaseService:
     ) -> Dict[str, Any]:
         is_valid, error_msg = self._validate_data(data)
         if not is_valid:
-            logger.warning(f"Data validation failed: {error_msg}")
+            logger.warning("Data validation failed: %s", error_msg)
             return {
                 "success": False,
                 "error": error_msg,
@@ -221,7 +225,12 @@ class GemilangDatabaseService:
             
             if data:
                 sample_location = data[0].get("location", "")
-                logger.info(f"save_with_price_update: Processing {len(data)} products. Sample location: '{sample_location}' (length: {len(sample_location)})")
+                logger.info(
+                    "save_with_price_update: Processing %s products. Sample location: '%s' (length: %s)",
+                    len(data),
+                    sample_location,
+                    len(sample_location)
+                )
             
             with transaction.atomic():
                 with connection.cursor() as cursor:
@@ -250,8 +259,10 @@ class GemilangDatabaseService:
                                     # Price change detected - save anomaly for admin approval
                                     anomalies.append(anomaly)
                                     logger.warning(
-                                        f"Price anomaly detected for {name}: "
-                                        f"{existing_price} -> {price}. Pending admin approval."
+                                        "Price anomaly detected for %s: %s -> %s. Pending admin approval.",
+                                        name,
+                                        existing_price,
+                                        price
                                     )
                                     # Do NOT update price - wait for admin approval
                                 else:
@@ -284,8 +295,10 @@ class GemilangDatabaseService:
                             inserted_count += 1
             
             logger.info(
-                f"Save with update completed: {updated_count} updated, "
-                f"{inserted_count} inserted, {len(anomalies)} anomalies"
+                "Save with update completed: %s updated, %s inserted, %s anomalies",
+                updated_count,
+                inserted_count,
+                len(anomalies)
             )
             
             # Save anomalies to database for review
@@ -299,7 +312,7 @@ class GemilangDatabaseService:
             }
             
         except Exception as e:
-            logger.error(f"Database save_with_price_update failed: {type(e).__name__}")
+            logger.exception("Database save_with_price_update failed: %s", type(e).__name__)
             return {
                 "success": False,
                 "error": "Database operation failed",

@@ -2,7 +2,6 @@
 OWASP Security Module for Gemilang API
 Implements A01:2021 (Broken Access Control), A03:2021 (Injection), A04:2021 (Insecure Design)
 """
-import logging
 import re
 import time
 from functools import wraps
@@ -13,8 +12,9 @@ from django.http import JsonResponse
 from django.core.cache import cache
 from django.db import connection
 import bleach
+from .logging_utils import get_gemilang_logger
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("security")
 
 
 # =============================================================================
@@ -52,7 +52,7 @@ class RateLimiter:
     def block_client(self, client_id: str, duration_seconds: int = 300):
         """Block a client for specified duration (default 5 minutes)."""
         self.blocked_ips[client_id] = time.time() + duration_seconds
-        logger.warning(f"Client {client_id} blocked for {duration_seconds} seconds due to rate limit violation")
+        logger.warning("Client %s blocked for %s seconds due to rate limit violation", client_id, duration_seconds)
     
     def check_rate_limit(
         self, 
@@ -88,8 +88,10 @@ class RateLimiter:
             if block_on_violation:
                 self.block_client(client_id)
             logger.warning(
-                f"Rate limit exceeded for {client_id}: "
-                f"{current_requests} requests in {window_seconds}s window"
+                "Rate limit exceeded for %s: %s requests in %ss window",
+                client_id,
+                current_requests,
+                window_seconds
             )
             return False, f"Rate limit exceeded. Maximum {max_requests} requests per {window_seconds} seconds"
         
@@ -157,7 +159,7 @@ class AccessControlManager:
         # Validate token exists
         if token not in cls.API_TOKENS:
             client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-            logger.warning(f"Invalid API token attempt from {client_ip}")
+            logger.warning("Invalid API token attempt from %s", client_ip)
             return False, 'Invalid API token', None
         
         token_info = cls.API_TOKENS[token]
@@ -176,7 +178,7 @@ class AccessControlManager:
             )
             return False, 'IP not authorized for this token', None
         
-        logger.info(f"Valid API token used from {client_ip}: {token_info['name']}")
+        logger.info("Valid API token used from %s: %s", client_ip, token_info['name'])
         return True, '', token_info
     
     @classmethod
@@ -293,12 +295,12 @@ class InputValidator:
         
         # Whitelist validation - only allow safe characters
         if not cls.KEYWORD_PATTERN.match(keyword):
-            logger.warning(f"Invalid keyword pattern detected: {keyword}")
+            logger.warning("Invalid keyword pattern detected: %s", keyword)
             return False, "Keyword contains invalid characters. Only alphanumeric, spaces, hyphens, underscores, and periods allowed", None
         
         # SQL injection detection
         if cls._detect_sql_injection(keyword):
-            logger.critical(f"SQL injection attempt detected in keyword: {keyword}")
+            logger.critical("SQL injection attempt detected in keyword: %s", keyword)
             return False, "Invalid keyword format", None
         
         # HTML sanitization (defense in depth)
@@ -486,13 +488,13 @@ class DatabaseQueryValidator:
         
         # Validate table name
         if not DatabaseQueryValidator.validate_table_name(table):
-            logger.critical(f"Invalid table name attempt: {table}")
+            logger.critical("Invalid table name attempt: %s", table)
             return False, "Invalid table name", ""
         
         # Validate column names
         for col in columns:
             if not DatabaseQueryValidator.validate_column_name(col):
-                logger.critical(f"Invalid column name attempt: {col}")
+                logger.critical("Invalid column name attempt: %s", col)
                 return False, "Invalid column name", ""
         
         # Build query based on operation
@@ -524,7 +526,7 @@ class SecurityDesignPatterns:
         if not isinstance(price, (int, float)) or price < 0:
             return False, "Price must be a positive number"
         if price > 1000000000:
-            logger.warning(f"Suspicious price value: {price}")
+            logger.warning("Suspicious price value: %s", price)
             return False, "Price value exceeds reasonable limit"
         return True, ""
     
@@ -543,7 +545,7 @@ class SecurityDesignPatterns:
         if not url.startswith('https://'):
             return False, "URL must use HTTPS protocol for security"
         if 'localhost' in url or '127.0.0.1' in url or '0.0.0.0' in url:
-            logger.critical(f"SSRF attempt detected: {url}")
+            logger.critical("SSRF attempt detected: %s", url)
             return False, "Invalid URL"
         return True, ""
     
@@ -588,7 +590,7 @@ class SecurityDesignPatterns:
         # Limit query complexity
         query_params_count = len(request.GET)
         if query_params_count > 20:
-            logger.warning(f"Excessive query parameters: {query_params_count}")
+            logger.warning("Excessive query parameters: %s", query_params_count)
             return False, "Too many query parameters"
         
         return True, ""

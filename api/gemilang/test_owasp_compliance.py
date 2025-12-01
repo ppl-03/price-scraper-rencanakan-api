@@ -177,7 +177,7 @@ class TestA01BrokenAccessControl(TestCase):
             REMOTE_ADDR=TEST_IP_ALLOWED
         )
         
-        with self.assertLogs('api.gemilang.security', level='WARNING') as cm:
+        with self.assertLogs('api.gemilang', level='WARNING') as cm:
             AccessControlManager.log_access_attempt(
                 request, False, 'Invalid token'
             )

@@ -1,6 +1,7 @@
+import logging
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from bs4 import BeautifulSoup
 from api.interfaces import Product, HtmlParserError
 from api.gemilang.html_parser import GemilangHtmlParser
@@ -156,11 +157,28 @@ class TestGemilangHtmlParser(TestCase):
             <div class="price-wrapper"><p class="price">Rp 10.000</p></div>
         </div>
         <div class="item-product">
+            <p class="product-name">Bad Product</p>
+            <div class="price-wrapper"><p class="price">Rp 5.000</p></div>
         </div>
         """
-        products = self.parser.parse_products(html_mixed)
-        self.assertEqual(len(products), 1)
-        self.assertEqual(products[0].name, "Good Product")
+        import logging
+        logger = logging.getLogger('api.gemilang')
+        original_level = logger.level
+        logger.setLevel(logging.WARNING)
+        try:
+            # Mock _extract_product_from_item to raise exception on second call
+            from unittest.mock import patch
+            with patch.object(self.parser, '_extract_product_from_item', side_effect=[
+                Product(name="Good Product", price=10000, url="https://gemilang-store.com/test", unit="PCS"),
+                Exception("Extraction failed")
+            ]):
+                with self.assertLogs('api.gemilang', level='WARNING') as captured:
+                    products = self.parser.parse_products(html_mixed)
+                self.assertEqual(len(products), 1)
+                self.assertEqual(products[0].name, "Good Product")
+                self.assertTrue(any("Failed to extract product from item" in msg for msg in captured.output))
+        finally:
+            logger.setLevel(original_level)
     def test_html_parser_critical_exception(self):
         with patch('api.gemilang.html_parser.BeautifulSoup', side_effect=Exception("Critical parsing error")):
             with self.assertRaises(HtmlParserError) as context:
@@ -182,11 +200,11 @@ class TestGemilangHtmlParser(TestCase):
             Product(name="Normal Product", price=10000, url="/test"),
             Exception("Extraction failed")
         ]):
-            with patch('api.gemilang.html_parser.logger') as mock_logger:
+            with self.assertLogs('api.gemilang', level='WARNING') as captured:
                 products = self.parser.parse_products(html_with_problematic_item)
-                self.assertEqual(len(products), 1)
-                self.assertEqual(products[0].name, "Normal Product")
-                mock_logger.warning.assert_called_once_with("Failed to extract product from item: Extraction failed")
+            self.assertEqual(len(products), 1)
+            self.assertEqual(products[0].name, "Normal Product")
+            self.assertTrue(any("Failed to extract product from item" in msg for msg in captured.output))
     def test_price_extraction_with_type_error(self):
         html_type_error = """
         <div class="item-product">

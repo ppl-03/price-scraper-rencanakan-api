@@ -82,9 +82,11 @@ WSGI_APPLICATION = 'price_scraper_rencanakan_api.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 # Database configuration with fallback to SQLite
 # Use SQLite for testing or when MySQL env vars aren't available
-if env.bool("USE_SQLITE_FOR_TESTS", default=False) or not all([
+USE_SQLITE_FOR_TESTS = env.bool("USE_SQLITE_FOR_TESTS", default=False)
+
+if USE_SQLITE_FOR_TESTS or not all([
     env("MYSQL_NAME", default=None) or env("DB_NAME", default=None),
-    env("MYSQL_USER", default=None) or env("DB_USER", default=None), 
+    env("MYSQL_USER", default=None) or env("DB_USER", default=None),
     env("MYSQL_PASSWORD", default=None) or env("DB_PASSWORD", default=None),
     env("MYSQL_HOST", default=None) or env("DB_HOST", default=None),
     env("MYSQL_PORT", default=None) or env("DB_PORT", default=None)
@@ -183,3 +185,8 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 TEST_IP_ALLOWED = env.str('TEST_IP_ALLOWED')
 TEST_IP_DENIED = env.str('TEST_IP_DENIED')
 TEST_IP_ATTACKER = env.str('TEST_IP_ATTACKER')
+
+if USE_SQLITE_FOR_TESTS:
+    MIGRATION_MODULES = {
+        "db_pricing": None,
+    }
