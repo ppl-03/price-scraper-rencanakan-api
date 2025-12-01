@@ -66,7 +66,7 @@ class TestCompleteProductSearchScenario(TestCase):
                 Product(name="Product A", price=10000, url="/a", unit="Kg"),
                 Product(name="Product B", price=20000, url="/b", unit="Kg")
             ]
-            mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             
@@ -102,7 +102,7 @@ class TestCompleteProductSearchScenario(TestCase):
             mock_products = [
                 Product(name="Product A", price=10000, url="/a", unit="Kg")
             ]
-            mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             
@@ -139,7 +139,7 @@ class TestLocationServiceFailureScenario(TestCase):
             # Mock successful products
             mock_scraper_instance = Mock()
             mock_products = [Product(name="Test", price=100, url="/t", unit="Pcs")]
-            mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             
@@ -229,7 +229,7 @@ class TestSQLInjectionPreventionScenario(TestCase):
                 mock_loc.return_value = mock_loc_instance
                 
                 mock_scraper_instance = Mock()
-                mock_result = ScrapingResult(products=[], success=True, url="http://test.com")
+                mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
                 mock_scraper_instance.scrape_products.return_value = mock_result
                 mock_scraper.return_value = mock_scraper_instance
                 
@@ -266,7 +266,7 @@ class TestPriceDataPersistenceScenario(TestCase):
                 Product(name="Semen 50kg", price=65000, url="/prod1", unit="Zak"),
                 Product(name="Cat Tembok", price=45000, url="/prod2", unit="Kaleng")
             ]
-            mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             
@@ -310,7 +310,7 @@ class TestFindCheapestPriceScenario(TestCase):
                 Product(name="Product B", price=30000, url="/b", unit="Kg"),  # Cheapest
                 Product(name="Product C", price=45000, url="/c", unit="Kg")
             ]
-            mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             
@@ -345,7 +345,7 @@ class TestPaginatedResultsScenario(TestCase):
             
             mock_scraper_instance = Mock()
             mock_products = [Product(name=f"P{i}", price=i*1000, url=f"/p{i}", unit="Pcs") for i in range(5)]
-            mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             
@@ -382,7 +382,7 @@ class TestPriceChangeDetectionScenario(TestCase):
                 Product(name="Semen 50kg", price=70000, url="/p1", unit="Zak"),  # Increased
                 Product(name="Cat Tembok", price=40000, url="/p2", unit="Kaleng")  # Decreased
             ]
-            mock_result = ScrapingResult(products=mock_products, success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=mock_products, success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             
@@ -426,7 +426,7 @@ class TestScenarioRunner(TestCase):
             mock_loc.return_value = mock_loc_instance
             
             mock_scraper_instance = Mock()
-            mock_result = ScrapingResult(products=[], success=True, url="http://test.com")
+            mock_result = ScrapingResult(products=[], success=True, url="https://test.com")
             mock_scraper_instance.scrape_products.return_value = mock_result
             mock_scraper.return_value = mock_scraper_instance
             

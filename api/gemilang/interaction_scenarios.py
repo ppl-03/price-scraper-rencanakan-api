@@ -27,6 +27,9 @@ import json
 from django.test import Client
 from api.interfaces import Product, Location
 
+# API endpoint constants
+API_SCRAPE_ENDPOINT = '/api/gemilang/scrape/'
+
 
 @dataclass
 class ScenarioResult:
@@ -82,7 +85,7 @@ def scenario_complete_product_search(
     validation_errors = []
     
     # Execute request
-    response = context.client.get('/api/gemilang/scrape/', {
+    response = context.client.get(API_SCRAPE_ENDPOINT, {
         'keyword': keyword,
         'sort_by_price': str(sort_by_price).lower(),
         'page': str(page)
@@ -164,7 +167,7 @@ def scenario_location_service_failure_handling(
     start_time = datetime.now()
     validation_errors = []
     
-    response = context.client.get('/api/gemilang/scrape/', {'keyword': keyword})
+    response = context.client.get(API_SCRAPE_ENDPOINT, {'keyword': keyword})
     response_data = json.loads(response.content) if response.content else {}
     
     # Validate graceful degradation
@@ -248,13 +251,11 @@ def scenario_invalid_input_rejection(
     
     # Validate error message includes field details
     error_msg = response_data.get('error', '').lower()
-    if keyword and len(keyword) > 100:
-        if 'keyword' not in error_msg:
-            validation_errors.append("Error message should mention 'keyword' field")
+    if keyword and len(keyword) > 100 and 'keyword' not in error_msg:
+        validation_errors.append("Error message should mention 'keyword' field")
     
-    if page and (int(page) if page.isdigit() else -1) > 100:
-        if 'page' not in error_msg:
-            validation_errors.append("Error message should mention 'page' field")
+    if page and (int(page) if page.isdigit() else -1) > 100 and 'page' not in error_msg:
+        validation_errors.append("Error message should mention 'page' field")
     
     # Validate details field exists
     if 'details' not in response_data:
@@ -303,7 +304,7 @@ def scenario_sql_injection_prevention(
     start_time = datetime.now()
     validation_errors = []
     
-    response = context.client.get('/api/gemilang/scrape/', {'keyword': malicious_keyword})
+    response = context.client.get(API_SCRAPE_ENDPOINT, {'keyword': malicious_keyword})
     response_data = json.loads(response.content) if response.content else {}
     
     # Validate security response
@@ -311,16 +312,14 @@ def scenario_sql_injection_prevention(
         validation_errors.append(f"Unexpected status code: {response.status_code}")
     
     # If accepted (200), verify it was sanitized
-    if response.status_code == 200:
-        if response_data.get('success'):
-            # Check that dangerous characters were handled
-            # In real scenario, we'd verify against logs or database
-            pass
+    if response.status_code == 200 and response_data.get('success'):
+        # Check that dangerous characters were handled
+        # In real scenario, we'd verify against logs or database
+        pass
     
     # If rejected (400), verify proper error handling
-    if response.status_code == 400:
-        if 'error' not in response_data:
-            validation_errors.append("Error response missing 'error' field")
+    if response.status_code == 400 and 'error' not in response_data:
+        validation_errors.append("Error response missing 'error' field")
     
     execution_time = (datetime.now() - start_time).total_seconds() * 1000
     
@@ -437,8 +436,7 @@ def scenario_price_data_persistence(
 
 def scenario_find_cheapest_price(
     context: ScenarioContext,
-    keyword: str,
-    expected_cheapest_vendor: Optional[str] = None
+    keyword: str
 ) -> ScenarioResult:
     """
     Scenario: User wants to find cheapest price for a material across vendors
@@ -461,7 +459,7 @@ def scenario_find_cheapest_price(
     validation_errors = []
     
     # Request with sort_by_price=true
-    response = context.client.get('/api/gemilang/scrape/', {
+    response = context.client.get(API_SCRAPE_ENDPOINT, {
         'keyword': keyword,
         'sort_by_price': 'true'
     })
@@ -534,7 +532,7 @@ def scenario_paginated_results(
     start_time = datetime.now()
     validation_errors = []
     
-    response = context.client.get('/api/gemilang/scrape/', {
+    response = context.client.get(API_SCRAPE_ENDPOINT, {
         'keyword': keyword,
         'page': str(page)
     })
@@ -548,7 +546,6 @@ def scenario_paginated_results(
     
     # Validate products have consistent structure
     if products:
-        first_location = products[0].get('location', '')
         for product in products:
             if 'location' not in product:
                 validation_errors.append("Product missing location field")
