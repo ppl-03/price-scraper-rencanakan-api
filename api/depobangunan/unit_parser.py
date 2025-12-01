@@ -1,9 +1,9 @@
 import re
-import logging
 from typing import Optional, Dict, List
 from bs4 import BeautifulSoup
+from .logging_utils import get_depobangunan_logger
 
-logger = logging.getLogger(__name__)
+logger = get_depobangunan_logger("unit_parser")
 
 # ReDoS protection: Set regex timeout (Python 3.11+)
 try:

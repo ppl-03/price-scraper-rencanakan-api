@@ -3,9 +3,9 @@ from sentry_sdk import start_transaction, start_span, capture_message, capture_e
 from functools import wraps
 import time
 from typing import Any, Callable, Optional, Dict
-import logging
+from .logging_utils import get_depobangunan_logger
 
-logger = logging.getLogger(__name__)
+logger = get_depobangunan_logger("sentry_monitoring")
 
 
 class DepoBangunanSentryMonitor:

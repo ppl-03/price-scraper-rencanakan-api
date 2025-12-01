@@ -17,11 +17,11 @@ from .sentry_monitoring import (
     track_depobangunan_transaction,
     DepoBangunanTaskMonitor
 )
-import logging
+from .logging_utils import get_depobangunan_logger
 import uuid
 import time
 
-logger = logging.getLogger(__name__)
+logger = get_depobangunan_logger("views")
 
 # Error message constants
 ERROR_KEYWORD_REQUIRED = 'Keyword parameter is required'
@@ -58,7 +58,7 @@ def _save_products_to_database(products):
         for product_data in products_data:
             is_valid, error_msg = SecurityDesignPatterns.validate_business_logic(product_data)
             if not is_valid:
-                logger.warning(f"Product validation failed: {error_msg}")
+                logger.warning(f"Product validation failed: {error_msg}", extra={"operation": "save_products"})
                 return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0, 'error': error_msg}
         
         # Save to database with price update
@@ -79,16 +79,16 @@ def _save_products_to_database(products):
                     categorization_service = AutoCategorizationService()
                     categorization_result = categorization_service.categorize_products('depobangunan', product_ids)
                     categorized_count = categorization_result.get('categorized', 0)
-                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products")
+                    logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new DepoBangunan products", extra={"operation": "auto_categorize"})
             except Exception as cat_error:
-                logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+                logger.warning(f"Auto-categorization failed: {str(cat_error)}", extra={"operation": "auto_categorize"})
                 # Don't fail the entire operation if categorization fails
         
         result['categorized'] = categorized_count
         return result
         
     except Exception as db_error:
-        logger.error(f"Failed to save DepoBangunan products to database: {str(db_error)}")
+        logger.error(f"Failed to save DepoBangunan products to database: {str(db_error)}", extra={"operation": "save_products"})
         return {'success': False, 'updated': 0, 'inserted': 0, 'anomalies': [], 'categorized': 0}
 
 

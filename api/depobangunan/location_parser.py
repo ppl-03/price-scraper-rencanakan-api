@@ -1,12 +1,12 @@
-import logging
 import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
 from html import unescape
 
 from api.interfaces import ILocationParser, Location, HtmlParserError
+from .logging_utils import get_depobangunan_logger
 
-logger = logging.getLogger(__name__)
+logger = get_depobangunan_logger("location_parser")
 
 
 class TextCleaner:

@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional
 from abc import ABC, abstractmethod
 
@@ -6,8 +5,9 @@ from api.interfaces import (
     IHttpClient, ILocationParser, ILocationScraper,
     LocationScrapingResult, Location, HttpClientError, HtmlParserError
 )
+from .logging_utils import get_depobangunan_logger
 
-logger = logging.getLogger(__name__)
+logger = get_depobangunan_logger("location_scraper")
 
 
 class LocationScraperConfiguration:
