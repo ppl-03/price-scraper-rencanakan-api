@@ -138,11 +138,14 @@ def test_logger_different_log_levels(caplog):
         logger.warning("Warning message")
         logger.error("Error message")
     
-    assert len(caplog.records) == 4
-    levels = [r.levelname for r in caplog.records]
+    # Filter to only depobangunan logs (exclude third-party logs like urllib3)
+    depobangunan_records = [r for r in caplog.records if r.name.startswith('api.depobangunan')]
+    
+    assert len(depobangunan_records) == 4
+    levels = [r.levelname for r in depobangunan_records]
     assert levels == ["DEBUG", "INFO", "WARNING", "ERROR"]
     
-    for record in caplog.records:
+    for record in depobangunan_records:
         assert "[depobangunan]" in record.message
         assert "[component=test_component]" in record.message
 
