@@ -327,17 +327,22 @@ def scrape_and_save_products(request):
         
         _auto_categorize_new_products(save_result)
         
+        # Use .get() for safe dictionary access with defaults
+        inserted = save_result.get('inserted', 0)
+        updated = save_result.get('updated', 0)
+        anomalies = save_result.get('anomalies', [])
+        
         logger.info(
             "Mitra10 saved %s new, updated %s, detected %s anomalies for query '%s'",
-            save_result['inserted'], save_result['updated'], len(save_result['anomalies']), query,
+            inserted, updated, len(anomalies), query,
             extra={"operation": "scrape_and_save_products"}
         )
         
         return JsonResponse({
-            'success': save_result['success'],
-            'inserted': save_result['inserted'],
-            'updated': save_result['updated'],
-            'anomalies': save_result['anomalies'],
+            'success': save_result.get('success', True),
+            'inserted': inserted,
+            'updated': updated,
+            'anomalies': anomalies,
             'total_products': len(products_data),
             'error_message': ''
         })
