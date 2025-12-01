@@ -295,7 +295,7 @@ class InputValidator:
         
         # Whitelist validation - only allow safe characters
         if not cls.KEYWORD_PATTERN.match(keyword):
-            logger.warning("Invalid keyword pattern detected: %s", keyword)
+            logger.warning("Invalid keyword pattern detected")
             return False, "Keyword contains invalid characters. Only alphanumeric, spaces, hyphens, underscores, and periods allowed", None
         
         # SQL injection detection
