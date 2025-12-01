@@ -1,5 +1,6 @@
 from db_pricing.models import JuraganMaterialProduct
 from api.juragan_material.database_service import JuraganMaterialDatabaseService
+import logging
 from .test_base import MySQLTestCase
 
 class TestJuraganMaterialDatabaseService(MySQLTestCase):
@@ -9,14 +10,17 @@ class TestJuraganMaterialDatabaseService(MySQLTestCase):
             {"name": "Item 2", "price": 20000, "url": "https://example.com/2", "unit": "box", "location": "Bandung"}
         ]
         service = JuraganMaterialDatabaseService()
-        result = service.save(data)
-        self.assertTrue(result)
-        self.assertEqual(JuraganMaterialProduct.objects.count(), 2)
-        product = JuraganMaterialProduct.objects.get(name="Item 1")
-        self.assertEqual(product.price, 10000)
-        self.assertEqual(product.url, "https://example.com/1")
-        self.assertEqual(product.unit, "pcs")
-        self.assertEqual(product.location, "Jakarta")
+        with self.assertLogs('api.juragan_material', level='INFO') as captured:
+            result = service.save(data)
+            self.assertTrue(result)
+            self.assertEqual(JuraganMaterialProduct.objects.count(), 2)
+            product = JuraganMaterialProduct.objects.get(name="Item 1")
+            self.assertEqual(product.price, 10000)
+            self.assertEqual(product.url, "https://example.com/1")
+            self.assertEqual(product.unit, "pcs")
+            self.assertEqual(product.location, "Jakarta")
+            # Verify info log about successful save (check for the actual message, not the prefix)
+            self.assertTrue(any("Successfully saved" in msg and "products to database" in msg for msg in captured.output))
 
 
     def test_save_empty_data(self):
@@ -31,9 +35,12 @@ class TestJuraganMaterialDatabaseService(MySQLTestCase):
             {"price": 10000, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = JuraganMaterialDatabaseService()
-        result = service.save(data)
-        self.assertFalse(result)
-        self.assertEqual(JuraganMaterialProduct.objects.count(), 0)
+        with self.assertLogs('api.juragan_material', level='WARNING') as captured:
+            result = service.save(data)
+            self.assertFalse(result)
+            self.assertEqual(JuraganMaterialProduct.objects.count(), 0)
+            # Verify warning was logged about missing required keys
+            self.assertTrue(any("missing required keys" in msg for msg in captured.output))
 
     def test_save_missing_price_field(self):
         data = [
@@ -67,9 +74,12 @@ class TestJuraganMaterialDatabaseService(MySQLTestCase):
             {"name": "Item 1", "price": -100, "url": "https://example.com/1", "unit": "pcs", "location": "Jakarta"}
         ]
         service = JuraganMaterialDatabaseService()
-        result = service.save(data)
-        self.assertFalse(result)
-        self.assertEqual(JuraganMaterialProduct.objects.count(), 0)
+        with self.assertLogs('api.juragan_material', level='WARNING') as captured:
+            result = service.save(data)
+            self.assertFalse(result)
+            self.assertEqual(JuraganMaterialProduct.objects.count(), 0)
+            # Verify warning was logged about invalid price
+            self.assertTrue(any("Invalid price value" in msg for msg in captured.output))
 
     def test_save_zero_price(self):
         data = [
