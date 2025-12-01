@@ -15,11 +15,11 @@ from .sentry_monitoring import (
     TokopediaTaskMonitor
 )
 from .security import require_api_token, enforce_resource_limits
-import logging
+from .logging_utils import get_tokopedia_logger
 import uuid
 import time
 
-logger = logging.getLogger(__name__)
+logger = get_tokopedia_logger("views")
 
 # Constants
 DEFAULT_LIMIT = '20'
