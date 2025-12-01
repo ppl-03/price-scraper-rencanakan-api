@@ -107,7 +107,8 @@ class TestGemilangAPI(TestCase):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertIn('error', data)
-        self.assertEqual(data['error'], 'Validation failed')
+        self.assertIn('Validation failed', data['error'])
+        self.assertIn('page', data['error'])
         self.assertIn('details', data)
         self.assertIn('page', data['details'])
         
