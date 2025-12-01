@@ -1,0 +1,44 @@
+{
+  "vendor": "depobangunan",
+  "timestamp": "2025-11-25 14:10:21",
+  "profiling_results": {
+    "html_parser": {
+      "component": "html_parser",
+      "iterations": 5,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\depobangunan_profiling\\html_parser_profile.txt",
+      "total_calls": 2570743,
+      "total_time": 1.4467944000000006
+    },
+    "price_cleaner": {
+      "component": "price_cleaner",
+      "iterations": 1000,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\depobangunan_profiling\\price_cleaner_profile.txt",
+      "total_calls": 53001,
+      "total_time": 0.024366900000000007,
+      "test_prices_count": 10
+    },
+    "url_builder": {
+      "component": "url_builder",
+      "iterations": 500,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\depobangunan_profiling\\url_builder_profile.txt",
+      "total_calls": 50815,
+      "total_time": 0.0138367,
+      "keywords_count": 8
+    },
+    "factory": {
+      "component": "factory",
+      "iterations": 100,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\depobangunan_profiling\\factory_profile.txt",
+      "total_calls": 9101,
+      "total_time": 0.004763399999999999
+    },
+    "complete_scraper": {
+      "component": "complete_scraper",
+      "iterations": 3,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\depobangunan_profiling\\complete_scraper_profile.txt",
+      "total_calls": 1213147,
+      "total_time": 11.391511800000002
+    }
+  },
+  "environment_config": {}
+}

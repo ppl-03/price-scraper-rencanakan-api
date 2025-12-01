@@ -1,0 +1,44 @@
+{
+  "vendor": "juraganmaterial",
+  "timestamp": "2025-12-01 11:59:39",
+  "profiling_results": {
+    "html_parser": {
+      "component": "html_parser",
+      "iterations": 5,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\juraganmaterial_profiling\\html_parser_profile.txt",
+      "total_calls": 10332946,
+      "total_time": 167.24432980000003
+    },
+    "price_cleaner": {
+      "component": "price_cleaner",
+      "iterations": 1000,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\juraganmaterial_profiling\\price_cleaner_profile.txt",
+      "total_calls": 53001,
+      "total_time": 0.013316500000000004,
+      "test_prices_count": 10
+    },
+    "url_builder": {
+      "component": "url_builder",
+      "iterations": 500,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\juraganmaterial_profiling\\url_builder_profile.txt",
+      "total_calls": 62501,
+      "total_time": 0.014811599999999996,
+      "keywords_count": 8
+    },
+    "factory": {
+      "component": "factory",
+      "iterations": 100,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\juraganmaterial_profiling\\factory_profile.txt",
+      "total_calls": 8301,
+      "total_time": 0.0028950000000000004
+    },
+    "complete_scraper": {
+      "component": "complete_scraper",
+      "iterations": 3,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\juraganmaterial_profiling\\complete_scraper_profile.txt",
+      "total_calls": 5660033,
+      "total_time": 88.75415500000003
+    }
+  },
+  "environment_config": {}
+}

@@ -14,11 +14,11 @@ from .sentry_monitoring import (
     track_juragan_material_transaction,
     JuraganMaterialTaskMonitor
 )
-import logging
+from .logging_utils import get_juragan_material_logger
 import uuid
 import time
 
-logger = logging.getLogger(__name__)
+logger = get_juragan_material_logger("views")
 
 # Sentry breadcrumb categories
 CATEGORY_DATABASE = "juragan_material.database"

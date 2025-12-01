@@ -1,9 +1,9 @@
 from django.db import connection, transaction
 from django.utils import timezone
 from db_pricing.anomaly_service import PriceAnomalyService
-import logging
+from .logging_utils import get_juragan_material_logger
 
-logger = logging.getLogger(__name__)
+logger = get_juragan_material_logger("database_service")
 
 class JuraganMaterialDatabaseService:
     """
@@ -175,8 +175,6 @@ class JuraganMaterialDatabaseService:
         
         anomaly_result = PriceAnomalyService.save_anomalies('juragan_material', anomalies)
         if not anomaly_result['success']:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Failed to save some anomalies: {anomaly_result['errors']}")
 
     def _update_existing_product(self, cursor, item, existing_id, existing_price, now, anomalies):
@@ -194,8 +192,6 @@ class JuraganMaterialDatabaseService:
             if anomaly:
                 # Price change detected - save anomaly for admin approval
                 anomalies.append(anomaly)
-                import logging
-                logger = logging.getLogger(__name__)
                 item_name = item["name"] if isinstance(item, dict) else item.name
                 logger.warning(
                     f"Price anomaly detected for {item_name}: "
