@@ -140,15 +140,57 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy
+      - name: Deploy with rollback on failure
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6 # v0.1.10
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            cd $DEPLOY_DIR
-            git pull origin ${{ github.ref_name }}
-            source venv/bin/activate
+            set -e  # exit on ANY error
+
+            cd ${{ env.DEPLOY_DIR }}
+
+            # Save last known good commit
+            if [ -f last_good_commit.txt ]; then
+              echo "Last known good commit: $(cat last_good_commit.txt)"
+            else
+              echo "No last_good_commit.txt found – creating one."
+              git rev-parse HEAD > last_good_commit.txt
+            fi
+
+            echo "Saving last attempted commit..."
+            git rev-parse HEAD > last_attempt_commit.txt
+
+            rollback() {
+                echo "⚠️ Deployment failed. Rolling back..."
+                LAST_GOOD=$(cat last_good_commit.txt)
+                git reset --hard "$LAST_GOOD"
+                sudo systemctl restart ${{ env.SERVICE_NAME }}
+                echo "✅ Rolled back to $LAST_GOOD"
+                exit 1
+            }
+
+            trap rollback ERR  # If ANY command fails → rollback automatically
+
+            echo "Fetching latest commit..."
+            git fetch origin ${{ github.ref_name }}
+
+            echo "Resetting to remote branch..."
+            git reset --hard origin/${{ github.ref_name }}
+
+            echo "Activating virtualenv..."
+            source "./venv/bin/activate"
+
+            echo "Installing requirements..."
             pip install -r requirements.txt
-            sudo systemctl restart $SERVICE_NAME
+
+            echo "Restarting service..."
+            sudo systemctl restart ${{ env.SERVICE_NAME }}
+
+            # If everything worked: update known good commit
+            git rev-parse HEAD > last_good_commit.txt
+            echo "✅ Deployment successful."
+
+            # Remove trap so success doesn't trigger rollback
+            trap - ERR

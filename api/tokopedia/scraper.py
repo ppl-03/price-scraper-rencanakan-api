@@ -1,4 +1,3 @@
-import logging
 import warnings
 from typing import List, Optional
 from api.tokopedia_core import BasePriceScraper, BaseHttpClient
@@ -7,9 +6,10 @@ from api.playwright_client import BatchPlaywrightClient
 from .url_builder import TokopediaUrlBuilder
 from .html_parser import TokopediaHtmlParser
 from .price_cleaner import TokopediaPriceCleaner
+from .logging_utils import get_tokopedia_logger
 
 # Configure logger for this module
-logger = logging.getLogger(__name__)
+logger = get_tokopedia_logger("scraper")
 
 
 class TokopediaLocationError(ValueError):
