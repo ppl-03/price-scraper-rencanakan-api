@@ -41,7 +41,7 @@ def get_table_columns_mysql(table_name):
 def get_table_columns_sqlite(table_name):
     table_name = _validate_table_name(table_name)
     with connection.cursor() as cursor:
-        cursor.execute("SELECT name FROM pragma_table_info(?)", [table_name])
+        cursor.execute("SELECT name FROM pragma_table_info(%s)", [table_name])
         return [row[0] for row in cursor.fetchall()]
 
 

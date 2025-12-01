@@ -4,9 +4,9 @@ This allows API token authentication to bypass CSRF checks in a secure way.
 """
 from functools import wraps
 from django.http import JsonResponse
-import logging
+from .logging_utils import get_gemilang_logger
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("decorators")
 
 
 def api_token_required(view_func):
@@ -28,7 +28,7 @@ def api_token_required(view_func):
         
         is_valid, error_message = _validate_api_token(request)
         if not is_valid:
-            logger.warning(f"API token validation failed: {error_message}")
+            logger.warning("API token validation failed: %s", error_message)
             return JsonResponse({'error': error_message}, status=401)
         
         # Token is valid, proceed with the view

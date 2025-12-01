@@ -4,6 +4,7 @@ import json
 import logging
 import uuid
 import time
+from .logging_utils import get_gemilang_logger
 
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
@@ -20,7 +21,7 @@ from .sentry_monitoring import (
     GemilangTaskMonitor
 )
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("views")
 
 
 def _clean_location_name(location_name: str) -> str:
@@ -176,6 +177,64 @@ def scrape_products(request):
             return JsonResponse({
                 'error': 'Internal server error occurred'
             }, status=500)
+    try:
+        validated_data = request.validated_data
+        keyword = validated_data.get('keyword')
+        sort_by_price = validated_data.get('sort_by_price', True)
+        page = validated_data.get('page', 0)
+        
+        location_scraper = create_gemilang_location_scraper()
+        location_result = location_scraper.scrape_locations(timeout=30)
+        
+        locations_count = len(location_result.locations) if location_result.locations else 0
+        logger.info(
+            "[scrape_products] Location scraping - Success: %s, Count: %s",
+            location_result.success,
+            locations_count
+        )
+        
+        store_locations = []
+        if location_result.success and location_result.locations:
+            store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
+            logger.info("[scrape_products] Found %s locations", len(store_locations))
+        else:
+            logger.warning("[scrape_products] No locations found - Success: %s", location_result.success)
+        
+        all_stores_location = ", ".join(store_locations) if store_locations else ""
+        logger.info("[scrape_products] Location string length: %s", len(all_stores_location))
+        
+        scraper = create_gemilang_scraper()
+        result = scraper.scrape_products(
+            keyword=keyword,
+            sort_by_price=sort_by_price,
+            page=page
+        )
+        
+        products_data = [
+            {
+                'name': product.name,
+                'price': product.price,
+                'url': product.url,
+                'unit': product.unit,
+                'location': all_stores_location
+            }
+            for product in result.products
+        ]
+        
+        response_data = {
+            'success': result.success,
+            'products': products_data,
+            'error_message': result.error_message,
+            'url': result.url
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error("Unexpected error in scraper: %s", type(e).__name__)
+        return JsonResponse({
+            'error': 'Internal server error occurred'
+        }, status=500)
 
 
 def _validate_timeout_param(x):
@@ -216,7 +275,7 @@ def gemilang_locations_view(request):
         return JsonResponse(response_data)
         
     except Exception as e:
-        logger.error(f"Unexpected error in locations endpoint: {type(e).__name__}")
+        logger.error("Unexpected error in locations endpoint: %s", type(e).__name__)
         return JsonResponse({
             'success': False,
             'locations': [],
@@ -339,10 +398,14 @@ def _fetch_store_locations():
     location_scraper = create_gemilang_location_scraper()
     location_result = location_scraper.scrape_locations(timeout=30)
     
-    logger.info(f"Location scraping result - Success: {location_result.success}, Locations count: {len(location_result.locations) if location_result.locations else 0}")
+    logger.info(
+        "Location scraping result - Success: %s, Locations count: %s",
+        location_result.success,
+        len(location_result.locations) if location_result.locations else 0
+    )
     
     if not location_result.success:
-        logger.error(f"Location scraping failed with error: {location_result.error_message}")
+        logger.error("Location scraping failed with error: %s", location_result.error_message)
         return ""
     
     if not location_result.locations:
@@ -350,10 +413,14 @@ def _fetch_store_locations():
         return ""
     
     store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
-    logger.info(f"Found {len(store_locations)} Gemilang store locations: {store_locations[:3]}")
+    logger.info("Found %s Gemilang store locations: %s", len(store_locations), store_locations[:3])
     
     all_stores_location = ", ".join(store_locations)
-    logger.info(f"Final location string length: {len(all_stores_location)}, Preview: {all_stores_location[:200]}")
+    logger.info(
+        "Final location string length: %s, Preview: %s",
+        len(all_stores_location),
+        all_stores_location[:200]
+    )
     
     return all_stores_location
 
@@ -366,7 +433,7 @@ def _categorize_products(products_data):
     for product in products_data:
         category = categorizer.categorize(product['name'])
         product['category'] = category if category else None
-        logger.info(f"Categorized '{product['name']}' as '{category}'")
+        logger.info("Categorized '%s' as '%s'", product['name'], category)
 
 
 @require_http_methods(["POST"])
@@ -412,7 +479,11 @@ def scrape_and_save(request):
             for product in result.products
         ]
         
-        logger.info(f"Prepared {len(products_data)} products with location: {all_stores_location[:100]}...")
+        logger.info(
+            "Prepared %s products with location: %s...",
+            len(products_data),
+            all_stores_location[:100]
+        )
         
         if not products_data:
             return JsonResponse({
@@ -438,7 +509,7 @@ def scrape_and_save(request):
         return _handle_regular_save(db_service, products_data)
         
     except Exception as e:
-        logger.error(f"Unexpected error in scrape_and_save: {type(e).__name__}")
+        logger.error("Unexpected error in scrape_and_save: %s", type(e).__name__)
         return JsonResponse({
             'error': f'Internal server error: {str(e)}'
         }, status=500)
@@ -464,7 +535,7 @@ def scrape_popularity(request):
         return JsonResponse(response_data)
 
     except Exception as e:
-        logger.error(f"Unexpected error in scraper: {type(e).__name__}")
+        logger.error("Unexpected error in scraper: %s", type(e).__name__)
         return JsonResponse({
             'error': 'Internal server error occurred'
         }, status=500)
