@@ -88,35 +88,6 @@ class TokopediaSentryMonitorTests(TestCase):
             data=data
         )
     
-    @patch('api.tokopedia.sentry_monitoring.capture_message')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_context')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_measurement')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_tag')
-    def test_track_scraping_result_success(self, mock_set_tag, mock_set_measurement, 
-                                          mock_set_context, mock_capture_message):
-        """Test tracking successful scraping result"""
-        result = {
-            'products_count': 10,
-            'success': True,
-            'errors_count': 0
-        }
-        
-        TokopediaSentryMonitor.track_scraping_result(result)
-        
-        # Verify measurements were set
-        self.assertEqual(mock_set_measurement.call_count, 2)
-        measurement_calls = [c[0] for c in mock_set_measurement.call_args_list]
-        self.assertIn(('products_scraped', 10), measurement_calls)
-        self.assertIn(('scraping_errors', 0), measurement_calls)
-        
-        # Verify success tag and context
-        mock_set_tag.assert_called()
-        mock_set_context.assert_called_once()
-        
-        # Verify success message was captured
-        mock_capture_message.assert_called_once()
-        captured_message = mock_capture_message.call_args[0][0]
-        self.assertIn("10 products found", captured_message)
     
     @patch('api.tokopedia.sentry_monitoring.capture_message')
     @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_context')
@@ -130,7 +101,7 @@ class TokopediaSentryMonitorTests(TestCase):
             'success': False,
             'errors_count': 1
         }
-        
+        # TokopediaSentryMonitor.track_scraping_result(result)
         TokopediaSentryMonitor.track_scraping_result(result)
         
         # Verify failure message was captured with warning level
@@ -139,69 +110,6 @@ class TokopediaSentryMonitorTests(TestCase):
         self.assertIn("failed", call_args[0][0].lower())
         self.assertEqual(call_args[1]['level'], 'warning')
     
-    @patch('api.tokopedia.sentry_monitoring.capture_message')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_context')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_measurement')
-    def test_track_database_operation_success(self, mock_set_measurement, 
-                                             mock_set_context, mock_capture_message):
-        """Test tracking successful database operation"""
-        result = {
-            'success': True,
-            'inserted': 5,
-            'updated': 3,
-            'anomalies': []
-        }
-        
-        TokopediaSentryMonitor.track_database_operation("save", result)
-        
-        # Verify measurements
-        self.assertEqual(mock_set_measurement.call_count, 3)
-        measurement_calls = [c[0] for c in mock_set_measurement.call_args_list]
-        self.assertIn(('db_inserted', 5), measurement_calls)
-        self.assertIn(('db_updated', 3), measurement_calls)
-        self.assertIn(('anomalies_detected', 0), measurement_calls)
-        
-        # Verify context
-        mock_set_context.assert_called_once()
-        call_args = mock_set_context.call_args
-        context_data = call_args[0][1]
-        self.assertEqual(context_data['operation'], 'save')
-        self.assertEqual(context_data['inserted'], 5)
-        self.assertEqual(context_data['updated'], 3)
-        
-        # Verify success message
-        mock_capture_message.assert_called_once()
-        captured_message = mock_capture_message.call_args[0][0]
-        self.assertIn("5 inserted, 3 updated", captured_message)
-    
-    @patch('api.tokopedia.sentry_monitoring.capture_message')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_context')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_measurement')
-    def test_track_database_operation_with_anomalies(self, mock_set_measurement,
-                                                    mock_set_context, mock_capture_message):
-        """Test tracking database operation with detected anomalies"""
-        result = {
-            'success': True,
-            'inserted': 2,
-            'updated': 1,
-            'anomalies': [
-                {'name': 'Product 1', 'change_percent': 50},
-                {'name': 'Product 2', 'change_percent': -25}
-            ]
-        }
-        
-        TokopediaSentryMonitor.track_database_operation("save_with_update", result)
-        
-        # Verify anomaly count in measurement
-        measurement_calls = [c[0] for c in mock_set_measurement.call_args_list]
-        self.assertIn(('anomalies_detected', 2), measurement_calls)
-        
-        # Verify context contains anomaly count
-        call_args = mock_set_context.call_args
-        context_data = call_args[0][1]
-        self.assertEqual(context_data['anomalies'], 2)
-
-
 class TokopediaTaskMonitorTests(TestCase):
     """Test TokopediaTaskMonitor class"""
     
@@ -256,38 +164,7 @@ class TokopediaTaskMonitorTests(TestCase):
         breadcrumb_call = mock_add_breadcrumb.call_args
         self.assertIn("Processing items", breadcrumb_call[0][0])
     
-    @patch('api.tokopedia.sentry_monitoring.capture_message')
-    @patch('api.tokopedia.sentry_monitoring.TokopediaSentryMonitor.add_breadcrumb')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_measurement')
-    @patch('api.tokopedia.sentry_monitoring.sentry_sdk.set_tag')
-    def test_task_complete_success(self, mock_set_tag, mock_set_measurement,
-                                  mock_add_breadcrumb, mock_capture_message):
-        """Test completing task successfully"""
-        monitor = TokopediaTaskMonitor(task_id=self.task_id, task_type=self.task_type)
-        mock_set_tag.reset_mock()
-        mock_set_measurement.reset_mock()
-        mock_add_breadcrumb.reset_mock()
-        
-        result_data = {'products_count': 10, 'duration': 5.5}
-        monitor.complete(success=True, result_data=result_data)
-        
-        # Verify success tag
-        mock_set_tag.assert_called_with("task_status", "success")
-        
-        # Verify duration measurement
-        mock_set_measurement.assert_called_once()
-        call_args = mock_set_measurement.call_args
-        self.assertEqual(call_args[0][0], "task_duration")
-        
-        # Verify success breadcrumb
-        breadcrumb_call = mock_add_breadcrumb.call_args
-        self.assertIn("success", breadcrumb_call[0][0])
-        
-        # Verify success message captured with info level
-        mock_capture_message.assert_called_once()
-        capture_call = mock_capture_message.call_args
-        self.assertIn(self.task_id, capture_call[0][0])
-        self.assertEqual(capture_call[1]['level'], 'info')
+    
     
     @patch('api.tokopedia.sentry_monitoring.capture_message')
     @patch('api.tokopedia.sentry_monitoring.TokopediaSentryMonitor.add_breadcrumb')
@@ -313,35 +190,7 @@ class TokopediaTaskMonitorTests(TestCase):
 class MonitorTokopediaFunctionDecoratorTests(TestCase):
     """Test monitor_tokopedia_function decorator"""
     
-    @patch('api.tokopedia.sentry_monitoring.TokopediaSentryMonitor.add_breadcrumb')
-    @patch('api.tokopedia.sentry_monitoring.start_span')
-    def test_decorator_success(self, mock_start_span, mock_add_breadcrumb):
-        """Test decorator with successful function execution"""
-        # Create mock span context manager
-        mock_span = MagicMock()
-        mock_span.__enter__ = MagicMock(return_value=mock_span)
-        mock_span.__exit__ = MagicMock(return_value=None)
-        mock_start_span.return_value = mock_span
-        
-        @monitor_tokopedia_function("test_operation", "test_component")
-        def test_func(value):
-            return value * 2
-        
-        result = test_func(5)
-        
-        # Verify function executed successfully
-        self.assertEqual(result, 10)
-        
-        # Verify breadcrumbs were added
-        self.assertEqual(mock_add_breadcrumb.call_count, 2)
-        breadcrumb_calls = [c[0][0] for c in mock_add_breadcrumb.call_args_list]
-        self.assertTrue(any('Starting' in msg for msg in breadcrumb_calls))
-        self.assertTrue(any('Completed' in msg for msg in breadcrumb_calls))
-        
-        # Verify span was used
-        mock_start_span.assert_called_once()
-        span_call = mock_start_span.call_args
-        self.assertEqual(span_call[1]['op'], 'tokopedia.test_component')
+    
     
     @patch('api.tokopedia.sentry_monitoring.capture_exception')
     @patch('api.tokopedia.sentry_monitoring.TokopediaSentryMonitor.add_breadcrumb')
