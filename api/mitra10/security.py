@@ -1,4 +1,3 @@
-import logging
 import re
 import time
 import json
@@ -11,7 +10,9 @@ from django.core.cache import cache
 from django.db import connection
 import bleach
 
-logger = logging.getLogger(__name__)
+from .logging_utils import get_mitra10_logger
+
+logger = get_mitra10_logger("security")
 
 
 # =============================================================================

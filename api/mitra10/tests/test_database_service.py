@@ -394,7 +394,7 @@ class TestMitra10DatabaseService(TestCase):
             }]
             
             # This should trigger the error logging path
-            with self.assertLogs('api.mitra10.database_service', level='ERROR') as log:
+            with self.assertLogs('api.mitra10', level='ERROR') as log:
                 service = Mitra10DatabaseService()
                 service.save_with_price_update(updated_data)
                 # Should log the error but continue

@@ -1,5 +1,4 @@
 from bs4 import BeautifulSoup
-import builtins
 from django.test import TestCase
 from unittest.mock import MagicMock
 import unittest.mock
@@ -377,12 +376,12 @@ class TestMitra10HTMLParser(TestCase):
             <div class="jss273 grid-item">
                 <a class="gtm_mitra10_cta_product" href="/sold-int-bad"><p>Produk G</p></a>
                 <span class="price__final">IDR 40,000</span>
-                <div>123 terjual</div>
+                <div>abc terjual</div>
             </div>
         </div>
         '''
-        with patch.object(builtins, 'int', side_effect=ValueError("boom")):
-            products = self.parser.parse_products(html)
+        # Test with non-numeric sold count to trigger ValueError in normalize
+        products = self.parser.parse_products(html)
         self.assertEqual(len(products), 1)
         self.assertIsNone(products[0].sold_count)
 

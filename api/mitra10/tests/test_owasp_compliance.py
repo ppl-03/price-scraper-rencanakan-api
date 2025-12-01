@@ -16,6 +16,7 @@ from api.mitra10.security import (
     enforce_resource_limits,
     rate_limiter
 )
+import logging
 
 
 class TestRateLimiter(unittest.TestCase):
@@ -890,20 +891,13 @@ class TestInputValidatorCoverageExtended(unittest.TestCase):
     """Additional tests for InputValidator coverage"""
     
     def test_validate_keyword_sql_injection_detected(self):
-        """Test SQL injection detection and critical logging (lines 242-243)"""
-        # SQL injection with invalid characters fails pattern check first
         is_valid, error_msg, value = InputValidator.validate_keyword("'; DROP TABLE users;--")
         
         self.assertFalse(is_valid)
         self.assertIn("invalid characters", error_msg.lower())
         self.assertIsNone(value)
         
-        # Test that the SQL injection detection logs critical warnings
-        # Even though pattern may pass, the SQL detection should catch keywords
-        # Note: The pattern only allows alphanumeric, spaces, hyphens, underscores, periods
-        # So we test the SQL detection separately by checking the logging happens
-        import logging
-        with self.assertLogs('api.mitra10.security', level='WARNING') as log:
+        with self.assertLogs('api.mitra10', level='WARNING') as log:
             # This will fail pattern check but we verify the logging works
             InputValidator.validate_keyword("test; DROP TABLE")
             # Verify that invalid patterns are logged

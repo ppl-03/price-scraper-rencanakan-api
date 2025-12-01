@@ -1,9 +1,9 @@
 import re
-import logging
 from typing import Optional, Dict, List, Protocol
 from bs4 import BeautifulSoup
+from .logging_utils import get_mitra10_logger
 
-logger = logging.getLogger(__name__)
+logger = get_mitra10_logger("unit_parser")
 
 # Unit type constants
 UNIT_M2 = 'M²'

@@ -3,7 +3,12 @@ from .test_url_builder import TestMitra10UrlBuilder
 from .test_html_parser import TestMitra10HTMLParser
 from .test_integration import TestMitra10Integration
 from .test_http_client import TestMitra10HttpClient
-
+from .test_logging_utils import (
+    SanitizeLogInputTest,
+    Mitra10LoggerTest,
+    GetMitra10LoggerTest,
+    Mitra10LoggerIntegrationTest,
+)
 from .test_api import TestMitra10API
 from .test_factory import TestMitra10Factory
 from .test_location_parser import TestMitra10LocationParser
@@ -39,7 +44,22 @@ from .test_owasp_compliance import (
     TestSecurityDecorators,
     TestEdgeCases,
     TestDecoratorIntegration,
+    TestSecurityCoverageExtended,
+    TestAccessControlCoverage,
+    TestInputValidatorCoverageExtended,
+    TestDatabaseQueryValidatorCoverage,
+    TestSecurityDesignPatternsCoverageExtended,
+    TestValidateInputDecoratorCoverage,
 )
+from .test_sentry_monitoring import (
+    TestMitra10SentryMonitorConstants,
+    TestMitra10SentryMonitorMethods,
+    TestMonitorMitra10FunctionDecorator,
+    TestTrackMitra10Transaction,
+    TestMitra10TaskMonitor,
+)
+from .test_scheduler import TestMitra10Scheduler
+from .test_anomaly_integration import TestMitra10AnomalyIntegration
 
 __all__ = [
     "TestMitra10PriceCleaner",
@@ -57,7 +77,6 @@ __all__ = [
     "TestMitra10PriceScraperPopularity",
     "TestMitra10URLs",
     "TestMitra10Views",
-    "TestMitra10HandshakeTest",
     "TestMitra10UnitPatternRepository",
     "TestMitra10AreaPatternStrategy",
     "TestMitra10UnitExtractor",
@@ -83,4 +102,21 @@ __all__ = [
     "TestSecurityDecorators",
     "TestEdgeCases",
     "TestDecoratorIntegration",
+    "TestSecurityCoverageExtended",
+    "TestAccessControlCoverage",
+    "TestInputValidatorCoverageExtended",
+    "TestDatabaseQueryValidatorCoverage",
+    "TestSecurityDesignPatternsCoverageExtended",
+    "TestValidateInputDecoratorCoverage",
+    "SanitizeLogInputTest",
+    "Mitra10LoggerTest",
+    "GetMitra10LoggerTest",
+    "Mitra10LoggerIntegrationTest",
+    "TestMitra10SentryMonitorConstants",
+    "TestMitra10SentryMonitorMethods",
+    "TestMonitorMitra10FunctionDecorator",
+    "TestTrackMitra10Transaction",
+    "TestMitra10TaskMonitor",
+    "TestMitra10Scheduler",
+    "TestMitra10AnomalyIntegration",
 ]

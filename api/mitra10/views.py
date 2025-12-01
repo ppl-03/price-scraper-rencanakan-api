@@ -10,11 +10,12 @@ from .sentry_monitoring import (
     track_mitra10_transaction,
     Mitra10TaskMonitor
 )
+from .logging_utils import get_mitra10_logger
 import logging
 import uuid
 import time
 
-logger = logging.getLogger(__name__)
+logger = get_mitra10_logger("views")
 
 # Error message constants
 ERROR_QUERY_REQUIRED = 'Query parameter is required'
@@ -52,7 +53,11 @@ def _validate_api_token(request) -> tuple[bool, str]:
     if token not in API_TOKENS:
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
         try:
-            logger.warning(f"Invalid API token attempt from {client_ip}")
+            logger.warning(
+                "Invalid API token attempt from %s",
+                client_ip,
+                extra={"operation": "_validate_api_token"}
+            )
         except Exception:
             # Don't let logging failures block auth flow
             pass
@@ -64,13 +69,21 @@ def _validate_api_token(request) -> tuple[bool, str]:
 
     if allowed_ips and client_ip not in allowed_ips:
         try:
-            logger.warning(f"IP {client_ip} not allowed for token {token_info['name']}")
+            logger.warning(
+                "IP %s not allowed for token %s",
+                client_ip, token_info['name'],
+                extra={"operation": "_validate_api_token"}
+            )
         except Exception:
             pass
         return False, 'IP not authorized'
 
     try:
-        logger.info(f"Valid API token used from {client_ip}: {token_info['name']}")
+        logger.info(
+            "Valid API token used from %s: %s",
+            client_ip, token_info['name'],
+            extra={"operation": "_validate_api_token"}
+        )
     except Exception:
         # Swallow logging errors to allow request to proceed
         pass
@@ -164,11 +177,20 @@ def scrape_products(request):
                 'url': result.url
             }
             
-            logger.info(f"Mitra10 scraping successful for query '{query}': {len(result.products)} products found")
+            logger.info(
+                "Mitra10 scraping successful for query '%s': %s products found",
+                query, len(result.products),
+                extra={"operation": "scrape_products"}
+            )
             return JsonResponse(response_data)
             
         except Exception as e:
-            logger.error(f"Error in scrape_products: {str(e)}", exc_info=True)
+            logger.error(
+                "Error in scrape_products: %s",
+                str(e),
+                exc_info=True,
+                extra={"operation": "scrape_products"}
+            )
             
             # Track error in Sentry
             Mitra10SentryMonitor.add_breadcrumb(
@@ -223,7 +245,12 @@ def scrape_locations(request):
         })
 
     except Exception as e:
-        logger.error(f"Error in scrape_locations: {str(e)}", exc_info=True)
+        logger.error(
+            "Error in scrape_locations: %s",
+            str(e),
+            exc_info=True,
+            extra={"operation": "scrape_locations"}
+        )
         return JsonResponse({
             'success': False,
             'locations': [],
@@ -268,7 +295,11 @@ def _scrape_location_data():
         if loc_result.get('success') and loc_result.get('locations'):
             return ', '.join([str(l) for l in loc_result.get('locations', [])])
     except Exception as e:
-        logger.warning(f"Failed to scrape locations; continuing without locations: {e}")
+        logger.warning(
+            "Failed to scrape locations; continuing without locations: %s",
+            e,
+            extra={"operation": "_scrape_location_data"}
+        )
     return ''
 
 
@@ -304,10 +335,18 @@ def _auto_categorize_new_products(save_result):
             categorization_result = categorization_service.categorize_products('mitra10', product_ids)
             categorized_count = categorization_result.get('categorized', 0)
             
-            logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new Mitra10 products")
+            logger.info(
+                "Auto-categorized %s out of %s new Mitra10 products",
+                categorized_count, len(product_ids),
+                extra={"operation": "_auto_categorize_new_products"}
+            )
             return categorized_count
     except Exception as cat_error:
-        logger.warning(f"Auto-categorization failed: {str(cat_error)}")
+        logger.warning(
+            "Auto-categorization failed: %s",
+            str(cat_error),
+            extra={"operation": "_auto_categorize_new_products"}
+        )
         # Don't fail the entire operation if categorization fails
     
     return 0
@@ -334,7 +373,11 @@ def _handle_scraping_phase(query, params, task):
         )
         return result, None
     except Exception as e:
-        logger.error(f"Scraping error: {str(e)}")
+        logger.error(
+            "Scraping error: %s",
+            str(e),
+            extra={"operation": "_handle_scraping_phase"}
+        )
         Mitra10SentryMonitor.add_breadcrumb(
             f"Scraping failed: {str(e)}",
             category=BREADCRUMB_CATEGORY_ERROR,
@@ -371,7 +414,11 @@ def _handle_database_save(products_data, task):
         )
         return save_result, None
     except Exception as e:
-        logger.error(f"Database error: {str(e)}")
+        logger.error(
+            "Database error: %s",
+            str(e),
+            extra={"operation": "_handle_database_save"}
+        )
         Mitra10SentryMonitor.add_breadcrumb(
             f"Database save failed: {str(e)}",
             category=BREADCRUMB_CATEGORY_ERROR,
@@ -477,7 +524,12 @@ def scrape_and_save_products(request):
             # Complete task
             task.complete(success=save_result.get('success', False), result_data=operation_result)
             
-            logger.info(f"Mitra10 saved {save_result.get('inserted', 0)} new, updated {save_result.get('updated', 0)}, detected {len(save_result.get('anomalies', []))} anomalies for query '{query}'")
+            logger.info(
+                "Mitra10 saved %s new, updated %s, detected %s anomalies for query '%s'",
+                save_result.get('inserted', 0), save_result.get('updated', 0),
+                len(save_result.get('anomalies', [])), query,
+                extra={"operation": "scrape_and_save_products"}
+            )
             
             return JsonResponse({
                 'success': save_result.get('success', False),
@@ -489,7 +541,12 @@ def scrape_and_save_products(request):
             })
             
         except Exception as e:
-            logger.error(f"Error in scrape_and_save_products: {str(e)}", exc_info=True)
+            logger.error(
+                "Error in scrape_and_save_products: %s",
+                str(e),
+                exc_info=True,
+                extra={"operation": "scrape_and_save_products"}
+            )
             
             # Track error in Sentry
             Mitra10SentryMonitor.add_breadcrumb(
@@ -543,11 +600,20 @@ def scrape_popularity(request):
             'url': result.url
         }
         
-        logger.info(f"Mitra10 popularity scraping successful for query '{query}': {len(result.products)} best sellers found")
+        logger.info(
+            "Mitra10 popularity scraping successful for query '%s': %s best sellers found",
+            query, len(result.products),
+            extra={"operation": "scrape_popularity"}
+        )
         return JsonResponse(response_data)
         
     except Exception as e:
-        logger.error(f"Error in scrape_popularity: {str(e)}", exc_info=True)
+        logger.error(
+            "Error in scrape_popularity: %s",
+            str(e),
+            exc_info=True,
+            extra={"operation": "scrape_popularity"}
+        )
         return JsonResponse({
             'success': False,
             'products': [],

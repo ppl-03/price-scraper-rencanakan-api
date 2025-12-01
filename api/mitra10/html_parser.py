@@ -1,4 +1,3 @@
-import logging
 import re
 from typing import List, Optional, Callable, Any
 from bs4 import BeautifulSoup
@@ -6,8 +5,9 @@ from bs4 import BeautifulSoup
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import Mitra10PriceCleaner
 from .unit_parser import Mitra10UnitParser
+from .logging_utils import get_mitra10_logger
 
-logger = logging.getLogger(__name__)
+logger = get_mitra10_logger("html_parser")
 
 MAX_SOLD_TEXT_LEN = 64
 RB_RIBU_PATTERN = re.compile(r"\b(\d{1,4}(?:[.,]\d{1,3})?)\s*(?:rb|ribu)\b", re.IGNORECASE)
@@ -148,7 +148,10 @@ class SafeExtractionMixin:
         try:
             return operation(*args, **kwargs)
         except Exception as e:
-            logger.warning(f"Failed to {operation_name}: {str(e)}")
+            logger.warning(
+                "Failed to %s: %s", operation_name, str(e),
+                extra={"operation": "safe_extract"}
+            )
             return None
     
     def safe_extract_with_default(self, operation: Callable, default_value: Any, operation_name: str, *args, **kwargs) -> Any:
@@ -157,7 +160,10 @@ class SafeExtractionMixin:
             result = operation(*args, **kwargs)
             return result if result is not None else default_value
         except Exception as e:
-            logger.warning(f"Failed to {operation_name}: {str(e)}")
+            logger.warning(
+                "Failed to %s: %s", operation_name, str(e),
+                extra={"operation": "safe_extract_with_default"}
+            )
             return default_value
 
 
@@ -211,7 +217,11 @@ class Mitra10HtmlParser(IHtmlParser, SafeExtractionMixin):
     
     def _extract_all_products(self, soup: BeautifulSoup) -> List[Product]:
         product_items = soup.select(self._product_selector)
-        logger.info(f"Found {len(product_items)} product items in HTML")
+        logger.info(
+            "Found %s product items in HTML",
+            len(product_items),
+            extra={"operation": "extract_all_products"}
+        )
         
         products = []
         for item in product_items:
@@ -219,7 +229,11 @@ class Mitra10HtmlParser(IHtmlParser, SafeExtractionMixin):
             if product:
                 products.append(product)
         
-        logger.info(f"Successfully parsed {len(products)} products")
+        logger.info(
+            "Successfully parsed %s products",
+            len(products),
+            extra={"operation": "extract_all_products"}
+        )
         return products
     
     def _safely_extract_product(self, item) -> Optional[Product]:
