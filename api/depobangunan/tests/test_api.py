@@ -909,7 +909,7 @@ class TestDepoBangunanViewsCoverageImprovement(TestCase):
         mock_validate.return_value = (False, "Invalid price: must be positive")
         
         # Create test products
-        products = [create_mock_product("Test", 0, "http://test.com", "PCS")]
+        products = [create_mock_product("Test", 0, "https://test.com", "PCS")] 
         
         result = _save_products_to_database(products)
         
@@ -944,7 +944,7 @@ class TestDepoBangunanViewsCoverageImprovement(TestCase):
         with patch('db_pricing.models.DepoBangunanProduct') as mock_product_model:
             mock_product_model.objects.filter.side_effect = Exception("Database query failed")
             
-            products = [create_mock_product("Test", 5000, "http://test.com", "PCS")]
+            products = [create_mock_product("Test", 5000, "https://test.com", "PCS")] 
             result = _save_products_to_database(products)
             
             # Should continue despite categorization failure
