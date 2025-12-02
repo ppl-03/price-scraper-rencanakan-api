@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponseNotAllowed
-from django.views.decorators.http import require_POST, require_GET, require_http_methods
+from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.csrf import csrf_protect
 from django.contrib import messages
 from django.urls import reverse
@@ -11,9 +11,12 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 import re, json, os, time
 import secrets
+import logging
 
 # For diagnostics + plain HTML fetch
 from api.core import BaseHttpClient
+
+logger = logging.getLogger(__name__)
 
 # Vendors (use each package's own factory + url builder)
 from api.gemilang.factory import create_gemilang_scraper, create_gemilang_location_scraper
@@ -28,9 +31,15 @@ from api.juragan_material.url_builder import JuraganMaterialUrlBuilder
 from api.mitra10.factory import create_mitra10_scraper, create_mitra10_location_scraper
 from api.mitra10.url_builder import Mitra10UrlBuilder
 
-from api.tokopedia.factory import create_tokopedia_scraper
-from api.tokopedia.url_builder import TokopediaUrlBuilder
-from api.tokopedia.scraper import TOKOPEDIA_LOCATION_IDS
+from api.tokopedia.url_builder_ulasan import TokopediaUrlBuilderUlasan
+from api.tokopedia.http_client import TokopediaHttpClient
+from api.tokopedia.html_parser import TokopediaHtmlParser
+from api.tokopedia.scraper import TokopediaPriceScraper
+from api.tokopedia.location_scraper import TokopediaLocationScraper
+from api.tokopedia.unit_parser import TokopediaUnitParser
+
+# Import categorization service
+from db_pricing.categorization import ProductCategorizer
 
 # Playwright fallback (optional at runtime)
 HAS_PLAYWRIGHT = False
@@ -51,6 +60,10 @@ TOKOPEDIA_SOURCE = "Tokopedia"
 DASHBOARD_FORM_TEMPLATE = "dashboard/form.html"
 JSON_LD_TYPE_KEY = "@type"
 HTML_PARSER = "html.parser"
+
+# URL name constants
+CURATED_PRICE_LIST_URL = "dashboard:curated_price_list"
+CURATED_PRICE_CREATE_POST_URL = "dashboard:curated_price_create_post"
 
 # Error message constants
 CONTEXT_MANAGER_ERROR = "context manager"
@@ -106,7 +119,7 @@ def _fetch_len(url: str) -> int:
 # ---------------- Juragan fallback (HTML-only) ----------------
 def _extract_juragan_product_name(card) -> str | None:
     """Extract product name from Juragan Material card."""
-    for sel in ("a p.product-name", "p.product-name", PRODUCT_NAME_SELECTOR, "[class*=name]"):
+    for sel in ("a " + PRODUCT_NAME_SELECTOR, PRODUCT_NAME_SELECTOR, PRODUCT_NAME_SELECTOR, "[class*=name]"):
         el = card.select_one(sel)
         if el and el.get_text(strip=True):
             return _clean_text(el.get_text(" ", strip=True))
@@ -120,7 +133,7 @@ def _extract_juragan_product_name(card) -> str | None:
 
 def _extract_juragan_product_link(card) -> str:
     """Extract product link from Juragan Material card."""
-    link = card.select_one("a:has(p.product-name)") or card.select_one(HREF_SELECTOR)
+    link = card.select_one("a:has(p" + PRODUCT_NAME_SELECTOR + ")") or card.select_one(HREF_SELECTOR)
     return link.get("href") if link and link.get("href") else "/products/product"
 
 
@@ -318,6 +331,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
         cards = soup.select("div.product-card") or \
                 soup.select("div.product-card__item, div.card-product, div.catalog-item, div.product")
 
+        categorizer = ProductCategorizer()
         out = []
         for card in cards:
             name = _extract_juragan_product_name(card)
@@ -333,8 +347,11 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             # Extract unit and location for Juragan Material
             unit = _extract_juragan_product_unit(href) if href else ""
             location = _extract_juragan_product_location(href) if href else ""
+            
+            # Categorize the product
+            category = categorizer.categorize(name)
 
-            out.append({"item": name, "value": price, "unit": unit, "location": location, "source": JURAGAN_MATERIAL_SOURCE, "url": href})
+            out.append({"item": name, "value": price, "unit": unit, "location": location, "source": JURAGAN_MATERIAL_SOURCE, "url": href, "category": category or "Lainnya"})
 
         return out, url, len(html)
     except Exception:
@@ -345,7 +362,7 @@ def _juragan_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
 def _extract_depo_product_name(card) -> str | None:
     """Extract product name from Depo Bangunan card."""
     # Try specific Depo Bangunan selectors
-    for sel in ("strong.product.name.product-item-name a", "strong.product-item-name a", ".product-item-name", ".product-name"):
+    for sel in ("strong.product.name.product-item-name a", "strong.product-item-name a", ".product-item-name", PRODUCT_NAME_SELECTOR):
         el = card.select_one(sel)
         if el and el.get_text(strip=True):
             return _clean_text(el.get_text(" ", strip=True))
@@ -451,6 +468,7 @@ def _depo_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
                 soup.select("li.product-item") or \
                 soup.select("div.product-item")
 
+        categorizer = ProductCategorizer()
         out = []
         for card in cards:
             name = _extract_depo_product_name(card)
@@ -469,8 +487,11 @@ def _depo_fallback(keyword: str, sort_by_price: bool = True, page: int = 0):
             # If no unit found from name, try extracting from detail page
             if not unit and href:
                 unit = _extract_depo_product_unit(href)
+            
+            # Categorize the product
+            category = categorizer.categorize(name)
 
-            out.append({"item": name, "value": price, "unit": unit, "source": DEPO_BANGUNAN_SOURCE, "url": href})
+            out.append({"item": name, "value": price, "unit": unit, "source": DEPO_BANGUNAN_SOURCE, "url": href, "category": category or "Lainnya"})
 
         return out, url, len(html)
     except Exception:
@@ -656,6 +677,7 @@ def _parse_jsonld_products(data: dict | list, emit_func):
 def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
     """Parse Mitra10 JSON-LD structured data."""
     out = []
+    categorizer = ProductCategorizer()
 
     def _emit(name: str | None, price_val: int, href: str | None):
         if not name or price_val <= 0:
@@ -673,7 +695,10 @@ def _parse_mitra10_jsonld(soup, request_url: str, seen: set) -> list[dict]:
         if not unit and full_url:
             unit = _extract_mitra10_product_unit(full_url)
         
-        out.append({"item": _clean_text(name), "value": price_val, "unit": unit, "source": MITRA10_SOURCE, "url": full_url})
+        # Categorize the product
+        category = categorizer.categorize(name)
+        
+        out.append({"item": _clean_text(name), "value": price_val, "unit": unit, "source": MITRA10_SOURCE, "url": full_url, "category": category or "Lainnya"})
 
     jsonld_scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
     for script in jsonld_scripts:
@@ -731,7 +756,7 @@ def _try_specific_mitra10_selectors(container) -> str | None:
     """Try specific product selectors for Mitra10."""
     specific_selectors = [
         "a.product-item-link",
-        ".product-name",
+        PRODUCT_NAME_SELECTOR,
         "h3", "h2", "h1"
     ]
 
@@ -1038,6 +1063,64 @@ def _try_alternative_mitra10_urls(keyword: str):
 
 
 # ---------------- Tokopedia helpers + fallback ----------------
+def _extract_tokopedia_product_unit(url: str) -> str:
+    """Extract product unit from Tokopedia product detail page."""
+    try:
+        if not url:
+            return ""
+
+        # Handle relative URLs
+        if url.startswith('/'):
+            url = f"https://www.tokopedia.com{url}"
+
+        # Fetch product detail page
+        html = _human_get(url)
+        if not html:
+            return ""
+
+        # Use Tokopedia's unit parser to extract unit from detail page
+        unit_parser = TokopediaUnitParser()
+
+        # Try to extract unit from the detail page HTML
+        unit = unit_parser.parse_unit(html)
+        return unit or ""
+
+    except Exception:
+        return ""
+
+
+def _extract_tokopedia_product_unit_from_name(name: str) -> str:
+    """Extract product unit from Tokopedia product name."""
+    try:
+        if not name:
+            return ""
+
+        # Use Tokopedia's unit parser to extract unit from product name
+        unit_parser = TokopediaUnitParser()
+
+        # Try to extract unit from the product name
+        unit = unit_parser._extract_unit_from_name(name)
+        return unit or ""
+
+    except Exception:
+        return ""
+
+
+def _extract_tokopedia_product_location(card) -> str:
+    """Extract product location from Tokopedia product card using location scraper."""
+    try:
+        if not card:
+            return ""
+
+        # Use Tokopedia's location scraper to extract location from product item
+        location_scraper = TokopediaLocationScraper()
+        location = location_scraper.extract_location_from_product_item(card)
+        return location or ""
+
+    except Exception:
+        return ""
+
+
 def _extract_tokopedia_product_name(card) -> str | None:
     """Extract product name from Tokopedia card."""
     # Try primary selector
@@ -1211,8 +1294,7 @@ def _tokopedia_fallback(keyword: str, sort_by_price: bool = True, page: int = 0)
 
 
 def _try_simple_tokopedia_url(keyword: str, sort_by_price: bool = True, page: int = 0):
-    """Try simple Tokopedia URL without complex parameters."""
-    url = _build_url_defensively(TokopediaUrlBuilder(), keyword, sort_by_price, page)
+    url = _build_url_defensively(TokopediaUrlBuilderUlasan(), keyword, sort_by_price, page)
     html = _human_get(url)
     prods = _parse_tokopedia_html(html)
     return prods, url, len(html)
@@ -1254,6 +1336,7 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
             soup.select('div.css-bk6tzz') or \
             soup.select('div[data-unify="Card"]')
 
+    categorizer = ProductCategorizer()
     out = []
     for card in cards:
         name = _extract_tokopedia_product_name(card)
@@ -1265,27 +1348,123 @@ def _parse_tokopedia_html(html: str) -> list[dict]:
             continue
 
         href = _extract_tokopedia_product_link(card)
+        
+        # Categorize the product
+        category = categorizer.categorize(name)
 
-        out.append({"item": name, "value": price, "source": TOKOPEDIA_SOURCE, "url": href})
+        # Extract location from product card
+        location = _extract_tokopedia_product_location(card)
+
+        # Extract unit from product name first (faster)
+        unit = _extract_tokopedia_product_unit_from_name(name)
+
+        # If no unit found from name, try extracting from detail page
+        if not unit and href:
+            unit = _extract_tokopedia_product_unit(href)
+
+        out.append({
+            "item": name, 
+            "value": price, 
+            "unit": unit,
+            "location": location,
+            "source": TOKOPEDIA_SOURCE, 
+            "url": href,
+            "category": category or "Lainnya"
+        })
 
     return out
 
 
 # ---------------- generic runners ----------------
+def _get_database_service(label: str):
+    """Get the appropriate database service for a vendor label."""
+    if label == GEMILANG_SOURCE:
+        from api.gemilang.database_service import GemilangDatabaseService
+        return GemilangDatabaseService()
+    elif label == MITRA10_SOURCE:
+        from api.mitra10.database_service import Mitra10DatabaseService
+        return Mitra10DatabaseService()
+    elif label == JURAGAN_MATERIAL_SOURCE:
+        from api.juragan_material.database_service import JuraganMaterialDatabaseService
+        return JuraganMaterialDatabaseService()
+    return None
+
+
+def _format_product_data(product, label: str, categorizer):
+    """Format a single product for database insertion."""
+    category = categorizer.categorize(product.name) or 'Lainnya'
+    
+    product_dict = {
+        'name': product.name,
+        'price': product.price,
+        'url': getattr(product, 'url', ''),
+        'unit': getattr(product, 'unit', ''),
+    }
+    
+    if label == MITRA10_SOURCE:
+        product_dict['category'] = category
+    
+    if label == JURAGAN_MATERIAL_SOURCE:
+        product_dict['location'] = getattr(product, 'location', 'Unknown')
+    
+    return product_dict
+
+
+def _execute_database_save(db_service, products_data, label: str):
+    """Execute the database save operation."""
+    if hasattr(db_service, 'save_with_price_update'):
+        result = db_service.save_with_price_update(products_data)
+        if result and result.get('success', False):
+            logger.info(f"{label}: Saved {result.get('inserted', 0)} new, updated {result.get('updated', 0)} products")
+            return True
+        logger.error(f"{label}: Database save failed - {result.get('error', 'Unknown error')}")
+        return False
+    
+    result = db_service.save(products_data)
+    if result:
+        logger.info(f"{label}: Saved {len(products_data)} products to database")
+        return True
+    logger.error(f"{label}: Failed to save products to database")
+    return False
+
+
+def _save_products_to_database(products, label: str):
+    """Save scraped products to the database."""
+    try:
+        db_service = _get_database_service(label)
+        if not db_service:
+            return True
+        
+        categorizer = ProductCategorizer()
+        products_data = [_format_product_data(p, label, categorizer) for p in products]
+        
+        return _execute_database_save(db_service, products_data, label)
+                
+    except Exception as db_error:
+        logger.error(f"Failed to save {label} products to database: {str(db_error)}")
+        return False
+
+
 def _handle_successful_scrape(request, res, label: str, url: str, html_len: int) -> list[dict]:
     """Handle successful scrape results."""
     rows = []
+    categorizer = ProductCategorizer()
+    
     for p in res.products:
         # Include unit and location when available
         unit = getattr(p, "unit", None)
         location = getattr(p, "location", None)
+        
+        # Categorize the product
+        category = categorizer.categorize(p.name)
 
         product_data = {
             "item": p.name,
             "value": p.price,
             "unit": unit,
             "source": label,
-            "url": getattr(p, "url", "")
+            "url": getattr(p, "url", ""),
+            "category": category or "Lainnya"
         }
 
         # Add location if available
@@ -1293,6 +1472,11 @@ def _handle_successful_scrape(request, res, label: str, url: str, html_len: int)
             product_data["location"] = location
 
         rows.append(product_data)
+    
+    # Auto-save products to database after successful scraping
+    if res.products:
+        _save_products_to_database(res.products, label)
+    
     messages.info(request, f"[{label}] URL: {url} | HTML: {html_len} bytes | parsed={len(rows)}")
     return rows
 
@@ -1382,29 +1566,51 @@ def _safe_scrape_products(scraper, keyword: str, sort_by_price: bool = True, pag
             return scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=page)
 
 
+def _scrape_batch_with_limit(scraper, keyword: str, sort_by_price: bool, limit: int) -> list:
+    products = scraper.scrape_batch([keyword])
+    
+    if len(products) >= limit:
+        return products
+    
+    if not hasattr(scraper, 'scrape_products'):
+        return products
+    
+    return _extend_products_to_limit(scraper, keyword, sort_by_price, limit, products)
+
+
+def _extend_products_to_limit(scraper, keyword: str, sort_by_price: bool, limit: int, products: list) -> list:
+    try:
+        extra_res = scraper.scrape_products(
+            keyword=keyword, 
+            sort_by_price=sort_by_price, 
+            page=1, 
+            limit=limit - len(products)
+        )
+        if getattr(extra_res, 'success', False) and getattr(extra_res, 'products', None):
+            products.extend(extra_res.products)
+    except TypeError:
+        pass  # scrape_products doesn't support limit parameter
+    
+    return products
+
+
+def _use_scrape_batch_method(scraper, keyword: str, sort_by_price: bool, limit: int | None):
+    from api.interfaces import ScrapingResult
+    
+    if limit:
+        products = _scrape_batch_with_limit(scraper, keyword, sort_by_price, limit)
+    else:
+        products = scraper.scrape_batch([keyword])
+    
+    return ScrapingResult(products=products, success=True, url="")
+
+
 def _handle_playwright_scraper(scraper, keyword: str, sort_by_price: bool, page: int, limit: int | None = None):
-    """Handle scraping for BatchPlaywrightClient-based scrapers."""
-    from api.playwright_client import BatchPlaywrightClient
     from api.interfaces import ScrapingResult
 
     try:
-        # Try to use scrape_batch method if available (like Mitra10)
         if hasattr(scraper, 'scrape_batch'):
-            # If limit is provided and scrape_batch supports batching, attempt to collect up to limit
-            if limit and hasattr(scraper, 'scrape_batch'):
-                # scrape_batch takes a list of keywords; for a single keyword we may need paging inside the scraper
-                products = scraper.scrape_batch([keyword])
-                # If scrape_batch returned fewer than limit, and the scraper supports paginate via scrape_products, attempt to fetch more
-                if len(products) < limit and hasattr(scraper, 'scrape_products'):
-                    try:
-                        extra_res = scraper.scrape_products(keyword=keyword, sort_by_price=sort_by_price, page=1, limit=limit - len(products))
-                        if getattr(extra_res, 'success', False) and getattr(extra_res, 'products', None):
-                            products.extend(extra_res.products)
-                    except TypeError:
-                        pass
-            else:
-                products = scraper.scrape_batch([keyword])
-            return ScrapingResult(products=products, success=True, url="")
+            return _use_scrape_batch_method(scraper, keyword, sort_by_price, limit)
         else:
             return _handle_playwright_scraper_fallback(scraper, keyword, sort_by_price, page)
     except Exception as e:
@@ -1651,6 +1857,14 @@ def _get_mitra10_fallback_locations() -> list[dict]:
 
 
 # ---------------- helper functions for home view ----------------
+def _create_tokopedia_ulasan_scraper():
+    """Create a Tokopedia scraper configured to sort by ulasan (popularity/reviews)."""
+    http_client = TokopediaHttpClient()
+    url_builder = TokopediaUrlBuilderUlasan()
+    html_parser = TokopediaHtmlParser()
+    return TokopediaPriceScraper(http_client, url_builder, html_parser), url_builder
+
+
 def _scrape_all_vendors(request, keyword: str) -> list[dict]:
     """Scrape prices from all vendors."""
     prices = []
@@ -1658,8 +1872,7 @@ def _scrape_all_vendors(request, keyword: str) -> list[dict]:
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback)
     prices += _run_vendor_to_prices(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback)
-    # Request 20 items from Tokopedia (default was showing 5)
-    prices += _run_vendor_to_prices(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback, limit=20)
+    prices += _run_vendor_to_prices(request, keyword, _create_tokopedia_ulasan_scraper, TOKOPEDIA_SOURCE, _tokopedia_fallback, limit=20)
     return prices
 
 
@@ -1698,24 +1911,47 @@ def _collect_vendor_locations(request, prices: list[dict]) -> dict:
     # Tokopedia locations
     tokopedia_has_prices = any(p.get("source") == TOKOPEDIA_SOURCE for p in prices)
     if tokopedia_has_prices:
-        tokopedia_locations = _get_tokopedia_locations()
+        tokopedia_locations = _get_tokopedia_locations(prices)
         if tokopedia_locations:
             locations_data[TOKOPEDIA_SOURCE] = tokopedia_locations
 
     return locations_data
 
 
-def _get_tokopedia_locations() -> list[dict]:
-    """Get predefined Tokopedia location data."""
+def _get_tokopedia_locations(prices: list[dict]) -> list[dict]:
+    """Get Tokopedia location data from product prices."""
     tokopedia_locations = []
-    for location_name, location_ids in TOKOPEDIA_LOCATION_IDS.items():
-        # Format location name for display
-        display_name = location_name.replace('_', ' ').title()
-        tokopedia_locations.append({
-            "store_name": f"Tokopedia {display_name}",
-            "address": f"Area ID: {', '.join(map(str, location_ids))}",
-            "source": TOKOPEDIA_SOURCE
-        })
+    unique_locations = set()
+
+    # Extract unique locations from Tokopedia products
+    for price in prices:
+        if price.get("source") == TOKOPEDIA_SOURCE and price.get("location"):
+            location = price.get("location").strip()
+            if location and location not in unique_locations:
+                unique_locations.add(location)
+                tokopedia_locations.append({
+                    "store_name": f"Tokopedia {location}",
+                    "address": location,
+                    "source": TOKOPEDIA_SOURCE
+                })
+
+    # If no locations found in products, provide fallback locations based on search filters
+    if not tokopedia_locations:
+        fallback_locations = [
+            {"name": "Jakarta", "description": "DKI Jakarta area"},
+            {"name": "Jabodetabek", "description": "Greater Jakarta area"}, 
+            {"name": "Bandung", "description": "Bandung area"},
+            {"name": "Medan", "description": "Medan area"},
+            {"name": "Surabaya", "description": "Surabaya area"}
+        ]
+        
+        for loc_data in fallback_locations:
+            tokopedia_locations.append({
+                "store_name": f"Tokopedia {loc_data['name']}",
+                "address": loc_data["description"],
+                "source": TOKOPEDIA_SOURCE
+            })
+
     return tokopedia_locations
 
 
@@ -1802,7 +2038,7 @@ def _clean_and_dedupe_prices(prices: list[dict]) -> list[dict]:
 # ---------------- views ----------------
 @require_GET
 def home(request):
-    keyword = request.GET.get("q", "semen")
+    keyword = request.GET.get("q", "pasir")
 
     # Scrape prices from all vendors
     prices = _scrape_all_vendors(request, keyword)
@@ -1821,13 +2057,13 @@ def home(request):
 
 @require_POST
 def trigger_scrape(request):
-    keyword = request.POST.get("q", "semen")
+    keyword = request.POST.get("q", "pasir")
     counts = {
         "gemilang": _run_vendor_to_count(request, keyword, (lambda: (create_gemilang_scraper(), GemilangUrlBuilder())), GEMILANG_SOURCE),
         "depo": _run_vendor_to_count(request, keyword, (lambda: (create_depo_scraper(), DepoUrlBuilder())), DEPO_BANGUNAN_SOURCE, _depo_fallback),
         "juragan": _run_vendor_to_count(request, keyword, (lambda: (create_juraganmaterial_scraper(), JuraganMaterialUrlBuilder())), JURAGAN_MATERIAL_SOURCE, _juragan_fallback),
         "mitra10": _run_vendor_to_count(request, keyword, (lambda: (create_mitra10_scraper(), Mitra10UrlBuilder())), MITRA10_SOURCE, _mitra10_fallback),
-        "tokopedia": _run_vendor_to_count(request, keyword, (lambda: (create_tokopedia_scraper(), TokopediaUrlBuilder())), TOKOPEDIA_SOURCE, _tokopedia_fallback),
+        "tokopedia": _run_vendor_to_count(request, keyword, _create_tokopedia_ulasan_scraper, TOKOPEDIA_SOURCE, _tokopedia_fallback),
     }
     messages.success(
         request,
@@ -1835,7 +2071,7 @@ def trigger_scrape(request):
             gemilang=counts["gemilang"], depo=counts["depo"], juragan=counts["juragan"], mitra=counts["mitra10"], tokopedia=counts["tokopedia"]
         )
     )
-    return redirect("home")
+    return redirect("dashboard:dashboard_home")
 
 
 @require_GET
@@ -1850,7 +2086,7 @@ def curated_price_create(request):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "New Curated Price", 
         "form": form,
-        "form_action": reverse("curated_price_create_post")
+        "form_action": reverse(CURATED_PRICE_CREATE_POST_URL)
     })
 
 
@@ -1861,7 +2097,7 @@ def curated_price_create_post(request):
     if form.is_valid():
         form.save()
         messages.success(request, "Curated price saved")
-        return redirect("curated_price_list")
+        return redirect(CURATED_PRICE_LIST_URL)
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "New Curated Price", "form": form})
 
 
@@ -1872,7 +2108,7 @@ def curated_price_update(request, pk):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "Edit Curated Price", 
         "form": form,
-        "form_action": reverse("curated_price_update_post", args=[pk])
+        "form_action": reverse("dashboard:curated_price_update_post", args=[pk])
     })
 
 
@@ -1884,7 +2120,7 @@ def curated_price_update_post(request, pk):
     if form.is_valid():
         form.save()
         messages.success(request, "Curated price updated")
-        return redirect("curated_price_list")
+        return redirect(CURATED_PRICE_LIST_URL)
     return render(request, DASHBOARD_FORM_TEMPLATE, {"title": "Edit Curated Price", "form": form})
 
 
@@ -1894,7 +2130,7 @@ def curated_price_delete(request, pk):
     return render(request, "dashboard/confirm_delete.html", {
         "title": "Delete Curated Price", 
         "obj": obj,
-        "form_action": reverse("curated_price_delete_post", args=[pk])
+        "form_action": reverse("dashboard:curated_price_delete_post", args=[pk])
     })
 
 
@@ -1904,7 +2140,7 @@ def curated_price_delete_post(request, pk):
     obj = get_object_or_404(models.ItemPriceProvince, pk=pk)
     obj.delete()
     messages.success(request, "Curated price deleted")
-    return redirect("curated_price_list")
+    return redirect(CURATED_PRICE_LIST_URL)
 
 
 @require_POST
@@ -1918,5 +2154,15 @@ def curated_price_from_scrape(request):
     return render(request, DASHBOARD_FORM_TEMPLATE, {
         "title": "Save Price from Scrape", 
         "form": form,
-        "form_action": reverse("curated_price_create_post")
+        "form_action": reverse(CURATED_PRICE_CREATE_POST_URL)
     })
+
+
+# ==================== PRICE ANOMALY VIEWS ====================
+
+@require_GET
+def price_anomalies(request):
+    """
+    Display price anomalies page
+    """
+    return render(request, "dashboard/price_anomalies.html")

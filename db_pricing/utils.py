@@ -17,8 +17,9 @@ def _validate_table_name(table_name: str) -> str:
     return table_name
 
 
-class Mitra10TableChecker:
-    TABLE_NAME = 'mitra10_products'
+class BaseTableChecker:
+    """Base class for table existence checkers"""
+    TABLE_NAME = None  # Should be overridden in subclasses
     
     def __init__(self, db_connection: DatabaseConnection):
         self._connection = db_connection
@@ -88,6 +89,14 @@ class Mitra10TableChecker:
             'columns': [],
             'error': str(exception)
         }
+
+
+class Mitra10TableChecker(BaseTableChecker):
+    TABLE_NAME = 'mitra10_products'
+
+
+class TokopediaTableChecker(BaseTableChecker):
+    TABLE_NAME = 'tokopedia_products'
 
 
 def check_database_connection() -> Dict[str, Any]:
@@ -172,4 +181,9 @@ def check_gemilang_table_exists() -> Dict[str, Any]:
 
 def check_mitra10_table_exists() -> Dict[str, Any]:
     checker = Mitra10TableChecker(connection)
+    return checker.check()
+
+
+def check_tokopedia_table_exists() -> Dict[str, Any]:
+    checker = TokopediaTableChecker(connection)
     return checker.check()

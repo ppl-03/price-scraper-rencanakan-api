@@ -1,12 +1,12 @@
-import logging
 import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
 from html import unescape
 
 from api.interfaces import ILocationParser, Location, HtmlParserError
+from .logging_utils import get_gemilang_logger
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("location_parser")
 
 
 class TextCleaner:
@@ -52,7 +52,7 @@ class HtmlElementExtractor:
             return self._text_cleaner.clean_store_name(text)
             
         except Exception as e:
-            logger.warning(f"Failed to extract store name: {str(e)}")
+            logger.warning("Failed to extract store name: %s", e)
             return None
     
     def extract_address(self, item) -> Optional[str]:
@@ -82,7 +82,7 @@ class HtmlElementExtractor:
             return cleaned_address if self._text_cleaner.is_valid_text(cleaned_address) else None
             
         except Exception as e:
-            logger.warning(f"Failed to extract address: {str(e)}")
+            logger.warning("Failed to extract address: %s", e)
             return None
     
     def _remove_img_tags(self, element) -> None:
@@ -137,15 +137,15 @@ class GemilangLocationParser(ILocationParser):
             soup = self._create_soup(html_content)
             location_items = self._find_location_items(soup)
             
-            logger.info(f"Found {len(location_items)} location items in HTML")
+            logger.info("Found %s location items in HTML", len(location_items))
             
             locations = self._extract_locations_from_items(location_items)
             
-            logger.info(f"Successfully parsed {len(locations)} locations")
+            logger.info("Successfully parsed %s locations", len(locations))
             return locations
             
         except Exception as e:
-            logger.error(f"Failed to parse HTML: {str(e)}")
+            logger.error("Failed to parse HTML: %s", e)
             return []
     
     def _is_valid_html_content(self, html_content: str) -> bool:
@@ -175,7 +175,7 @@ class GemilangLocationParser(ILocationParser):
                     addresses.append(address)
                     
             except Exception as e:
-                logger.warning(f"Failed to extract data from item: {str(e)}")
+                logger.warning("Failed to extract data from item: %s", e)
                 continue
         
         # Pair up names and addresses
@@ -186,7 +186,7 @@ class GemilangLocationParser(ILocationParser):
                 if location:
                     locations.append(location)
             except Exception as e:
-                logger.warning(f"Failed to create location: {str(e)}")
+                logger.warning("Failed to create location: %s", e)
                 continue
         
         return locations
@@ -205,7 +205,7 @@ class GemilangLocationParser(ILocationParser):
             
             return self._create_location(store_name, address)
         except Exception as e:
-            logger.warning(f"Failed to extract location from item: {str(e)}")
+            logger.warning("Failed to extract location from item: %s", e)
             return None
     
     def _create_location(self, store_name: str, address: str) -> Location:

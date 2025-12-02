@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-11-25 14:29:48",
+  "comparison_type": "profiling_overhead",
+  "results": {
+    "without_profiling": {
+      "total_time": 6.550003308802843e-05,
+      "avg_time": 6.550003308802843e-05,
+      "iterations": 1,
+      "results": [
+        {
+          "keyword": "semen",
+          "products_count": 0,
+          "time": 3.390002530068159e-05
+        }
+      ]
+    },
+    "with_profiling": {
+      "total_time": 0.00014370004646480083,
+      "avg_time": 0.00014370004646480083,
+      "iterations": 1,
+      "results": [
+        {
+          "keyword": "semen",
+          "products_count": 0,
+          "time": 8.859997615218163e-05
+        }
+      ]
+    },
+    "overhead_analysis": {
+      "time_overhead": 7.82000133767724e-05,
+      "overhead_percentage": 119.38927308887905,
+      "without_profiling_time": 6.550003308802843e-05,
+      "with_profiling_time": 0.00014370004646480083,
+      "slowdown_factor": 2.1938927308887903
+    }
+  }
+}

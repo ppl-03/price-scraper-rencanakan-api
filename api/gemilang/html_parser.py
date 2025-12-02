@@ -1,4 +1,3 @@
-import logging
 import re
 from typing import List, Optional
 from bs4 import BeautifulSoup
@@ -6,12 +5,39 @@ from bs4 import BeautifulSoup
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import GemilangPriceCleaner
 from .unit_parser import GemilangUnitParser
+from .logging_utils import get_gemilang_logger
+import logging
 
-logger = logging.getLogger(__name__)
+logger = get_gemilang_logger("html_parser")
 
 class RegexCache:
     SLUG_PATTERN = re.compile(r'[^a-zA-Z0-9\s]')
     WHITESPACE_PATTERN = re.compile(r'\s+')
+    SLUG_CLEAN_PATTERN = re.compile(r'[^a-z0-9\-]')
+
+class ParserConfig:
+    """Cache parser configuration to avoid repeated checks"""
+    _has_lxml_cache = None
+    
+    @classmethod
+    def check_lxml(cls, use_cache: bool = True) -> bool:
+        """Check if lxml is available.
+        
+        Args:
+            use_cache: If True, cache the result. Set to False for testing.
+        """
+        if use_cache and cls._has_lxml_cache is not None:
+            return cls._has_lxml_cache
+            
+        try:
+            import lxml
+            result = True
+        except ImportError:
+            result = False
+            
+        if use_cache:
+            cls._has_lxml_cache = result
+        return result
 
 
 class GemilangHtmlParser(IHtmlParser):
@@ -19,18 +45,23 @@ class GemilangHtmlParser(IHtmlParser):
     def __init__(self, price_cleaner: GemilangPriceCleaner = None, unit_parser: GemilangUnitParser = None):
         self.price_cleaner = price_cleaner or GemilangPriceCleaner()
         self.unit_parser = unit_parser or GemilangUnitParser()
+        self._cached_has_lxml = None
     
     def parse_products(self, html_content: str) -> List[Product]:
         try:
             if not html_content:
                 return []
             
-            parser = 'lxml' if self._has_lxml() else 'html.parser'
+            # Cache lxml check result per instance for testability
+            if self._cached_has_lxml is None:
+                self._cached_has_lxml = self._has_lxml()
+            parser = 'lxml' if self._cached_has_lxml else 'html.parser'
             soup = BeautifulSoup(html_content, parser)
             products = []
             
             product_items = soup.find_all('div', class_='item-product')
-            logger.info(f"Found {len(product_items)} product items in HTML")
+            if logger.isEnabledFor(logging.INFO):
+                logger.info("Found %s product items in HTML", len(product_items))
             
             for item in product_items:
                 try:
@@ -38,10 +69,12 @@ class GemilangHtmlParser(IHtmlParser):
                     if product:
                         products.append(product)
                 except Exception as e:
-                    logger.warning(f"Failed to extract product from item: {str(e)}")
+                    if logger.isEnabledFor(logging.WARNING):
+                        logger.warning("Failed to extract product from item: %s", e)
                     continue
             
-            logger.info(f"Successfully parsed {len(products)} products")
+            if logger.isEnabledFor(logging.INFO):
+                logger.info("Successfully parsed %s products", len(products))
             return products
             
         except Exception as e:
@@ -58,8 +91,10 @@ class GemilangHtmlParser(IHtmlParser):
         if not self.price_cleaner.is_valid_price(price):
             return None
         
-        item_html = str(item)
-        unit = self.unit_parser.parse_unit(item_html)
+        # Pass BeautifulSoup object directly to avoid expensive str() conversion
+        unit = self.unit_parser.parse_unit_from_element(item)
+        if not unit:
+            unit = "PCS"
         
         return Product(name=name, price=price, url=url, unit=unit)
     
@@ -108,10 +143,11 @@ class GemilangHtmlParser(IHtmlParser):
     
     def _generate_slug(self, name: str) -> str:
         slug = name.lower().replace(' ', '-').replace('(', '').replace(')', '')
-        slug = re.sub(r'[^a-z0-9\-]', '', slug)
+        slug = RegexCache.SLUG_CLEAN_PATTERN.sub('', slug)
         return slug
     
     def _has_lxml(self) -> bool:
+        """Check if lxml is available. For testing compatibility."""
         try:
             import lxml
             return True
@@ -145,7 +181,7 @@ class GemilangHtmlParser(IHtmlParser):
             if not html_content:
                 return None
             
-            parser = 'lxml' if self._has_lxml() else 'html.parser'
+            parser = 'lxml' if ParserConfig.check_lxml() else 'html.parser'
             soup = BeautifulSoup(html_content, parser)
             
             name = self._extract_product_name_from_page(soup)
@@ -161,7 +197,8 @@ class GemilangHtmlParser(IHtmlParser):
             return Product(name=name, price=price, url=product_url or "", unit=unit)
             
         except Exception as e:
-            logger.warning(f"Failed to parse product details: {str(e)}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning("Failed to parse product details: %s", e)
             return None
     
     def _extract_product_name_from_page(self, soup: BeautifulSoup) -> Optional[str]:

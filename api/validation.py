@@ -30,7 +30,7 @@ class KeywordValidator(FieldValidator):
         r'data:',
         r'vbscript:',
         r'on\w+\s*=',
-        r'[<>"\']',
+        r'[<>"\'\\]',
         r'\bunion\b.*\bselect\b',
         r'\bselect\b.*\bfrom\b',
         r'\binsert\b.*\binto\b',
@@ -67,7 +67,7 @@ class KeywordValidator(FieldValidator):
         return ValidationResult(is_valid=True, errors=[], cleaned_data={'keyword': self._sanitize_keyword(keyword)})
 
 class VendorValidator(FieldValidator):
-    ALLOWED_VENDORS = ['depobangunan', 'gemilang', 'juragan_material', 'mitra10']
+    ALLOWED_VENDORS = ['depobangunan', 'gemilang', 'juragan_material', 'mitra10', 'government_wage']
     def validate(self, vendor: str) -> ValidationResult:
         errors = []
         if not vendor:
