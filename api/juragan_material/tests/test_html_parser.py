@@ -1,6 +1,7 @@
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock, patch
+import logging
 from api.interfaces import Product, HtmlParserError
 from api.juragan_material.html_parser import JuraganMaterialHtmlParser
 from api.juragan_material.price_cleaner import JuraganMaterialPriceCleaner
@@ -107,10 +108,13 @@ class TestJuraganMaterialHtmlParser(TestCase):
             return original_method(item)
         
         with patch.object(self.parser, '_extract_product_from_item', side_effect=mock_extract):
-            products = self.parser.parse_products(html_with_broken_item)
-            # Should still get the valid product, broken one should be skipped
-            self.assertEqual(len(products), 1)
-            self.assertEqual(products[0].name, "Valid Product")
+            with self.assertLogs('api.juragan_material', level='WARNING') as captured:
+                products = self.parser.parse_products(html_with_broken_item)
+                # Should still get the valid product, broken one should be skipped
+                self.assertEqual(len(products), 1)
+                self.assertEqual(products[0].name, "Valid Product")
+                # Verify warning was logged for the broken item
+                self.assertTrue(any("Failed to extract product from item" in msg for msg in captured.output))
     
     def test_fallback_product_name_extraction(self):
         """Test fallback to direct p.product-name when no link exists."""

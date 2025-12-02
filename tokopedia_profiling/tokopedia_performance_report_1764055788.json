@@ -1,0 +1,59 @@
+{
+  "vendor": "tokopedia",
+  "timestamp": "2025-11-25 14:29:48",
+  "profiling_results": {
+    "html_parser": {
+      "component": "html_parser",
+      "iterations": 1,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\tokopedia_profiling\\html_parser_profile.txt",
+      "total_calls": 79218,
+      "total_time": 0.050192299999999954
+    },
+    "price_cleaner": {
+      "component": "price_cleaner",
+      "iterations": 10,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\tokopedia_profiling\\price_cleaner_profile.txt",
+      "total_calls": 1711,
+      "total_time": 0.0005835999999999999,
+      "test_prices_count": 14
+    },
+    "url_builder": {
+      "component": "url_builder",
+      "iterations": 10,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\tokopedia_profiling\\url_builder_profile.txt",
+      "total_calls": 1215,
+      "total_time": 0.0005461000000000001,
+      "keywords_count": 12
+    },
+    "factory": {
+      "component": "factory",
+      "iterations": 1,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\tokopedia_profiling\\factory_profile.txt",
+      "total_calls": 146,
+      "total_time": 0.0003013
+    },
+    "complete_scraper": {
+      "component": "complete_scraper",
+      "iterations": 1,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\tokopedia_profiling\\complete_scraper_profile.txt",
+      "total_calls": 86679,
+      "total_time": 1.7267835999999999
+    },
+    "scraper_with_filters": {
+      "component": "scraper_with_filters",
+      "iterations": 1,
+      "stats_file": "C:\\Users\\Damar AR\\OneDrive\\Documents\\UI\\PPL\\Sprint4 Week2\\Monitoring\\price-scraper-rencanakan-api\\tokopedia_profiling\\scraper_with_filters_profile.txt",
+      "total_calls": 78447,
+      "total_time": 1.2905618
+    }
+  },
+  "environment_config": {
+    "PROFILING_ENABLED": "true",
+    "PROFILING_ITERATIONS_HTML": "1",
+    "PROFILING_ITERATIONS_PRICE": "10",
+    "PROFILING_ITERATIONS_URL": "10",
+    "PROFILING_ITERATIONS_FACTORY": "1",
+    "PROFILING_ITERATIONS_SCRAPER": "1",
+    "PROFILING_ITERATIONS_FILTERS": "1"
+  }
+}

@@ -1,8 +1,8 @@
 from api.core import BasePriceScraper
 from api.interfaces import IHttpClient, IUrlBuilder, IHtmlParser, ScrapingResult
-import logging
+from .logging_utils import get_juragan_material_logger
 
-logger = logging.getLogger(__name__)
+logger = get_juragan_material_logger("scraper")
 
 
 class JuraganMaterialPriceScraper(BasePriceScraper):

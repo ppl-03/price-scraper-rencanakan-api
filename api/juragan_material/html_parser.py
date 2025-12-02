@@ -6,8 +6,9 @@ from bs4 import BeautifulSoup
 
 from api.interfaces import IHtmlParser, Product, HtmlParserError
 from .price_cleaner import JuraganMaterialPriceCleaner
+from .logging_utils import get_juragan_material_logger
 
-logger = logging.getLogger(__name__)
+logger = get_juragan_material_logger("html_parser")
 import requests
 
 # Parser engine constants to avoid duplicating string literals

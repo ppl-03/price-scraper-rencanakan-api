@@ -12,6 +12,8 @@ class DepoPriceScraper(BasePriceScraper):
     def __init__(self, http_client: IHttpClient, url_builder: IUrlBuilder, html_parser: IHtmlParser):
         super().__init__(http_client, url_builder, html_parser)
         self.unit_parser = DepoBangunanUnitParser()
+        # Cache for detail page units to avoid re-fetching same URLs
+        self._unit_cache = {}
     
     def scrape_products(self, keyword: str, sort_by_price: bool = True, page: int = 0) -> ScrapingResult:
         # Get initial results from the base scraper
@@ -105,12 +107,28 @@ class DepoPriceScraper(BasePriceScraper):
         if not product.url:
             return product
         
+        # Check cache first
+        if product.url in self._unit_cache:
+            cached_unit = self._unit_cache[product.url]
+            if cached_unit:
+                return Product(
+                    name=product.name,
+                    price=product.price,
+                    url=product.url,
+                    unit=cached_unit,
+                    sold_count=product.sold_count
+                )
+            return product
+        
         try:
             # Fetch the product detail page with increased timeout
             detail_html = self.http_client.get(product.url, timeout=60)
             
             # Extract unit from the detail page
             unit = self.unit_parser.parse_unit_from_detail_page(detail_html)
+            
+            # Cache the result (even if None)
+            self._unit_cache[product.url] = unit
             
             if unit:
                 # Return enhanced product with unit
@@ -126,4 +144,6 @@ class DepoPriceScraper(BasePriceScraper):
             
         except Exception as e:
             logger.warning(f"Failed to enhance product with unit from detail page {product.url}: {str(e)}")
+            # Cache the failure to avoid re-fetching
+            self._unit_cache[product.url] = None
             return product
