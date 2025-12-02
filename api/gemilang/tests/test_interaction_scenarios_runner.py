@@ -482,8 +482,7 @@ class TestEdgeCasesAndErrorPaths(TestCase):
     
     def test_validate_product_structure_with_negative_price(self):
         """Test validation detects negative prices"""
-        with patch('api.gemilang.views.create_gemilang_location_scraper') as mock_loc, \
-             patch('api.gemilang.views.create_gemilang_scraper') as mock_scraper:
+        with patch('api.gemilang.views.create_gemilang_location_scraper') as mock_loc:
             
             mock_loc_instance = Mock()
             mock_loc_result = LocationScrapingResult(locations=[], success=True)
@@ -512,8 +511,7 @@ class TestEdgeCasesAndErrorPaths(TestCase):
     
     def test_validate_product_structure_with_invalid_price_type(self):
         """Test validation detects non-numeric prices"""
-        with patch('api.gemilang.views.create_gemilang_location_scraper') as mock_loc, \
-             patch('api.gemilang.views.create_gemilang_scraper') as mock_scraper:
+        with patch('api.gemilang.views.create_gemilang_location_scraper') as mock_loc:
             
             mock_loc_instance = Mock()
             mock_loc_result = LocationScrapingResult(locations=[], success=True)
