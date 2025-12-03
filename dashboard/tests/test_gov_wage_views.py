@@ -9,7 +9,7 @@ class GovWageViewsTests(TestCase):
     def setUp(self):
         self.client = Client()
     
-    def create_mock_item(self, item_number='1', work_code='1.1.1.1', description='Test Item', 
+    def create_mock_item(self, item_number='1', work_code='A.1.1.1', description='Test Item', 
                          unit='m', price=100000, region='Kab. Test'):
         return GovernmentWageItem(
             item_number=item_number, work_code=work_code, work_description=description,
@@ -69,8 +69,8 @@ class GovWageViewsTests(TestCase):
     @patch('dashboard.gov_wage_views.get_cached_or_scrape')
     def test_get_wage_data_with_mock_cache(self, mock_get_cached):
         mock_items = [
-            self.create_mock_item('1', '1.1.1.1', 'Test Pagar'),
-            self.create_mock_item('2', '1.1.1.2', 'Test Panel', 'm2', 200000),
+            self.create_mock_item('1', 'A.1.1.1', 'Test Pagar'),
+            self.create_mock_item('2', 'A.1.1.2', 'Test Panel', 'm2', 200000),
         ]
         mock_get_cached.return_value = mock_items
 
@@ -79,7 +79,7 @@ class GovWageViewsTests(TestCase):
         data = resp.json()
         self.assertTrue(data.get('success'))
         self.assertEqual(len(data['data']), 2)
-        self.assertEqual(data['data'][0]['work_code'], '1.1.1.1')
+        self.assertEqual(data['data'][0]['work_code'], 'A.1.1.1')
 
 
     def test_categorize_work_item_categories(self):
@@ -124,7 +124,7 @@ class GovWageViewsTests(TestCase):
 
     @patch('dashboard.gov_wage_views.get_cached_or_scrape')
     def test_get_wage_data_pagination(self, mock_get_cached):
-        mock_items = [self.create_mock_item(str(i), f'1.1.1.{i}', f'Test Item {i}', 
+        mock_items = [self.create_mock_item(str(i), f'A.1.1.{i}', f'Test Item {i}', 
                       price=100000 + i * 10000) for i in range(1, 26)]
         mock_get_cached.return_value = mock_items
 
@@ -139,7 +139,7 @@ class GovWageViewsTests(TestCase):
 
     @patch('dashboard.gov_wage_views.get_cached_or_scrape')
     def test_get_wage_data_with_all_param(self, mock_get_cached):
-        mock_items = [self.create_mock_item(str(i), f'1.1.1.{i}', f'Test Item {i}',
+        mock_items = [self.create_mock_item(str(i), f'A.1.1.{i}', f'Test Item {i}',
                       price=100000 + i * 10000) for i in range(1, 16)]
         mock_get_cached.return_value = mock_items
 
@@ -155,19 +155,19 @@ class GovWageViewsTests(TestCase):
     @patch('dashboard.gov_wage_views.get_cached_or_scrape')
     def test_search_work_code_view(self, mock_get_cached):
         mock_items = [
-            self.create_mock_item('1', '1.1.1.1', 'Test Item 1'),
-            self.create_mock_item('2', '2.2.2.2', 'Test Item 2', 'm2', 200000),
+            self.create_mock_item('1', 'A.1.1.1', 'Test Item 1'),
+            self.create_mock_item('2', 'A.2.2.2', 'Test Item 2', 'm2', 200000),
         ]
         mock_get_cached.return_value = mock_items
 
         resp = self.client.post('/api/gov-wage/search/',
-            data=json.dumps({'work_code': '1.1.1', 'region': 'Kab. Test'}),
+            data=json.dumps({'work_code': 'A.1.1', 'region': 'Kab. Test'}),
             content_type='application/json')
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data.get('success'))
         self.assertEqual(len(data['data']), 1)
-        self.assertEqual(data['data'][0]['work_code'], '1.1.1.1')
+        self.assertEqual(data['data'][0]['work_code'], 'A.1.1.1')
 
 
     @patch('dashboard.gov_wage_views.get_cached_or_scrape')
@@ -202,7 +202,7 @@ class GovWageViewsTests(TestCase):
         mock_get_cached.side_effect = Exception('Database error')
 
         resp = self.client.post('/api/gov-wage/search/',
-            data=json.dumps({'work_code': '1.1.1', 'region': 'Kab. Test'}),
+            data=json.dumps({'work_code': 'A.1.1', 'region': 'Kab. Test'}),
             content_type='application/json')
         self.assertEqual(resp.status_code, 500)
         self.assertFalse(resp.json().get('success'))
@@ -210,7 +210,7 @@ class GovWageViewsTests(TestCase):
 
     @patch('dashboard.gov_wage_views.get_cached_or_scrape')
     def test_get_pagination_info(self, mock_get_cached):
-        mock_items = [self.create_mock_item(str(i), f'1.1.1.{i}') for i in range(1, 26)]
+        mock_items = [self.create_mock_item(str(i), f'A.1.1.{i}') for i in range(1, 26)]
         mock_get_cached.return_value = mock_items
 
         resp = self.client.get('/api/gov-wage/pagination/?region=Kab. Test')
@@ -254,7 +254,7 @@ class GovWageViewsTests(TestCase):
 
     @patch('dashboard.gov_wage_views.get_cached_or_scrape')
     def test_get_pagination_info_with_data(self, mock_get_cached):
-        mock_items = [self.create_mock_item(str(i), f'1.{i}') for i in range(1, 101)]
+        mock_items = [self.create_mock_item(str(i), f'A.1.{i}') for i in range(1, 101)]
         mock_get_cached.return_value = mock_items
 
         resp = self.client.get('/api/gov-wage/pagination/?region=Kab. Test&year=2025')
@@ -310,7 +310,7 @@ class GovWageViewsTests(TestCase):
         mock_items = [
             GovernmentWageItem(
                 item_number='1',
-                work_code='1.1.1.1',
+                work_code='A.1.1.1',
                 work_description='Test',
                 unit='m',
                 unit_price_idr=100000,
