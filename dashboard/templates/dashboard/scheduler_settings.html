@@ -443,19 +443,19 @@
                             </div>
                         </fieldset>
 
-                        <!-- Pages Per Keyword -->
+                        <!-- Keyword to Search -->
                         <div class="mb-4">
-                            <label for="pagesPerKeyword" class="form-label">
-                                <i class="bi bi-file-earmark-text"></i> Pages Per Keyword
+                            <label for="searchKeyword" class="form-label">
+                                <i class="bi bi-search"></i> Search Keyword
                             </label>
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="pagesPerKeyword" 
-                                   name="pages_per_keyword"
-                                   value="{{ config.pages_per_keyword }}"
-                                   min="1" 
-                                   max="10">
-                            <small class="text-muted">Number of pages to scrape for each keyword (1-10)</small>
+                            <input type="text" 
+                                class="form-control" 
+                                id="searchKeyword" 
+                                name="search_keyword"
+                                value="{{ config.search_keyword }}"
+                                placeholder="Enter keyword to search"
+                                required>
+                            <small class="text-muted">Enter the keyword you want to search for</small>
                         </div>
 
                         <!-- Submit Buttons -->
@@ -552,15 +552,45 @@
             if (!confirm('Run scheduler now? This will start scraping immediately.')) {
                 return;
             }
+
+            const form = document.querySelector('form');
+            const formData = new FormData(form);
             
-            this.disabled = true;
+            // Get selected vendors
+            const vendorCheckboxes = document.querySelectorAll('input[name="vendors"]:checked');
+            const vendors = Array.from(vendorCheckboxes).map(cb => cb.value);
+            
+            // Validate vendors
+            if (vendors.length === 0) {
+                alert('Please select at least one vendor!');
+                return;
+            }
+            
+            // Validate keyword
+            const keyword = formData.get('search_keyword');
+            if (!keyword || !keyword.trim()) {
+                alert('Please enter a search keyword!');
+                return;
+            }
+            
+            // Remove existing vendors and add them properly
+            formData.delete('vendors');
+            vendors.forEach(vendor => {
+                formData.append('vendors', vendor);
+            });
+            
+            
+            // Show loading state
+            const btn = this;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
             this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Running...';
             
             fetch("{% url 'dashboard:run_scheduler_now' %}", {
                 method: 'POST',
+                body: formData,
                 headers: {
                     'X-CSRFToken': '{{ csrf_token }}',
-                    'Content-Type': 'application/json'
                 }
             })
             .then(response => response.json())
@@ -579,6 +609,8 @@
                 this.disabled = false;
                 this.innerHTML = '<i class="fas fa-play"></i> Run Now';
             });
-    });
+        });
+    
+    
 </script>
 {% endblock %}

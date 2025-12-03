@@ -39,4 +39,4 @@ urlpatterns = [
     path("api/unit/update/", views_db.update_product_unit, name="update_product_unit"),
     path("api/unit/bulk-update/", views_db.bulk_update_units, name="bulk_update_units"),
     path("api/unit/vendors/", views_db.get_available_vendors_unit, name="get_available_vendors_unit"),
-]
+    ]

@@ -126,7 +126,7 @@ class TestMitra10PendingApproval(TestCase):
         self.service.save([{
             "name": "Mitra10 Product",
             "price": 15000,
-            "url": "https://mitra10.com/product",
+            "url": "https://www.mitra10.com/product",
             "unit": "PCS"
         }])
     
@@ -135,7 +135,7 @@ class TestMitra10PendingApproval(TestCase):
         updated_data = [{
             "name": "Mitra10 Product",
             "price": 18000,  # 20% increase
-            "url": "https://mitra10.com/product",
+            "url": "https://www.mitra10.com/product",
             "unit": "PCS"
         }]
         

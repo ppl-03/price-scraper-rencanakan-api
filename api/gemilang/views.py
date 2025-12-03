@@ -7,6 +7,8 @@ from .database_service import GemilangDatabaseService
 from db_pricing.auto_categorization_service import AutoCategorizationService
 import json
 import logging
+import uuid
+import time
 
 from .factory import create_gemilang_scraper, create_gemilang_location_scraper
 from .database_service import GemilangDatabaseService
@@ -16,6 +18,11 @@ from .security import (
     enforce_resource_limits,
     InputValidator,
     SecurityDesignPatterns,
+)
+from .sentry_monitoring import (
+    GemilangSentryMonitor,
+    track_gemilang_transaction,
+    GemilangTaskMonitor
 )
 
 logger = logging.getLogger(__name__)
@@ -43,59 +50,137 @@ def _validate_page_param(x):
     'sort_by_price': lambda x: InputValidator.validate_boolean(x, 'sort_by_price')
 })
 def scrape_products(request):
-    try:
-        validated_data = request.validated_data
-        keyword = validated_data.get('keyword')
-        sort_by_price = validated_data.get('sort_by_price', True)
-        page = validated_data.get('page', 0)
-        
-        location_scraper = create_gemilang_location_scraper()
-        location_result = location_scraper.scrape_locations(timeout=30)
-        
-        logger.info(f"[scrape_products] Location scraping - Success: {location_result.success}, Count: {len(location_result.locations) if location_result.locations else 0}")
-        
-        store_locations = []
-        if location_result.success and location_result.locations:
-            store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
-            logger.info(f"[scrape_products] Found {len(store_locations)} locations")
-        else:
-            logger.warning(f"[scrape_products] No locations found - Success: {location_result.success}")
-        
-        all_stores_location = ", ".join(store_locations) if store_locations else ""
-        logger.info(f"[scrape_products] Location string length: {len(all_stores_location)}")
-        
-        scraper = create_gemilang_scraper()
-        result = scraper.scrape_products(
-            keyword=keyword,
-            sort_by_price=sort_by_price,
-            page=page
-        )
-        
-        products_data = [
-            {
-                'name': product.name,
-                'price': product.price,
-                'url': product.url,
-                'unit': product.unit,
-                'location': all_stores_location
+    # Start Sentry transaction for monitoring
+    with track_gemilang_transaction("gemilang_scrape_products"):
+        try:
+            validated_data = request.validated_data
+            keyword = validated_data.get('keyword')
+            sort_by_price = validated_data.get('sort_by_price', True)
+            page = validated_data.get('page', 0)
+            
+            # Set scraping context for Sentry
+            GemilangSentryMonitor.set_scraping_context(
+                keyword=keyword,
+                page=page,
+                additional_data={
+                    'sort_by_price': sort_by_price,
+                    'source': 'api_endpoint',
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            
+            # Create task monitor for tracking
+            task_id = f"scrape_{uuid.uuid4().hex[:8]}"
+            task = GemilangTaskMonitor(task_id=task_id, task_type="product_scraping")
+            
+            # Track location scraping
+            GemilangSentryMonitor.add_breadcrumb(
+                "Starting location scraping",
+                category="gemilang.location",
+                level="info"
+            )
+            
+            location_start_time = time.time()
+            location_scraper = create_gemilang_location_scraper()
+            location_result = location_scraper.scrape_locations(timeout=30)
+            location_time = time.time() - location_start_time
+            
+            # Log location result to Sentry
+            GemilangSentryMonitor.add_breadcrumb(
+                f"Location scraping completed in {location_time:.2f}s - Found: {len(location_result.locations) if location_result.locations else 0}",
+                category="gemilang.location",
+                level="info" if location_result.success else "warning",
+                data={
+                    "success": location_result.success,
+                    "locations_count": len(location_result.locations) if location_result.locations else 0,
+                    "duration": location_time
+                }
+            )
+            
+            logger.info(f"[scrape_products] Location scraping - Success: {location_result.success}, Count: {len(location_result.locations) if location_result.locations else 0}")
+            
+            store_locations = []
+            if location_result.success and location_result.locations:
+                store_locations = [_clean_location_name(loc.name) for loc in location_result.locations]
+                logger.info(f"[scrape_products] Found {len(store_locations)} locations")
+            else:
+                logger.warning(f"[scrape_products] No locations found - Success: {location_result.success}")
+            
+            all_stores_location = ", ".join(store_locations) if store_locations else ""
+            logger.info(f"[scrape_products] Location string length: {len(all_stores_location)}")
+            
+            # Update task progress
+            task.record_progress(1, 2, "Locations scraped, starting product scraping...")
+            
+            # Track product scraping
+            GemilangSentryMonitor.add_breadcrumb(
+                f"Starting product scraping for keyword: {keyword}",
+                category="gemilang.scraper",
+                level="info"
+            )
+            
+            product_start_time = time.time()
+            scraper = create_gemilang_scraper()
+            result = scraper.scrape_products(
+                keyword=keyword,
+                sort_by_price=sort_by_price,
+                page=page
+            )
+            product_time = time.time() - product_start_time
+            
+            # Update task progress
+            task.record_progress(2, 2, "Product scraping completed")
+            
+            # Track scraping result
+            scraping_result = {
+                'products_count': len(result.products),
+                'success': result.success,
+                'errors_count': 0 if result.success else 1,
+                'location_time': location_time,
+                'product_time': product_time,
+                'total_time': location_time + product_time
             }
-            for product in result.products
-        ]
-        
-        response_data = {
-            'success': result.success,
-            'products': products_data,
-            'error_message': result.error_message,
-            'url': result.url
-        }
-        
-        return JsonResponse(response_data)
-        
-    except Exception as e:
-        logger.error(f"Unexpected error in scraper: {type(e).__name__}")
-        return JsonResponse({
-            'error': 'Internal server error occurred'
-        }, status=500)
+            GemilangSentryMonitor.track_scraping_result(scraping_result)
+            
+            products_data = [
+                {
+                    'name': product.name,
+                    'price': product.price,
+                    'url': product.url,
+                    'unit': product.unit,
+                    'location': all_stores_location
+                }
+                for product in result.products
+            ]
+            
+            response_data = {
+                'success': result.success,
+                'products': products_data,
+                'error_message': result.error_message,
+                'url': result.url
+            }
+            
+            # Complete task
+            task.complete(success=result.success, result_data=scraping_result)
+            
+            return JsonResponse(response_data)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in scraper: {type(e).__name__}")
+            
+            # Track error in Sentry
+            GemilangSentryMonitor.add_breadcrumb(
+                f"Fatal error in scrape_products: {str(e)}",
+                category="gemilang.error",
+                level="error"
+            )
+            
+            if 'task' in locals():
+                task.complete(success=False)
+            
+            return JsonResponse({
+                'error': 'Internal server error occurred'
+            }, status=500)
 
 
 def _validate_timeout_param(x):

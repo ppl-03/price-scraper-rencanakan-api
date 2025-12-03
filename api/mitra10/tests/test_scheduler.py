@@ -71,19 +71,10 @@ class TestMitra10Scheduler(unittest.TestCase):
         products = [SimpleNamespace(name='P1', price='50', url='https://url', unit='box')]
         self._setup_mock_scraper(scheduler, ['category1'], products)
         
-        result = scheduler.run(vendors=['mitra10'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['mitra10'], search_keyword="semen")
         vendor_data = result['vendors']['mitra10']
         self.assertEqual(vendor_data['scrape_attempts'], 1)
 
-    def test_run_multiple_pages(self):
-        """Test scraping multiple pages per keyword"""
-        from api.mitra10.scheduler import Mitra10Scheduler
-        scheduler = Mitra10Scheduler()
-        
-        self._setup_mock_scraper(scheduler, ['cat1'], [], db_save_result=None)
-        
-        result = scheduler.run(vendors=['mitra10'], pages_per_keyword=3)
-        self.assertEqual(result['vendors']['mitra10']['scrape_attempts'], 3)
 
     def test_run_products_saved(self):
         """Test that scraped products are saved correctly"""
@@ -96,7 +87,7 @@ class TestMitra10Scheduler(unittest.TestCase):
         ]
         self._setup_mock_scraper(scheduler, ['test'], products)
         
-        result = scheduler.run(vendors=['mitra10'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['mitra10'], search_keyword="semen")
         self.assertEqual(result['vendors']['mitra10']['saved'], 2)
 
     def test_run_with_scrape_failure(self):

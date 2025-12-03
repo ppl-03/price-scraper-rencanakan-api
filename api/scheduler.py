@@ -49,18 +49,96 @@ class BaseScheduler:
                     return None
         return None
 
+    # def normalize_products(self, products: List[Any]) -> List[Dict[str, Any]]:
+    #     out = []
+    #     print("Normalizing Products:", products)
+    #     for p in products:
+    #         if isinstance(p, dict):
+    #             out.append(p)
+    #             continue
+    #         try:
+    #             out.append({'name': getattr(p, 'name'), 'price': getattr(p, 'price'), 'url': getattr(p, 'url'), 'unit': getattr(p, 'unit', '')})
+    #         except Exception:
+    #             logger.warning(f"Unable to normalize product: {p}")
+    #     return out
+    
+    # def normalize_products(self, products: List[Any]) -> List[Dict[str, Any]]:
+    #     out = []
+    #     for p in products:
+    #         print(p)
+    #         if isinstance(p, dict):
+    #             # Ensure required fields exist
+    #             if 'location' not in p or not p.get('location'):
+    #                 p['location'] = ''  # Default location
+    #             if 'category' not in p or not p.get('category'):
+    #                 p['category'] = ''  # Default category
+    #             if 'unit' not in p or p.get('unit') is None :  # ✅ FIX: Convert None to empty string
+    #                 p['unit'] = ''
+    #             out.append(p)
+    #             continue
+            
+    #         try:
+    #             product_dict = {
+    #                 'name': getattr(p, 'name'),
+    #                 'price': getattr(p, 'price'),
+    #                 'url': getattr(p, 'url'),
+    #                 'unit': getattr(p, 'unit',''),
+    #                 'location': getattr(p, 'location', ''),  # ADD THIS
+    #                 'category': getattr(p, 'category', '')  # ADD THIS
+    #             }
+    #             out.append(product_dict)
+    #         except Exception as e:
+    #             logger.warning(f"Unable to normalize product: {p} - {e}")
+        
+    #     logger.info(f"Normalized {len(out)} products")
+    #     return out
+
+    # api/scheduler/scheduler.py
+
     def normalize_products(self, products: List[Any]) -> List[Dict[str, Any]]:
         out = []
-        for p in products:
-            if isinstance(p, dict):
-                out.append(p)
-                continue
+        logger.info(f"Normalizing {len(products)} products")
+        
+        for idx, p in enumerate(products):
             try:
-                out.append({'name': getattr(p, 'name'), 'price': getattr(p, 'price'), 'url': getattr(p, 'url'), 'unit': getattr(p, 'unit', '')})
-            except Exception:
-                logger.warning(f"Unable to normalize product: {p}")
+                if isinstance(p, dict):
+                    # Create clean copy
+                    normalized = {
+                        'name': str(p.get('name', '')).strip(),
+                        'price': int(p.get('price', 0)),
+                        'url': str(p.get('url', '')).strip(),
+                        'unit': str(p.get('unit') or '').strip(),  # ✅ Convert None to ''
+                        'location': str(p.get('location') or '').strip(),
+                        'category': str(p.get('category') or '').strip(),
+                    }
+                else:
+                    # Extract from object
+                    normalized = {
+                        'name': str(getattr(p, 'name', '')).strip(),
+                        'price': int(getattr(p, 'price', 0)),
+                        'url': str(getattr(p, 'url', '')).strip(),
+                        'unit': str(getattr(p, 'unit', None) or '').strip(),  # ✅ Handle None
+                        'location': str(getattr(p, 'location', None) or '').strip(),
+                        'category': str(getattr(p, 'category', None) or '').strip(),
+                    }
+                
+                # Validate required fields
+                if not normalized['name'] or not normalized['url']:
+                    logger.warning(f"Product #{idx} missing name or url, skipping")
+                    continue
+                
+                if normalized['price'] <= 0:
+                    logger.warning(f"Product #{idx} has invalid price: {normalized['price']}, skipping")
+                    continue
+                
+                out.append(normalized)
+                
+            except Exception as e:
+                logger.warning(f"Unable to normalize product #{idx}: {p} - {e}")
+        
+        logger.info(f"Successfully normalized {len(out)}/{len(products)} products")
         return out
-
+    
     def _get_product_url(self, product):
         """Extract URL from product (dict or object)."""
         return product.get('url') if isinstance(product, dict) else getattr(product, 'url', None)
@@ -172,6 +250,7 @@ class BaseScheduler:
     
     def _save_products(self, db_service, products_data, use_price_update, vendor, keyword, vendor_result):
         """Save products to database and return count saved."""
+        # print("Products Data to Save:", products_data)
         try:
             if use_price_update and hasattr(db_service, 'save_with_price_update'):
                 res = db_service.save_with_price_update(products_data)
@@ -209,27 +288,27 @@ class BaseScheduler:
         
         return products_found, saved_count
     
-    def _scrape_vendor_keywords(self, vendor, scraper, cats, pages_per_keyword, vendor_result, db_service, use_price_update, max_products_per_keyword):
+    def _scrape_vendor_keywords(self, vendor, scraper, pages_per_keyword, vendor_result, db_service, use_price_update, max_products_per_keyword,keyword=None):
         """Scrape all keywords for a vendor and return total products found and saved."""
         total_products = 0
         total_saved = 0
         
-        for keyword in cats:
-            for page in range(pages_per_keyword):
-                vendor_result['scrape_attempts'] += 1
-                try:
-                    result = scraper.scrape_products(keyword=keyword, sort_by_price=True, page=page)
-                    found, saved = self._process_scrape_result(
-                        scraper, result, vendor, keyword, page, vendor_result,
-                        db_service, use_price_update, max_products_per_keyword
-                    )
-                    total_products += found
-                    total_saved += saved
-                except Exception as e:
-                    vendor_result['scrape_failures'] += 1
-                    error_msg = f'{vendor} exception during scrape keyword "{keyword}" page {page}: {type(e).__name__}: {str(e)}'
-                    vendor_result['errors'].append(error_msg)
-                    logger.exception(error_msg)
+        # for keyword in cats:
+        for page in range(pages_per_keyword):
+            vendor_result['scrape_attempts'] += 1
+            try:
+                result = scraper.scrape_products(keyword=keyword, sort_by_price=True, page=page)
+                found, saved = self._process_scrape_result(
+                    scraper, result, vendor, keyword, page, vendor_result,
+                    db_service, use_price_update, max_products_per_keyword
+                )
+                total_products += found
+                total_saved += saved
+            except Exception as e:
+                vendor_result['scrape_failures'] += 1
+                error_msg = f'{vendor} exception during scrape keyword "{keyword}" page {page}: {type(e).__name__}: {str(e)}'
+                vendor_result['errors'].append(error_msg)
+                logger.exception(error_msg)
         
         return total_products, total_saved
     
@@ -254,18 +333,20 @@ class BaseScheduler:
             vendor_result['status'] = 'success'
             summary['successful_vendors'] += 1
     
-    def _process_single_vendor(self, vendor, server_time, summary, pages_per_keyword, use_price_update, max_products_per_keyword):
+    def _process_single_vendor(self, vendor, server_time, summary,use_price_update, max_products_per_keyword, search_keyword=None):
         """Process scraping for a single vendor."""
         vendor_start = time.time()
         vendor_result = self._initialize_vendor_result()
         
         try:
-            cats = self.get_categories(vendor, server_time)
-            if not cats:
-                self._handle_no_categories(vendor, vendor_result, summary)
-                return
+            # cats = self.get_categories(vendor, server_time)
+            # if not cats:
+            #     self._handle_no_categories(vendor, vendor_result, summary)
+            #     return
             
-            vendor_result['keywords'] = len(cats)
+            # vendor_result['keywords'] = len(cats)
+            pages_per_keyword = 1  # Could be parameterized if needed
+            
             
             try:
                 scraper = self.create_scraper(vendor)
@@ -278,8 +359,8 @@ class BaseScheduler:
                 logger.warning(f'No database service available for vendor {vendor}')
             
             total_products, total_saved = self._scrape_vendor_keywords(
-                vendor, scraper, cats, pages_per_keyword, vendor_result,
-                db_service, use_price_update, max_products_per_keyword
+                vendor, scraper, pages_per_keyword, vendor_result,
+                db_service, use_price_update, max_products_per_keyword, keyword=search_keyword
             )
             
             vendor_result['products_found'] = total_products
@@ -298,7 +379,7 @@ class BaseScheduler:
         vendor_result['duration_seconds'] = round(time.time() - vendor_start, 2)
         summary['vendors'][vendor] = vendor_result
 
-    def run(self, server_time=None, vendors: Optional[Iterable[str]] = None, pages_per_keyword: int = 1, use_price_update: bool = False, max_products_per_keyword: Optional[int] = None, expected_start_time=None) -> Dict[str, Any]:
+    def run(self, server_time=None, vendors: Optional[Iterable[str]] = None, use_price_update: bool = False, max_products_per_keyword: Optional[int] = None, expected_start_time=None, search_keyword=None) -> Dict[str, Any]:
         start_timestamp = time.time()
         server_time = server_time or _now()
         
@@ -311,10 +392,12 @@ class BaseScheduler:
         
         for vendor in vendors:
             self._process_single_vendor(
-                vendor, server_time, summary, pages_per_keyword,
-                use_price_update, max_products_per_keyword
+                vendor=vendor, server_time=server_time, summary=summary,
+                use_price_update=use_price_update, 
+                max_products_per_keyword=max_products_per_keyword,
+                search_keyword=search_keyword
             )
-        
+            
         summary['total_duration_seconds'] = round(time.time() - start_timestamp, 2)
         summary['end_timestamp'] = time.time()
         
