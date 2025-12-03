@@ -1,5 +1,10 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
+from django.middleware.csrf import get_token
+from .factory import create_gemilang_scraper, create_gemilang_location_scraper
+from .database_service import GemilangDatabaseService
+from db_pricing.auto_categorization_service import AutoCategorizationService
 import json
 import logging
 import uuid
@@ -438,7 +443,11 @@ def scrape_and_save(request):
         return _handle_regular_save(db_service, products_data)
         
     except Exception as e:
-        logger.error(f"Unexpected error in scrape_and_save: {type(e).__name__}")
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Unexpected error in scrape_and_save: {str(e)}\n{error_details}")
+        print(f"ERROR in scrape_and_save: {str(e)}")
+        print(error_details)
         return JsonResponse({
             'error': f'Internal server error: {str(e)}'
         }, status=500)

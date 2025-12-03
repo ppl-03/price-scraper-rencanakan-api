@@ -20,6 +20,7 @@ env = environ.Env(
 )
 environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
+
 sentry_sdk.init(
     dsn="https://c4ca31a3f2dd9c1b48cafc587cad0a03@o4510392092983296.ingest.us.sentry.io/4510392095801344",
     # Add data like request headers and IP for users,
@@ -28,7 +29,6 @@ sentry_sdk.init(
     traces_sample_rate=1.0,
 
 )
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -183,3 +183,5 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 TEST_IP_ALLOWED = env.str('TEST_IP_ALLOWED')
 TEST_IP_DENIED = env.str('TEST_IP_DENIED')
 TEST_IP_ATTACKER = env.str('TEST_IP_ATTACKER')
+
+DEMO_SEED = env.bool("DEMO_SEED", default=False)

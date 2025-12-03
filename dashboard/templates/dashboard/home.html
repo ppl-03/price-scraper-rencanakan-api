@@ -5,10 +5,6 @@
 {% block extra_css %}
 {% load static %}
 <style>
-    /* Right-align price column */
-    .price-align-right, .c-price {
-      text-align: right !important;
-    }
     body { background:#f7f9fb; font-family: Arial, sans-serif; color:#333; }
 
     /* Top bar with only the logo + avatar */
@@ -18,14 +14,49 @@
     .avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; }
 
     .content-wrapper{ margin-top:24px; }
-    .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+    .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); overflow: visible; }
 
     /* Results card minimum height for consistency */
-    #resultsCard { min-height: 600px; }
+    #resultsCard { min-height: 600px; overflow: visible; }
+    #resultsWrap { overflow: visible; }
 
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
-    .table td{ vertical-align: middle; border-color:#f1f3f5; }
+    
+    /* Table scrolling wrapper */
+    .table-responsive {
+      overflow-x: visible;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Fixed column widths for consistent table layout */
+    .table { table-layout: fixed; width: 100%; }
+    .table th:nth-child(1), .table td:nth-child(1) { width: 4%; } /* No */
+    .table th:nth-child(2), .table td:nth-child(2) { width: 20%; } /* Nama Produk */
+    .table th:nth-child(3), .table td:nth-child(3) { width: 10%; } /* Kategori */
+    .table th:nth-child(4), .table td:nth-child(4) { width: 10%; } /* Harga */
+    .table th:nth-child(5), .table td:nth-child(5) { width: 6%; }  /* Unit */
+    .table th:nth-child(6), .table td:nth-child(6) { width: 11%; } /* Vendor */
+    .table th:nth-child(7), .table td:nth-child(7) { width: 17%; } /* Lokasi */
+    .table th:nth-child(8), .table td:nth-child(8) { width: 22%; } /* Aksi */
+    
+    /* Text overflow handling and cell styling - enable wrapping for all cells */
+    .table td { 
+      vertical-align: middle;
+      border-color: #f1f3f5;
+      white-space: normal;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    
+    /* Ensure text wraps properly in all cells */
+    .table td.c-item,
+    .table td.c-category,
+    .table td.c-location,
+    .table td.c-vendor {
+      white-space: normal;
+      word-wrap: break-word;
+    }
 
     /* Sort indicators */
     .th-sort { position:relative; padding-right:18px; }
@@ -53,12 +84,61 @@
       background:#fff; border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,.10);
       padding:18px 22px; display:flex; align-items:center; gap:12px; border:1px solid #eef2f6;
     }
-    .ring { width:26px; height:26px; border:3px solid #e9eef5; border-top-color:#0d6efd; border-radius:50%; animation:spin .9s linear infinite; }
+    .ring { 
+      width:26px; height:26px; 
+      border:3px solid #e9eef5; 
+      border-top-color:#00365a; 
+      border-radius:50%; 
+      animation:spin .9s linear infinite;
+    }
     @keyframes spin { to { transform:rotate(360deg) } }
+    
+    /* Progress feedback */
+    .progress-feedback {
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      z-index: 1050;
+      min-width: 300px;
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(400px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
 
     /* Controls row (filters like DataTables) */
     .controls { gap:8px; }
     .controls .form-control, .controls .form-select { background:#fff; }
+
+    /* Enhanced focus states for accessibility */
+    .form-control:focus, .form-select:focus, .btn:focus {
+      box-shadow: 0 0 0 0.2rem rgba(0, 54, 90, 0.25);
+      border-color: #00365a;
+      outline: none;
+    }
+    
+    /* Improved input states */
+    .form-control:disabled, .form-select:disabled {
+      background-color: #e9ecef;
+      cursor: not-allowed;
+    }
+    
+    /* Success/error state indicators */
+    .form-control.is-valid {
+      border-color: #28a745;
+      padding-right: calc(1.5em + 0.75rem);
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right calc(0.375em + 0.1875rem) center;
+      background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    }
+    
+    .form-control.is-invalid {
+      border-color: #dc3545;
+      padding-right: calc(1.5em + 0.75rem);
+    }
 
     /* Location badge styling */
     .location-badge { 
@@ -67,7 +147,7 @@
     }
     .location-badge:hover {
       background: #e3f2fd !important;
-      border-color: #2196f3 !important;
+      border-color: #00365a !important;
       transform: translateY(-1px);
     }
 
@@ -76,6 +156,18 @@
       font-weight: 600;
       color: #495057;
       background: #f8f9fa;
+    }
+    
+    /* Tooltips and help text */
+    .form-text {
+      color: #6c757d;
+      margin-top: 0.25rem;
+    }
+    
+    /* Badge and label styling */
+    .badge {
+      font-weight: 500;
+      padding: 0.35em 0.65em;
     }
     
     /* Custom dropdown styling */
@@ -166,12 +258,118 @@
     .page-item .page-link:hover { background:#dfe7ec; color:#00365a; }
 
     .footer{ margin-top:40px; font-size:.85rem; color:#888; text-align:center; }
+    
+    /* Help text and hints */
+    .form-text.text-muted {
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+    }
+    
+    /* Keyboard shortcut hints */
+    .keyboard-hint {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.7rem;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+
+    /* Edit Mode Styles */
+    .edit-mode-btn {
+      position: relative;
+      overflow: hidden;
+      padding: 10px 20px;
+      font-weight: 600;
+      border-radius: 999px;
+      transition: all 0.2s ease;
+    }
+    .edit-mode-btn:not(.active) {
+      background: #fff;
+      border-color: #dee2e6;
+      color: #495057;
+    }
+    .edit-mode-btn:not(.active):hover {
+      background: #f8f9fa;
+      border-color: #adb5bd;
+      color: #212529;
+    }
+    .edit-mode-btn.active {
+      background: #0b7022;
+      border-color: #0b7022;
+      color: #ffffff;
+    }
+    .edit-mode-btn.active:hover {
+      background: #218838;
+      border-color: #1e7e34;
+    }
+    
+    /* Hide Aksi column and buttons by default */
+    thead .edit-mode-header,
+    tbody .edit-action-cell {
+      display: none !important;
+    }
+    
+    /* Show Aksi column and buttons when table has edit-mode class */
+    #pricesTable.edit-mode thead .edit-mode-header,
+    #pricesTable.edit-mode tbody .edit-action-cell {
+      display: table-cell !important;
+      visibility: visible !important;
+    }
+    
+    .edit-category-btn {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      transition: all 0.2s ease;
+    }
+    
+    .edit-category-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .edit-unit-btn {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      transition: all 0.2s ease;
+    }
+    
+    .edit-unit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .category-cell {
+      transition: background-color 0.2s ease;
+    }
+    .edit-mode .category-cell:hover {
+      background-color: #f8f9fa;
+    }
+    #categoryEditModal .modal-header {
+      background: linear-gradient(135deg, #00365a 0%, #022b47 100%);
+      color: white;
+    }
+    #categoryEditModal .btn-close {
+      filter: brightness(0) invert(1);
+    }
+    #unitEditModal .modal-header {
+      background: linear-gradient(135deg, #00365a 0%, #022b47 100%);
+      color: white;
+    }
+    #unitEditModal .btn-close {
+      filter: brightness(0) invert(1);
+    }
   </style>
 {% endblock %}
 
 {% block content %}
+  <!-- Skip to main content link for accessibility -->
+  <a href="#mainContent" class="visually-hidden-focusable btn btn-primary" style="position: absolute; top: 10px; left: 10px; z-index: 9999;">
+    Skip to main content
+  </a>
+
   <!-- Main content wrapper -->
-  <div class="container-fluid px-4 py-3">
+  <div class="container-fluid px-4 py-3" id="mainContent">
     <!-- Removed old topbar header since navbar is now in sidebar -->
 
     <!-- Oval warning banner ABOVE the search bar (only if messages exist) -->
@@ -187,49 +385,82 @@
       </div>
     {% endif %}
 
-    <!-- Backend search (hits your scrapers) -->
-    <form id="searchForm" action="{% url 'dashboard:dashboard_home' %}" method="get" class="mb-3" novalidate>
-      <div class="input-group">
-        <input id="qInput" type="text" name="q" class="form-control"
-               placeholder="Cari produk (contoh: semen, pasir, batu...)"
-               value="{{ request.GET.q|default_if_none:'' }}" autocomplete="off">
-        <button id="searchBtn" type="submit" class="btn btn-brand btn-pill d-inline-flex align-items-center gap-2">
-          <span class="btn-text">Search</span>
-          <span class="btn-spinner spinner-border spinner-border-sm" style="display:none" aria-hidden="true"></span>
-        </button>
-      </div>
-    </form>
+    <!-- Backend search with Edit Mode Toggle -->
+    <div class="d-flex gap-2 mb-3">
+      <form id="searchForm" action="{% url 'dashboard:dashboard_home_db' %}" method="get" class="flex-grow-1" novalidate>
+        <div class="input-group">
+          <input id="qInput" type="text" name="q" class="form-control"
+                 placeholder="Cari produk (contoh: semen, pasir, batu...)"
+                 value="{{ request.GET.q|default_if_none:'' }}" autocomplete="off">
+          <button id="searchBtn" type="submit" class="btn btn-brand btn-pill d-inline-flex align-items-center gap-2">
+            <span class="btn-text">Search</span>
+            <span class="btn-spinner spinner-border spinner-border-sm" style="display:none" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+      
+      <!-- Edit Mode Toggle -->
+      <button id="editModeToggle" class="btn btn-outline-secondary edit-mode-btn d-inline-flex align-items-center gap-2" style="white-space: nowrap;">
+        <i class="bi bi-pencil-square"></i>
+        <span class="edit-mode-text">Edit Mode</span>
+      </button>
+    </div>
 
     <!-- Client-side DataTable-like controls -->
     <div class="card mb-3">
       <div class="card-body">
-        <h6 class="card-title mb-3">
-          Filter & Pencarian
-        </h6>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="card-title mb-0 fw-bold text-secondary" style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i class="bi bi-funnel me-2"></i>Filter & Pencarian
+          </h6>
+          <button id="clearFilters" class="btn btn-outline-secondary btn-sm" style="border-radius: 999px; padding: 0.375rem 1rem; font-weight: 500;">
+            <i class="bi bi-x-circle me-1"></i>
+            Hapus Filter
+          </button>
+        </div>
         
         <!-- Row 1: Text filter, Vendor, and Category -->
         <div class="row g-3 mb-3">
-          <div class="col-md-4">
-            <label for="filterInput" class="form-label small text-muted">Filter Hasil</label>
-            <input id="filterInput" type="text" class="form-control" placeholder="Ketik untuk memfilter hasil...">
+          <div class="col-md-5">
+            <label for="filterInput" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-funnel me-1" aria-hidden="true"></i>
+              Filter Hasil
+              <span class="badge bg-light text-muted ms-2" id="activeFilterCount" style="display:none;"></span>
+            </label>
+            <input id="filterInput" 
+                   type="text" 
+                   class="form-control" 
+                   placeholder="Ketik untuk memfilter hasil..."
+                   aria-label="Filter hasil berdasarkan teks"
+                   title="Filter produk berdasarkan nama, vendor, atau lokasi">
           </div>
-          <div class="col-md-4">
-            <label for="vendorSelect" class="form-label small text-muted">Vendor</label>
-            <select id="vendorSelect" class="form-select">
+          <div class="col-md-3">
+            <label for="vendorSelect" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-shop me-1" aria-hidden="true"></i>
+              Vendor
+            </label>
+            <select id="vendorSelect" 
+                    class="form-select"
+                    aria-label="Pilih vendor">
               <option value="">Semua vendor</option>
             </select>
           </div>
           <div class="col-md-4">
-            <label for="categorySelect" class="form-label small text-muted">Kategori</label>
-            <select id="categorySelect" class="form-select">
+            <label for="categorySelect" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-tag me-1" aria-hidden="true"></i>
+              Kategori
+            </label>
+            <select id="categorySelect" 
+                    class="form-select"
+                    aria-label="Pilih kategori produk">
               <option value="">Semua kategori</option>
             </select>
           </div>
         </div>
         
-        <!-- Row 2: Location and Price range -->
+        <!-- Row 2: Location and Price Range -->
         <div class="row g-3 mb-3">
-          <div class="col-md-4">
+          <div class="col-md-5">
             <label for="locationSelect" class="form-label small text-muted">Lokasi</label>
             <div class="dropdown">
               <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="locationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -244,22 +475,49 @@
             <!-- Hidden input to store the actual selected value -->
             <input type="hidden" id="locationSelect" value="">
           </div>
-          <div class="col-md-4">
-            <label for="minPrice" class="form-label small text-muted">Harga Minimum</label>
-            <input id="minPrice" type="number" class="form-control" placeholder="0">
+          <div class="col-md-3">
+            <label for="minPrice" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-currency-dollar me-1" aria-hidden="true"></i>
+              Harga Minimum
+            </label>
+            <input id="minPrice" 
+                   type="number" 
+                   class="form-control" 
+                   placeholder="0"
+                   min="0"
+                   step="1000"
+                   aria-label="Harga minimum dalam Rupiah"
+                   title="Masukkan harga minimum">
+            <div class="form-text" id="minPriceHelp" style="font-size: 0.75rem;">Min: Rp 0</div>
           </div>
           <div class="col-md-4">
-            <label for="maxPrice" class="form-label small text-muted">Harga Maksimum</label>
-            <input id="maxPrice" type="number" class="form-control" placeholder="Tidak ada batas">
+            <label for="maxPrice" class="form-label small text-muted d-flex align-items-center">
+              <i class="bi bi-currency-dollar me-1" aria-hidden="true"></i>
+              Harga Maksimum
+            </label>
+            <input id="maxPrice" 
+                   type="number" 
+                   class="form-control" 
+                   placeholder="Tidak ada batas"
+                   min="0"
+                   step="1000"
+                   aria-label="Harga maksimum dalam Rupiah"
+                   title="Masukkan harga maksimum">
+            <div class="form-text" id="maxPriceHelp" style="font-size: 0.75rem;">Kosongkan untuk tanpa batas</div>
           </div>
         </div>
-        
-        <!-- Clear button -->
-        <div class="d-flex justify-content-end">
-          <button id="clearFilters" class="btn btn-outline-secondary btn-sm">
-            Hapus Semua Filter
-          </button>
-        </div>
+      </div>
+    </div>
+
+    <!-- Results summary -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <output id="resultsInfo" class="text-muted small" aria-live="polite">
+        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+        <span id="resultsCount">Memuat data...</span>
+      </output>
+      <div id="filterStatus" class="text-muted small" style="display:none;">
+        <i class="bi bi-funnel-fill me-1" aria-hidden="true"></i>
+        <span id="filterStatusText">Filter aktif</span>
       </div>
     </div>
 
@@ -278,26 +536,32 @@
 
       <!-- Table -->
       <div id="resultsWrap" class="card-body p-0">
+        <div class="table-responsive">
         <table class="table table-hover mb-0" id="pricesTable">
           <thead>
             <tr>
-              <th style="width:5%">No.</th>
-              <th class="th-sort" data-key="item" style="width:28%">Nama Produk</th>
-              <th class="th-sort" data-key="category" style="width:13%">Kategori</th>
-              <th class="th-sort price-align-right" data-key="price" style="width:12%">Harga</th>
-              <th style="width:7%">Unit</th>
-              <th class="th-sort" data-key="vendor" style="width:13%">Vendor</th>
-              <th class="th-sort" data-key="location" style="width:22%">Lokasi</th>
+              <th>No.</th>
+              <th class="th-sort" data-key="item">Nama Produk</th>
+              <th class="th-sort" data-key="category">Kategori</th>
+              <th class="th-sort" data-key="price">Harga</th>
+              <th>Unit</th>
+              <th class="th-sort" data-key="vendor">Vendor</th>
+              <th class="th-sort" data-key="location">Lokasi</th>
+              <th class="edit-mode-header">Aksi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
             {% for r in prices %}
-              <tr>
+              <tr data-product-url="{{ r.url }}" data-vendor="{{ r.source }}">
                 <td>{{ forloop.counter }}</td>
                 <td class="c-item">{{ r.item }}</td>
-                <td class="c-category">{{ r.category|default:"Lainnya" }}</td>
+                <td class="c-category category-cell" data-category="{{ r.category|default:"Lainnya" }}">
+                  <span class="category-text">{{ r.category|default:"Lainnya" }}</span>
+                </td>
                 <td class="c-price price-align-right">{{ r.value }}</td>
-                <td class="c-unit">{{ r.unit|default:"—" }}</td>
+                <td class="c-unit unit-cell" data-unit="{{ r.unit|default:"" }}">
+                  <span class="unit-text">{{ r.unit|default:"—" }}</span>
+                </td>
                 <td class="c-vendor">{{ r.source|default:"—" }}</td>
                 <td class="c-location">
                   {% if r.location %}
@@ -310,9 +574,9 @@
                               data-locations="{{ r.all_locations|join:'|' }}"
                               data-bs-toggle="tooltip"
                               title="Show all {{ r.location_count }} locations"
-                              aria-label="+{{ r.location_count|add:"-1" }} more locations"
+                              aria-label="Show {{ r.location_count|add:"-1" }} more locations for {{ r.source }}"
                               style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
-                          +{{ r.location_count|add:"-1" }}
+                          <span aria-hidden="true">+{{ r.location_count|add:"-1" }}</span>
                         </button>
                       {% endif %}
                     </div>
@@ -320,10 +584,22 @@
                     <span class="text-muted">—</span>
                   {% endif %}
                 </td>
+                <td class="edit-action-cell">
+                  <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
+                          onclick="openCategoryEditModal(this)" 
+                          title="Edit Category">
+                    <i class="bi bi-pencil"></i> Edit Category
+                  </button>
+                  <button class="btn btn-sm btn-outline-primary edit-unit-btn" 
+                          onclick="openUnitEditModal(this)" 
+                          title="Edit Unit">
+                    <i class="bi bi-rulers"></i> Edit Unit
+                  </button>
+                </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="7" class="empty-state">
+                <td colspan="8" class="empty-state">
                   <div class="empty-state-icon">Tidak ada data</div>
                   <h5>Belum ada data harga</h5>
                   <p class="mb-0">Gunakan form pencarian di atas untuk mulai mencari harga produk</p>
@@ -332,6 +608,7 @@
             {% endfor %}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
 
@@ -340,12 +617,111 @@
       <ul id="pagination" class="pagination"></ul>
     </nav>
 
-    <div class="footer">© 2025 rencanakan.id</div>
+    <div class="footer">
+      © 2025 rencanakan.id
+      <span class="mx-2">•</span>
+      <a href="#" id="showKeyboardShortcuts" class="text-muted text-decoration-none" title="Lihat shortcut keyboard">
+        <i class="bi bi-keyboard me-1"></i>Keyboard Shortcuts
+      </a>
+    </div>
+  </div>
+  
+  <!-- Keyboard Shortcuts Modal -->
+  <div class="modal fade" id="keyboardShortcutsModal" tabindex="-1" aria-labelledby="keyboardShortcutsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="keyboardShortcutsLabel">
+            <i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="list-group list-group-flush">
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Fokus ke pencarian</span>
+              <kbd class="keyboard-hint">/</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Toggle Edit Mode</span>
+              <kbd class="keyboard-hint">Ctrl + E</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Hapus filter (saat di input filter)</span>
+              <kbd class="keyboard-hint">Esc</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Cari (saat di input pencarian)</span>
+              <kbd class="keyboard-hint">Enter</kbd>
+            </div>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span>Urutkan kolom</span>
+              <kbd class="keyboard-hint">Klik header</kbd>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
   </div>
 {% endblock %}
 
 {% block extra_js %}
   <script>
+    // ========== Keyboard Shortcuts (User Control & Efficiency) ==========
+    document.addEventListener('keydown', function(e) {
+      // Focus search with '/' key
+      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        document.getElementById('qInput').focus();
+      }
+      
+      // Toggle edit mode with Ctrl+E
+      if (e.ctrlKey && e.key === 'e') {
+        e.preventDefault();
+        document.getElementById('editModeToggle').click();
+      }
+      
+      // Clear filters with Esc when focus is on filter inputs
+      if (e.key === 'Escape' && ['filterInput', 'vendorSelect', 'categorySelect', 'minPrice', 'maxPrice'].includes(e.target.id)) {
+        document.getElementById('clearFilters').click();
+      }
+      
+      // Show keyboard shortcuts with ?
+      if (e.key === '?' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        const modal = new bootstrap.Modal(document.getElementById('keyboardShortcutsModal'));
+        modal.show();
+      }
+    });
+    
+    // Handle keyboard shortcuts modal link
+    document.addEventListener('DOMContentLoaded', function() {
+      const shortcutsLink = document.getElementById('showKeyboardShortcuts');
+      if (shortcutsLink) {
+        shortcutsLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          const modal = new bootstrap.Modal(document.getElementById('keyboardShortcutsModal'));
+          modal.show();
+        });
+      }
+    });
+
+    // ========== Keyboard navigation for sortable headers ==========
+    document.addEventListener('DOMContentLoaded', function() {
+      const sortHeaders = document.querySelectorAll('th.th-sort');
+      for (const th of sortHeaders) {
+        th.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            this.click();
+          }
+        });
+      }
+    });
+
     // ---------- Price formatting: "IDR 30,400" (code, comma thousands, NO decimals) ----------
     const idf = new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -388,8 +764,8 @@
 
       const httpIdx = raw.toLowerCase().indexOf("http error");
       if (httpIdx !== -1) {
-        const windowStr = raw.slice(httpIdx, httpIdx + 40);
-        const m = windowStr.match(/HTTP error\s+(\d{3})/i);
+        const globalThisStr = raw.slice(httpIdx, httpIdx + 40);
+        const m = globalThisStr.match(/HTTP error\s+(\d{3})/i);
         if (m) {
           const code = m[1];
           return `<strong>${vendor ?? 'Salah satu vendor'}</strong> sedang tidak tersedia (HTTP ${code}). Data dari vendor lain tetap ditampilkan. Coba lagi beberapa menit lagi.`;
@@ -457,14 +833,19 @@
 
     // ---------- Build data from table ----------
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
-      const data = allRows.map(tr => {
+    // Make data globally accessible for updates
+    globalThis.tableData = allRows.map(tr => {
       const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
-      const category = tr.querySelector(".c-category")?.textContent?.trim() || "Lainnya";
       const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
+      const categoryCell = tr.querySelector(".c-category");
+      const category = categoryCell?.dataset.category?.trim() || "Lainnya";
       const priceText = tr.querySelector(".c-price")?.textContent || "0";
         const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
       const priceNum = toNumber(priceText);
       const locationCell = tr.querySelector(".c-location");
+      
+      // Extract URL from row data attribute
+      const url = tr.dataset.productUrl || "";
       
       // Extract modal data from button if present (updated from span)
       const modalButton = locationCell?.querySelector("button[data-locations]");
@@ -483,12 +864,13 @@
       // Normalize empty unit to dash
       const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
       
-      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations };
+      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations, url };
     });
 
     // Populate vendor dropdown (for…of)
     const vendorSelect = document.getElementById("vendorSelect");
-    const uniqueVendors = [...new Set(data.map(d => d.vendor).filter(Boolean))].sort();
+    const categorySelect = document.getElementById("categorySelect");
+    const uniqueVendors = [...new Set(globalThis.tableData.map(d => d.vendor).filter(Boolean))].sort();
     for (const v of uniqueVendors) {
       const opt = document.createElement("option");
       opt.value = v; opt.textContent = v;
@@ -496,12 +878,35 @@
     }
     
     // Populate category dropdown (for…of)
-    const categorySelect = document.getElementById("categorySelect");
-    const uniqueCategories = [...new Set(data.map(d => d.category).filter(Boolean))].sort();
+    const uniqueCategories = [...new Set(globalThis.tableData.map(d => d.category).filter(Boolean))].sort();
     for (const c of uniqueCategories) {
       const opt = document.createElement("option");
       opt.value = c; opt.textContent = c;
       categorySelect.appendChild(opt);
+    }
+    
+    // Function to refresh category dropdown after edits
+    function refreshCategoryDropdown() {
+      const currentValue = categorySelect.value;
+      const uniqueCategories = [...new Set(globalThis.tableData.map(d => d.category).filter(Boolean))].sort();
+      
+      // Clear existing options except the first one (All categories)
+      while (categorySelect.options.length > 1) {
+        categorySelect.remove(1);
+      }
+      
+      // Repopulate with updated categories
+      for (const c of uniqueCategories) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        categorySelect.appendChild(opt);
+      }
+      
+      // Restore previous selection if it still exists
+      if (currentValue && [...categorySelect.options].some(opt => opt.value === currentValue)) {
+        categorySelect.value = currentValue;
+      }
     }
 
     // Populate location dropdown with vendor grouping and submenus
@@ -511,7 +916,7 @@
     const locationsByVendor = {};
     
     // Group locations by vendor
-    for (const d of data) {
+    for (const d of globalThis.tableData) {
       if (!locationsByVendor[d.vendor]) {
         locationsByVendor[d.vendor] = new Set();
       }
@@ -623,7 +1028,7 @@
     }
 
     // ---------- Filtering + Sorting + Pagination ----------
-    const perPage = 10;
+    const perPage = 15;
     const pagination = document.getElementById("pagination");
     const tbody = document.getElementById("tableBody");
     const filterInput = document.getElementById("filterInput");
@@ -641,7 +1046,7 @@
       const l = locationSelect.value || "";
       const min = Number(minPrice.value || "");
       const max = Number(maxPrice.value || "");
-      return data.filter(d => {
+      return globalThis.tableData.filter(d => {
         const qmatch = !q || d.item.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q) || d.location.toLowerCase().includes(q) || d.category.toLowerCase().includes(q);
         const vm = !v || d.vendor === v;
         const cm = !c || d.category === c;
@@ -670,85 +1075,132 @@
       return sorted;
     }
 
-    function render() {
-      let rows = applyFilters();
-      rows = applySort(rows);
+    function updateResultsDisplay(filteredCount, totalCount) {
+      const resultsCount = document.getElementById('resultsCount');
+      if (resultsCount) {
+        resultsCount.textContent = `Menampilkan ${filteredCount} dari ${totalCount} produk`;
+      }
+      
+      const filterStatus = document.getElementById('filterStatus');
+      const hasActiveFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
+                               locationSelect.value || minPrice.value || maxPrice.value;
+      if (filterStatus) {
+        filterStatus.style.display = hasActiveFilters ? 'block' : 'none';
+        const activeCount = [filterInput.value, vendorSelect.value, categorySelect.value, 
+                            locationSelect.value, minPrice.value, maxPrice.value]
+                           .filter(Boolean).length;
+        document.getElementById('filterStatusText').textContent = `${activeCount} filter aktif`;
+      }
+    }
 
-      const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
-      if (currentPage > pageCount) currentPage = pageCount;
+    function createLocationCell(d) {
+      let locationHtml = `<div class="d-flex align-items-center">
+                           <span class="me-2">${d.location}</span>`;
+      if (d.allLocations && d.allLocations.length > 1) {
+        const moreCount = d.allLocations.length - 1;
+        const locationsStr = d.allLocations.join('|');
+        locationHtml += ` <button type="button" class="btn badge bg-light text-dark border location-badge" 
+                           tabindex="0"
+                           data-vendor="${d.vendor}"
+                           data-locations="${locationsStr}"
+                           title="Click to see all ${d.allLocations.length} locations"
+                           aria-label="Show all ${d.allLocations.length} locations for ${d.vendor}"
+                           style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
+                           +${moreCount}
+                         </button>`;
+      }
+      locationHtml += `</div>`;
+      return locationHtml;
+    }
 
-      // Render tbody
-      tbody.innerHTML = "";
-      const start = (currentPage - 1) * perPage;
-      const slice = rows.slice(start, start + perPage);
-      let idx = 0;
-      for (const d of slice) {
-        const tr = document.createElement("tr");
-        
-        // Build location cell content with improved design
-        let locationHtml = `<div class="d-flex align-items-center">
-                             <span class="me-2">${d.location}</span>`;
-        if (d.allLocations && d.allLocations.length > 1) {
-          const moreCount = d.allLocations.length - 1;
-          const locationsStr = d.allLocations.join('|');
-          locationHtml += ` <button type="button" class="btn badge bg-light text-dark border location-badge" 
-                             tabindex="0"
-                             data-vendor="${d.vendor}"
-                             data-locations="${locationsStr}"
-                             title="Click to see all ${d.allLocations.length} locations"
-                             aria-label="Show all ${d.allLocations.length} locations for ${d.vendor}"
-                             style="font-size: 0.7rem; cursor: pointer; border: none !important; padding: 0.25rem 0.5rem;">
-                             +${moreCount}
-                           </button>`;
-        }
-        locationHtml += `</div>`;
-        
-        tr.innerHTML = `
-          <td>${start + idx + 1}</td>
-          <td class="c-item">${d.item}</td>
-          <td class="c-category">${d.category || 'Lainnya'}</td>
-          <td class="c-price">${idf.format(Math.round(d.price))}</td>
-          <td class="c-unit">${d.unit || '—'}</td>
-          <td class="c-vendor">${d.vendor}</td>
-          <td class="c-location">${locationHtml}</td>`;
-        tbody.appendChild(tr);
-        
-        // Add click event listener to the location badge if it exists
-        const modalBadge = tr.querySelector('button[data-locations]');
-        if (modalBadge) {
-          const handleLocationModal = function(e) {
-            e.preventDefault(); // Prevent any default behavior
-            e.stopPropagation(); // Stop event bubbling
-            
-            const vendor = this.dataset.vendor;
-            const locationsStr = this.dataset.locations;
-            const locations = locationsStr ? locationsStr.split('|') : [];
-            
-            console.log('DEBUG: Dynamic badge clicked');
-            console.log('DEBUG: Vendor:', vendor);
-            console.log('DEBUG: Locations string:', locationsStr);
-            console.log('DEBUG: Parsed locations:', locations);
-            
-            showLocationModal(vendor, locations);
-          };
+    function attachLocationModalHandlers(tr) {
+      const modalBadge = tr.querySelector('button[data-locations]');
+      if (modalBadge) {
+        const handleLocationModal = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
           
-          modalBadge.addEventListener('click', handleLocationModal);
-          modalBadge.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-              handleLocationModal.call(this, e);
-            }
-          });
-        }
+          const vendor = this.dataset.vendor;
+          const locationsStr = this.dataset.locations;
+          const locations = locationsStr ? locationsStr.split('|') : [];
+          
+          console.log('DEBUG: Dynamic badge clicked');
+          console.log('DEBUG: Vendor:', vendor);
+          console.log('DEBUG: Locations string:', locationsStr);
+          console.log('DEBUG: Parsed locations:', locations);
+          
+          showLocationModal(vendor, locations);
+        };
         
-        idx++;
+        modalBadge.addEventListener('click', handleLocationModal);
+        modalBadge.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleLocationModal.call(this, e);
+          }
+        });
       }
-      if (slice.length === 0) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="5" class="text-center text-muted py-4">Tidak ada data</td>`;
-        tbody.appendChild(tr);
-      }
+    }
 
-      // Render pagination
+    function renderTableRow(d, rowIndex) {
+      const tr = document.createElement("tr");
+      tr.dataset.category = d.category || "";
+      tr.dataset.productUrl = d.url || '';
+      tr.dataset.vendor = d.vendor || '';
+      
+      const locationHtml = createLocationCell(d);
+      
+      tr.innerHTML = `
+        <td>${rowIndex + 1}</td>
+        <td class="c-item">${d.item}</td>
+        <td class="c-category category-cell" data-category="${d.category || 'Lainnya'}">
+          <span class="category-text">${d.category || 'Lainnya'}</span>
+        </td>
+        <td class="c-price">${idf.format(Math.round(d.price))}</td>
+        <td class="c-unit unit-cell" data-unit="${d.unit || ''}">
+          <span class="unit-text">${d.unit || '—'}</span>
+        </td>
+        <td class="c-vendor">${d.vendor}</td>
+        <td class="c-location">${locationHtml}</td>
+        <td class="edit-action-cell">
+          <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
+                  onclick="openCategoryEditModal(this)" 
+                  title="Edit Category">
+            <i class="bi bi-pencil"></i> Edit Category
+          </button>
+          <button class="btn btn-sm btn-outline-primary edit-unit-btn" 
+                  onclick="openUnitEditModal(this)" 
+                  title="Edit Unit">
+            <i class="bi bi-rulers"></i> Edit Unit
+          </button>
+        </td>`;
+      
+      attachLocationModalHandlers(tr);
+      return tr;
+    }
+
+    function renderEmptyState() {
+      const tr = document.createElement("tr");
+      const hasFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
+                        locationSelect.value || minPrice.value || maxPrice.value;
+      const emptyMessage = hasFilters 
+        ? `<div class="empty-state">
+             <div class="empty-state-icon"><i class="bi bi-search"></i></div>
+             <h6>Tidak ada hasil yang cocok</h6>
+             <p class="text-muted mb-3">Coba ubah atau hapus beberapa filter</p>
+             <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('clearFilters').click()">
+               <i class="bi bi-x-circle me-1"></i>Hapus Semua Filter
+             </button>
+           </div>`
+        : `<div class="empty-state">
+             <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+             <h6>Belum ada data</h6>
+             <p class="text-muted">Data produk akan muncul di sini</p>
+           </div>`;
+      tr.innerHTML = `<td colspan="8" class="text-center py-4">${emptyMessage}</td>`;
+      return tr;
+    }
+
+    function renderPagination(pageCount) {
       pagination.innerHTML = "";
       for (let i = 1; i <= pageCount; i++) {
         const li = document.createElement("li");
@@ -758,6 +1210,32 @@
         a.addEventListener("click", e => { e.preventDefault(); currentPage = i; render(); });
         li.appendChild(a); pagination.appendChild(li);
       }
+    }
+
+    function render() {
+      let rows = applyFilters();
+      rows = applySort(rows);
+
+      const pageCount = Math.max(1, Math.ceil(rows.length / perPage));
+      if (currentPage > pageCount) currentPage = pageCount;
+      
+      updateResultsDisplay(rows.length, globalThis.tableData.length);
+
+      // Render tbody
+      tbody.innerHTML = "";
+      const start = (currentPage - 1) * perPage;
+      const slice = rows.slice(start, start + perPage);
+      
+      if (slice.length === 0) {
+        tbody.appendChild(renderEmptyState());
+      } else {
+        for (let idx = 0; idx < slice.length; idx++) {
+          const tr = renderTableRow(slice[idx], start + idx);
+          tbody.appendChild(tr);
+        }
+      }
+
+      renderPagination(pageCount);
     }
 
     // Header sorting (for…of + dataset)
@@ -783,10 +1261,48 @@
       el.addEventListener("input", () => { currentPage = 1; render(); });
       el.addEventListener("change", () => { currentPage = 1; render(); });
     }
+    
+    // Price validation (Error prevention)
+    minPrice.addEventListener('input', function() {
+      if (this.value && Number.parseFloat(this.value) < 0) {
+        this.value = 0;
+      }
+      // Validate max price is greater than min
+      if (maxPrice.value && Number.parseFloat(this.value) > Number.parseFloat(maxPrice.value)) {
+        this.classList.add('is-invalid');
+        document.getElementById('minPriceHelp').textContent = 'Harga minimum tidak boleh lebih dari maksimum';
+        document.getElementById('minPriceHelp').classList.add('text-danger');
+      } else {
+        this.classList.remove('is-invalid');
+        document.getElementById('minPriceHelp').textContent = 'Min: Rp 0';
+        document.getElementById('minPriceHelp').classList.remove('text-danger');
+      }
+    });
+    
+    maxPrice.addEventListener('input', function() {
+      if (this.value && Number.parseFloat(this.value) < 0) {
+        this.value = 0;
+      }
+      // Validate max price is greater than min
+      if (minPrice.value && Number.parseFloat(this.value) < Number.parseFloat(minPrice.value)) {
+        this.classList.add('is-invalid');
+        document.getElementById('maxPriceHelp').textContent = 'Harga maksimum tidak boleh kurang dari minimum';
+        document.getElementById('maxPriceHelp').classList.add('text-danger');
+      } else {
+        this.classList.remove('is-invalid');
+        document.getElementById('maxPriceHelp').textContent = 'Kosongkan untuk tanpa batas';
+        document.getElementById('maxPriceHelp').classList.remove('text-danger');
+      }
+    });
 
-    // Clear
+    // Clear (with feedback for user control)
     clearBtn.addEventListener("click", (e) => {
       e.preventDefault();
+      
+      // Store if there were active filters
+      const hadFilters = filterInput.value || vendorSelect.value || categorySelect.value ||
+                        locationSelect.value || minPrice.value || maxPrice.value;
+      
       filterInput.value = ""; 
       vendorSelect.value = ""; 
       categorySelect.value = "";
@@ -796,6 +1312,11 @@
       maxPrice.value = "";
       currentPage = 1; 
       render();
+      
+      // Provide feedback (Visibility of system status)
+      if (hadFilters) {
+        showNotification('Semua filter telah dihapus', 'info');
+      }
     });
 
     // Add click listeners to initially loaded buttons (updated from spans)
@@ -959,4 +1480,581 @@
       </div>
     </div>
   </div>
+
+  <!-- Unit Edit Modal -->
+  <div class="modal fade" id="unitEditModal" tabindex="-1" aria-labelledby="unitEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="unitEditModalLabel">
+            <i class="bi bi-rulers me-2"></i>Edit Unit Produk
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <div class="form-label fw-bold">Nama Produk:</div>
+            <p id="editProductNameUnit" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Vendor:</div>
+            <p id="editVendorUnit" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Unit Saat Ini:</div>
+            <p id="currentUnit" class="text-muted mb-2"></p>
+          </div>
+          <div class="mb-3">
+            <label for="newUnitInput" class="form-label fw-bold">Unit Baru:</label>
+            <input type="text" 
+                   class="form-control" 
+                   id="newUnitInput" 
+                   maxlength="50" 
+                   placeholder="Masukkan unit baru (contoh: kg, m², pcs)..."
+                   autocomplete="off">
+            <div class="form-text">Maksimal 50 karakter</div>
+            <div id="unitError" class="text-danger mt-2" style="display: none;"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-primary" id="saveUnitBtn" onclick="saveUnit()">
+            <span class="save-unit-text">Simpan Perubahan</span>
+            <span class="save-unit-spinner spinner-border spinner-border-sm ms-2" style="display:none" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Edit Modal -->
+  <div class="modal fade" id="categoryEditModal" tabindex="-1" aria-labelledby="categoryEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="categoryEditModalLabel">
+            <i class="bi bi-pencil-square me-2"></i>Edit Kategori Produk
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <div class="form-label fw-bold">Nama Produk:</div>
+            <p id="editProductName" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Vendor:</div>
+            <p id="editVendor" class="text-muted mb-0"></p>
+          </div>
+          <div class="mb-3">
+            <div class="form-label fw-bold">Kategori Saat Ini:</div>
+            <p id="currentCategory" class="text-muted mb-2"></p>
+          </div>
+          <div class="mb-3">
+            <label for="newCategorySelect" class="form-label fw-bold">Kategori Baru:</label>
+            <select class="form-select" id="newCategorySelect">
+              <option value="">-- Pilih Kategori --</option>
+              <option value="Baja dan Besi Tulangan">Baja dan Besi Tulangan</option>
+              <option value="Material Interior">Material Interior</option>
+              <option value="Tanah, Pasir, Batu, dan Semen">Tanah, Pasir, Batu, dan Semen</option>
+              <option value="Peralatan Kerja">Peralatan Kerja</option>
+              <option value="Material Pipa Air">Material Pipa Air</option>
+              <option value="Material Sanitair">Material Sanitair</option>
+              <option value="Material Listrik">Material Listrik</option>
+              <option value="Alat Berat">Alat Berat</option>
+              <option value="Lainnya">Lainnya</option>
+              <option value="__custom__">✏️ Tambah Kategori Sendiri...</option>
+            </select>
+            <div class="form-text">Pilih kategori yang sesuai untuk produk ini</div>
+            <div id="categoryError" class="text-danger mt-2" style="display: none;"></div>
+          </div>
+          <div class="mb-3" id="customCategoryContainer" style="display: none;">
+            <label for="customCategoryInput" class="form-label fw-bold">Nama Kategori Custom:</label>
+            <input type="text" 
+                   class="form-control" 
+                   id="customCategoryInput" 
+                   maxlength="100" 
+                   placeholder="Masukkan nama kategori..."
+                   autocomplete="off">
+            <div class="form-text">Maksimal 100 karakter</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-primary" id="saveCategoryBtn" onclick="saveCategory()">
+            <span class="save-text">Simpan Perubahan</span>
+            <span class="save-spinner spinner-border spinner-border-sm ms-2" style="display:none" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== CSRF Token Helper ==========
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+          const trimmedCookie = cookie.trim();
+          if (trimmedCookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(trimmedCookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+
+    // ========== Edit Mode Management ==========
+    let editModeEnabled = false;
+    let currentEditingProduct = null;
+    let categoryEditModalInstance = null;
+    let currentEditingProductUnit = null;
+    let unitEditModalInstance = null;
+
+    // Toggle edit mode (User control and freedom)
+    document.getElementById('editModeToggle').addEventListener('click', function() {
+      editModeEnabled = !editModeEnabled;
+      const table = document.getElementById('pricesTable');
+      const tableBody = document.getElementById('tableBody');
+      const editModeText = this.querySelector('.edit-mode-text');
+      
+      if (editModeEnabled) {
+        table.classList.add('edit-mode');
+        tableBody.classList.add('edit-mode');
+        this.classList.add('active');
+        this.setAttribute('aria-pressed', 'true');
+        editModeText.textContent = 'Exit Edit';
+        console.log('Edit mode enabled - table classes:', table.className);
+        showNotification('Mode edit diaktifkan. Klik tombol edit pada baris produk.', 'info');
+      } else {
+        table.classList.remove('edit-mode');
+        tableBody.classList.remove('edit-mode');
+        this.classList.remove('active');
+        this.setAttribute('aria-pressed', 'false');
+        editModeText.textContent = 'Edit Mode';
+        console.log('Edit mode disabled');
+        
+        // Refresh the table to show all updates made during edit mode
+        render();
+        showNotification('Mode edit dinonaktifkan', 'info');
+      }
+    });
+
+    // ========== Category Edit Modal Functions ==========
+    
+    // Helper function to validate category input
+    function validateCategoryInput(newCategory, errorDiv) {
+      if (newCategory === '__custom__') {
+        const customValue = document.getElementById('customCategoryInput').value.trim();
+        if (!customValue) {
+          errorDiv.textContent = 'Silakan masukkan nama kategori custom';
+          errorDiv.style.display = 'block';
+          return { valid: false, category: null };
+        }
+        if (customValue.length > 100) {
+          errorDiv.textContent = 'Nama kategori tidak boleh lebih dari 100 karakter';
+          errorDiv.style.display = 'block';
+          return { valid: false, category: null };
+        }
+        return { valid: true, category: customValue };
+      }
+      
+      if (!newCategory) {
+        errorDiv.textContent = 'Silakan pilih kategori';
+        errorDiv.style.display = 'block';
+        return { valid: false, category: null };
+      }
+      
+      return { valid: true, category: newCategory };
+    }
+    
+    // Helper function to apply optimistic category update
+    function applyOptimisticCategoryUpdate(editingContext, newCategory) {
+      editingContext.categoryCell.dataset.category = newCategory;
+      const categoryTextSpan = editingContext.categoryCell.querySelector('.category-text');
+      categoryTextSpan.textContent = newCategory;
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].category = newCategory;
+      }
+      
+      refreshCategoryDropdown();
+      render();
+    }
+    
+    // Helper function to rollback category changes
+    function rollbackCategoryUpdate(editingContext, oldCategory, errorMessage) {
+      editingContext.categoryCell.dataset.category = oldCategory;
+      const categoryTextSpan = editingContext.categoryCell.querySelector('.category-text');
+      categoryTextSpan.textContent = oldCategory;
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].category = oldCategory;
+      }
+      
+      refreshCategoryDropdown();
+      render();
+      showNotification(errorMessage, 'danger');
+    }
+    
+    function openCategoryEditModal(button) {
+      if (!editModeEnabled) return;
+      
+      const row = button.closest('tr');
+      const productName = row.querySelector('.c-item').textContent.trim();
+      const vendor = row.dataset.vendor;
+      const productUrl = row.dataset.productUrl;
+      const categoryCell = row.querySelector('.c-category');
+      const currentCategory = categoryCell.dataset.category;
+      
+      // Store current editing context
+      currentEditingProduct = {
+        row: row,
+        vendor: vendor,
+        productUrl: productUrl,
+        productName: productName,
+        currentCategory: currentCategory,
+        categoryCell: categoryCell
+      };
+      
+      // Populate modal
+      document.getElementById('editProductName').textContent = productName;
+      document.getElementById('editVendor').textContent = vendor;
+      document.getElementById('currentCategory').textContent = currentCategory;
+      
+      // Check if current category is in predefined list
+      const select = document.getElementById('newCategorySelect');
+      const predefinedCategories = ['Baja dan Besi Tulangan', 'Material Interior', 'Tanah, Pasir, Batu, dan Semen', 
+                                     'Peralatan Kerja', 'Material Pipa Air', 'Material Sanitair', 
+                                     'Material Listrik', 'Alat Berat', 'Lainnya'];
+      
+      if (predefinedCategories.includes(currentCategory)) {
+        select.value = currentCategory;
+        document.getElementById('customCategoryContainer').style.display = 'none';
+        document.getElementById('customCategoryInput').value = '';
+      } else {
+        select.value = '__custom__';
+        document.getElementById('customCategoryContainer').style.display = 'block';
+        document.getElementById('customCategoryInput').value = currentCategory;
+      }
+      
+      document.getElementById('categoryError').style.display = 'none';
+      
+      // Show modal
+      const modalElement = document.getElementById('categoryEditModal');
+      if (categoryEditModalInstance) {
+        categoryEditModalInstance.dispose();
+      }
+      categoryEditModalInstance = new bootstrap.Modal(modalElement);
+      categoryEditModalInstance.show();
+      
+      // Focus on select
+      setTimeout(() => {
+        document.getElementById('newCategorySelect').focus();
+      }, 500);
+    }
+
+    // Save category changes 
+    async function saveCategory() {
+      if (!currentEditingProduct) return;
+      
+      const errorDiv = document.getElementById('categoryError');
+      const saveBtn = document.getElementById('saveCategoryBtn');
+      const saveText = saveBtn.querySelector('.save-text');
+      const saveSpinner = saveBtn.querySelector('.save-spinner');
+      
+      // Validate input
+      let categoryInput = document.getElementById('newCategorySelect').value.trim();
+      const validation = validateCategoryInput(categoryInput, errorDiv);
+      if (!validation.valid) return;
+      
+      const newCategory = validation.category;
+      
+      // Show loading state
+      saveBtn.disabled = true;
+      saveText.textContent = 'Menyimpan...';
+      saveSpinner.style.display = 'inline-block';
+      errorDiv.style.display = 'none';
+      
+      // Store context and old value
+      const oldCategory = currentEditingProduct.currentCategory;
+      const editingContext = currentEditingProduct;
+      currentEditingProduct = null;
+      
+      // Apply optimistic update
+      applyOptimisticCategoryUpdate(editingContext, newCategory);
+      
+      // Close modal and show success
+      categoryEditModalInstance.hide();
+      showNotification('Kategori berhasil diperbarui!', 'success');
+      
+      // Sync with server in background
+      try {
+        const csrftoken = getCookie('csrftoken');
+        const response = await fetch('/api/category/update/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+          },
+          body: JSON.stringify({
+            source: editingContext.vendor,
+            product_url: editingContext.productUrl,
+            new_category: newCategory
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          rollbackCategoryUpdate(editingContext, oldCategory, data.error || 'Gagal memperbarui kategori. Perubahan dibatalkan.');
+        }
+      } catch (error) {
+        console.error('Error updating category:', error);
+        rollbackCategoryUpdate(editingContext, oldCategory, 'Terjadi kesalahan jaringan. Perubahan dibatalkan.');
+      } finally {
+        saveBtn.disabled = false;
+        saveText.textContent = 'Simpan Perubahan';
+        saveSpinner.style.display = 'none';
+      }
+    }
+
+    // Show notification (Enhanced feedback)
+    function showNotification(message, type = 'info') {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert alert-${type} alert-dismissible fade show progress-feedback`;
+      alertDiv.setAttribute('role', 'alert');
+      alertDiv.setAttribute('aria-live', 'polite');
+      
+      // Icon based on type
+      let icon = 'info-circle';
+      if (type === 'success') icon = 'check-circle';
+      if (type === 'warning') icon = 'exclamation-triangle';
+      if (type === 'danger') icon = 'x-circle';
+      
+      alertDiv.innerHTML = `
+        <div class="d-flex align-items-center">
+          <i class="bi bi-${icon} me-2" aria-hidden="true"></i>
+          <div class="flex-grow-1">${message}</div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      `;
+      
+      document.body.appendChild(alertDiv);
+      
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        alertDiv.classList.remove('show');
+        setTimeout(() => alertDiv.remove(), 150);
+      }, 5000);
+    }
+
+    // Handle category select change to show/hide custom input
+    document.getElementById('newCategorySelect').addEventListener('change', function(e) {
+      const customContainer = document.getElementById('customCategoryContainer');
+      const customInput = document.getElementById('customCategoryInput');
+      
+      if (this.value === '__custom__') {
+        customContainer.style.display = 'block';
+        setTimeout(() => {
+          customInput.focus();
+        }, 100);
+      } else {
+        customContainer.style.display = 'none';
+        customInput.value = '';
+      }
+    });
+    
+    // Handle Enter key in category select
+    document.getElementById('newCategorySelect').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveCategory();
+      }
+    });
+    
+    // Handle Enter key in custom category input
+    document.getElementById('customCategoryInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveCategory();
+      }
+    });
+
+    // Clean up modal instance on hide
+    document.getElementById('categoryEditModal').addEventListener('hidden.bs.modal', function() {
+      if (categoryEditModalInstance) {
+        categoryEditModalInstance.dispose();
+        categoryEditModalInstance = null;
+      }
+    });
+
+    // ========== Unit Edit Modal Functions ==========
+    
+    // Helper function to apply optimistic unit update
+    function applyOptimisticUnitUpdate(editingContext, newUnit) {
+      editingContext.unitCell.dataset.unit = newUnit;
+      const unitTextSpan = editingContext.unitCell.querySelector('.unit-text');
+      unitTextSpan.textContent = newUnit || '—';
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].unit = newUnit || '—';
+      }
+      
+      render();
+    }
+    
+    // Helper function to rollback unit changes
+    function rollbackUnitUpdate(editingContext, oldUnit, errorMessage) {
+      editingContext.unitCell.dataset.unit = oldUnit;
+      const unitTextSpan = editingContext.unitCell.querySelector('.unit-text');
+      unitTextSpan.textContent = oldUnit || '—';
+      
+      // Find index using product URL for reliable matching
+      const productUrl = editingContext.row.dataset.productUrl;
+      const dataIndex = globalThis.tableData.findIndex(d => d.url === productUrl);
+      if (dataIndex !== -1 && globalThis.tableData[dataIndex]) {
+        globalThis.tableData[dataIndex].unit = oldUnit || '—';
+      }
+      
+      render();
+      showNotification(errorMessage, 'danger');
+    }
+    
+    function openUnitEditModal(button) {
+      if (!editModeEnabled) return;
+      
+      const row = button.closest('tr');
+      const productName = row.querySelector('.c-item').textContent.trim();
+      const vendor = row.dataset.vendor;
+      const productUrl = row.dataset.productUrl;
+      const unitCell = row.querySelector('.c-unit');
+      const currentUnit = unitCell.dataset.unit || '';
+      
+      // Store current editing context
+      currentEditingProductUnit = {
+        row: row,
+        vendor: vendor,
+        productUrl: productUrl,
+        productName: productName,
+        currentUnit: currentUnit,
+        unitCell: unitCell
+      };
+      
+      // Populate modal
+      document.getElementById('editProductNameUnit').textContent = productName;
+      document.getElementById('editVendorUnit').textContent = vendor;
+      document.getElementById('currentUnit').textContent = currentUnit || '—';
+      document.getElementById('newUnitInput').value = currentUnit;
+      document.getElementById('unitError').style.display = 'none';
+      
+      // Show modal
+      const modalElement = document.getElementById('unitEditModal');
+      if (unitEditModalInstance) {
+        unitEditModalInstance.dispose();
+      }
+      unitEditModalInstance = new bootstrap.Modal(modalElement);
+      unitEditModalInstance.show();
+      
+      // Focus on input
+      setTimeout(() => {
+        document.getElementById('newUnitInput').focus();
+        document.getElementById('newUnitInput').select();
+      }, 500);
+    }
+
+    // Save unit changes (Optimized for reduced complexity)
+    async function saveUnit() {
+      if (!currentEditingProductUnit) return;
+      
+      const newUnit = document.getElementById('newUnitInput').value.trim();
+      const errorDiv = document.getElementById('unitError');
+      const saveBtn = document.getElementById('saveUnitBtn');
+      const saveText = saveBtn.querySelector('.save-unit-text');
+      const saveSpinner = saveBtn.querySelector('.save-unit-spinner');
+      
+      // Validation
+      if (newUnit.length > 50) {
+        errorDiv.textContent = 'Unit tidak boleh lebih dari 50 karakter';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      // Show loading state
+      saveBtn.disabled = true;
+      saveText.textContent = 'Menyimpan...';
+      saveSpinner.style.display = 'inline-block';
+      errorDiv.style.display = 'none';
+      
+      // Store context and old value
+      const oldUnit = currentEditingProductUnit.currentUnit;
+      const editingContext = currentEditingProductUnit;
+      currentEditingProductUnit = null;
+      
+      // Apply optimistic update
+      applyOptimisticUnitUpdate(editingContext, newUnit);
+      
+      // Close modal and show success
+      unitEditModalInstance.hide();
+      showNotification('Unit berhasil diperbarui!', 'success');
+      
+      // Sync with server in background
+      try {
+        const csrftoken = getCookie('csrftoken');
+        const response = await fetch('/api/unit/update/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+          },
+          body: JSON.stringify({
+            source: editingContext.vendor,
+            product_url: editingContext.productUrl,
+            new_unit: newUnit
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          rollbackUnitUpdate(editingContext, oldUnit, data.error || 'Gagal memperbarui unit. Perubahan dibatalkan.');
+        }
+      } catch (error) {
+        console.error('Error updating unit:', error);
+        rollbackUnitUpdate(editingContext, oldUnit, 'Terjadi kesalahan jaringan. Perubahan dibatalkan.');
+      } finally {
+        saveBtn.disabled = false;
+        saveText.textContent = 'Simpan Perubahan';
+        saveSpinner.style.display = 'none';
+      }
+    }
+
+    // Handle Enter key in unit input
+    document.getElementById('newUnitInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveUnit();
+      }
+    });
+
+    // Clean up unit modal instance on hide
+    document.getElementById('unitEditModal').addEventListener('hidden.bs.modal', function() {
+      if (unitEditModalInstance) {
+        unitEditModalInstance.dispose();
+        unitEditModalInstance = null;
+      }
+    });
+  </script>
 {% endblock %}

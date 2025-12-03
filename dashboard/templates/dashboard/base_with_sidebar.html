@@ -188,9 +188,7 @@
             <div class="sidebar-logo">
                 {% load static %}
                 <!-- Rencanakan Logo -->
-                <img src="{% static 'dashboard/images/rencanakan_logo.png' %}" 
-                     alt="Rencanakan">
-                <!-- Fallback if image doesn't load -->
+                <img src="{% static 'dashboard/images/rencanakan_logo.png' %}" alt="Rencanakan Logo">
                 <div class="logo-fallback">
                     <div class="logo-icon">
                         <i class="fas fa-cube"></i>
@@ -201,8 +199,8 @@
             
             <ul class="sidebar-nav">
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard_home' %}active{% endif %}" 
-                       href="{% url 'dashboard:dashboard_home' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard_home_db' %}active{% endif %}" 
+                       href="{% url 'dashboard:dashboard_home_db' %}">
                         <i class="fas fa-folder"></i>
                         <span class="nav-link-text">Product Vendor</span>
                     </a>
