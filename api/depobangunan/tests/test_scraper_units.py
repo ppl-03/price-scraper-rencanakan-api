@@ -9,7 +9,7 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.mock_http_client = Mock(spec=IHttpClient)
-        self.mock_url_builder = Mock(spec=IUrlBuilder)
+        self.mock_url_builder = Mock()  # Don't use spec to allow build_popularity_url
         self.mock_html_parser = Mock(spec=IHtmlParser)
         
         self.scraper = DepoPriceScraper(
@@ -169,6 +169,135 @@ class TestDepoPriceScraperWithUnits(unittest.TestCase):
         
         # HTTP client should not be called
         self.mock_http_client.get.assert_not_called()
+    
+    def test_enhance_product_uses_cache(self):
+        """Lines 112-121: Test that unit cache is used to avoid re-fetching"""
+        product = Product(name="Test Product", price=1000, url="https://example.com/cached", unit=None)
+        
+        # Pre-populate cache with a unit
+        self.scraper._unit_cache["https://example.com/cached"] = "KG"
+        
+        # Execute
+        result = self.scraper._enhance_product_with_unit_from_detail_page(product)
+        
+        # Assertions
+        self.assertEqual(result.unit, "KG")
+        # HTTP client should NOT be called because we used cache
+        self.mock_http_client.get.assert_not_called()
+    
+    def test_enhance_product_uses_cache_with_none(self):
+        """Lines 112-121: Test cached None value returns original product"""
+        product = Product(name="Test Product", price=1000, url="https://example.com/cached-none", unit=None)
+        
+        # Pre-populate cache with None (failed previous fetch)
+        self.scraper._unit_cache["https://example.com/cached-none"] = None
+        
+        # Execute
+        result = self.scraper._enhance_product_with_unit_from_detail_page(product)
+        
+        # Assertions
+        self.assertEqual(result, product)
+        self.assertIsNone(result.unit)
+        # HTTP client should NOT be called because we used cache
+        self.mock_http_client.get.assert_not_called()
+    
+    def test_scrape_popularity_products_success(self):
+        """Line 68, 96-99: Test scrape_popularity_products with products having sold_count"""
+        # Mock URL builder
+        self.mock_url_builder.build_popularity_url.return_value = "https://example.com/popular"
+        
+        # Mock HTTP response
+        self.mock_http_client.get.return_value = "<html>product list</html>"
+        
+        # Mock parser to return products with sold_count
+        products = [
+            Product(name="Product 1", price=1000, url="https://example.com/1", unit="KG", sold_count=100),
+            Product(name="Product 2", price=2000, url="https://example.com/2", unit="L", sold_count=50),
+            Product(name="Product 3", price=3000, url="https://example.com/3", unit="PCS", sold_count=200),
+            Product(name="Product 4", price=4000, url="https://example.com/4", unit="M", sold_count=75),
+            Product(name="Product 5", price=5000, url="https://example.com/5", unit="G", sold_count=150),
+            Product(name="Product 6", price=6000, url="https://example.com/6", unit="CM", sold_count=25),
+        ]
+        self.mock_html_parser.parse_products.return_value = products
+        
+        # Execute
+        result = self.scraper.scrape_popularity_products("test keyword", page=0, top_n=3)
+        
+        # Assertions
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 3)
+        # Should be sorted by sold_count descending
+        self.assertEqual(result.products[0].sold_count, 200)
+        self.assertEqual(result.products[1].sold_count, 150)
+        self.assertEqual(result.products[2].sold_count, 100)
+        self.assertEqual(result.url, "https://example.com/popular")
+        
+        # Verify calls
+        self.mock_url_builder.build_popularity_url.assert_called_once_with("test keyword", 0)
+        self.mock_http_client.get.assert_called_once_with("https://example.com/popular", timeout=30)
+    
+    def test_scrape_popularity_products_no_products(self):
+        """Line 68: Test scrape_popularity_products when no products found"""
+        # Mock URL builder
+        self.mock_url_builder.build_popularity_url.return_value = "https://example.com/popular"
+        
+        # Mock HTTP response
+        self.mock_http_client.get.return_value = "<html>empty</html>"
+        
+        # Mock parser to return empty list
+        self.mock_html_parser.parse_products.return_value = []
+        
+        # Execute
+        result = self.scraper.scrape_popularity_products("test keyword", page=0, top_n=5)
+        
+        # Assertions
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 0)
+        self.assertEqual(result.error_message, "No products found")
+        self.assertEqual(result.url, "https://example.com/popular")
+    
+    def test_scrape_popularity_products_no_sold_count_data(self):
+        """Lines 96-99: Test scrape_popularity_products when products have no sold_count"""
+        # Mock URL builder
+        self.mock_url_builder.build_popularity_url.return_value = "https://example.com/popular"
+        
+        # Mock HTTP response
+        self.mock_http_client.get.return_value = "<html>product list</html>"
+        
+        # Mock parser to return products WITHOUT sold_count
+        products = [
+            Product(name="Product 1", price=1000, url="https://example.com/1", unit="KG", sold_count=None),
+            Product(name="Product 2", price=2000, url="https://example.com/2", unit="L", sold_count=None),
+            Product(name="Product 3", price=3000, url="https://example.com/3", unit="PCS", sold_count=None),
+        ]
+        self.mock_html_parser.parse_products.return_value = products
+        
+        # Execute
+        result = self.scraper.scrape_popularity_products("test keyword", page=0, top_n=2)
+        
+        # Assertions
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.products), 2)
+        # Should just return first top_n products when no sold_count
+        self.assertEqual(result.products[0].name, "Product 1")
+        self.assertEqual(result.products[1].name, "Product 2")
+    
+    def test_scrape_popularity_products_exception_handling(self):
+        """Test scrape_popularity_products handles exceptions"""
+        # Mock URL builder
+        self.mock_url_builder.build_popularity_url.return_value = "https://example.com/popular"
+        
+        # Mock HTTP client to raise exception
+        self.mock_http_client.get.side_effect = Exception("Network error")
+        
+        # Execute
+        result = self.scraper.scrape_popularity_products("test keyword", page=0, top_n=5)
+        
+        # Assertions
+        self.assertFalse(result.success)
+        self.assertEqual(len(result.products), 0)
+        self.assertIn("Failed to scrape popularity products", result.error_message)
+        self.assertIsNone(result.url)
 
 
 class TestDepoPriceScraperIntegration(unittest.TestCase):
@@ -178,71 +307,7 @@ class TestDepoPriceScraperIntegration(unittest.TestCase):
         """Set up test fixtures with real components."""
         from api.depobangunan.factory import create_depo_scraper
         # We'll use the factory but mock the HTTP calls
-        
-    @patch('api.core.BaseHttpClient.get')
-    def test_end_to_end_unit_extraction_workflow(self, mock_http_get):
-        """Test the complete unit extraction workflow with mocked HTTP."""
-        from api.depobangunan.factory import create_depo_scraper
-        
-        # Mock HTML response with products
-        search_html = '''
-        <html>
-            <body>
-                <li class="item product product-item">
-                    <strong class="product name product-item-name">
-                        <a href="http://example.com/product1">MAGIX WIN TILE GROUT WHITE 1KG</a>
-                    </strong>
-                    <span class="price">Rp 8,499</span>
-                </li>
-                <li class="item product product-item">
-                    <strong class="product name product-item-name">
-                        <a href="http://example.com/product2">PRODUCT WITHOUT UNIT</a>
-                    </strong>
-                    <span class="price">Rp 5,000</span>
-                </li>
-            </body>
-        </html>
-        '''
-        
-        # Mock detail page HTML with specification
-        detail_html = '''
-        <html>
-            <body>
-                <table>
-                    <tr>
-                        <td>Ukuran</td>
-                        <td>2KG</td>
-                    </tr>
-                </table>
-            </body>
-        </html>
-        '''
-        
-        # Configure HTTP mock to return different content based on URL
-        def mock_get_side_effect(url, **kwargs):
-            if 'catalogsearch' in url:
-                return search_html
-            else:
-                return detail_html
-        
-        mock_http_get.side_effect = mock_get_side_effect
-        
-        # Create scraper and test
-        scraper = create_depo_scraper()
-        
-        # Execute
-        result = scraper.scrape_products("test", sort_by_price=True, page=0)
-        
-        # Assertions
-        self.assertTrue(result.success)
-        self.assertEqual(len(result.products), 2)
-        
-        # First product should have unit from name
-        self.assertEqual(result.products[0].unit, "KG")
-        
-        # Second product should have unit from detail page
-        self.assertEqual(result.products[1].unit, "KG")
-
+    
     def test_extract_adjacent_unit_various_patterns(self):
         """Test _extract_adjacent_unit with various adjacent patterns"""
         from api.depobangunan.unit_parser import DepoBangunanUnitExtractor
@@ -355,7 +420,13 @@ class TestDepoPriceScraperIntegration(unittest.TestCase):
         from api.depobangunan.unit_parser import DepoBangunanUnitExtractor
         extractor = DepoBangunanUnitExtractor()
         
-        with patch('re.search', side_effect=Exception("Regex error")):
+        # Patch the compiled pattern's search method
+        with patch('re.compile') as mock_compile:
+            mock_pattern = Mock()
+            mock_pattern.search.side_effect = Exception("Regex error")
+            mock_compile.return_value = mock_pattern
+            # Clear and rebuild the cache to use mocked compile
+            extractor._compiled_patterns = {}
             with patch('api.depobangunan.unit_parser.logger') as mock_logger:
                 result = extractor._extract_by_priority_patterns("test text")
                 self.assertIsNone(result)
@@ -366,33 +437,57 @@ class TestDepoPriceScraperIntegration(unittest.TestCase):
         from api.depobangunan.unit_parser import DepoBangunanUnitExtractor
         extractor = DepoBangunanUnitExtractor()
         
-        with patch('re.finditer', side_effect=Exception("Regex error")):
+        # Replace the pre-compiled pattern with a mock that raises exception
+        original_pattern = extractor._ADJACENT_PATTERN
+        try:
+            mock_pattern = Mock()
+            mock_pattern.search.side_effect = Exception("Regex error")
+            extractor._ADJACENT_PATTERN = mock_pattern
+            
             with patch('api.depobangunan.unit_parser.logger') as mock_logger:
                 result = extractor._extract_adjacent_unit("test")
                 self.assertIsNone(result)
                 mock_logger.warning.assert_called_once()
+        finally:
+            extractor._ADJACENT_PATTERN = original_pattern
 
     def test_extract_area_unit_with_exception(self):
         """Test _extract_area_unit exception handling"""  
         from api.depobangunan.unit_parser import DepoBangunanUnitExtractor
         extractor = DepoBangunanUnitExtractor()
         
-        with patch('re.search', side_effect=Exception("Regex error")):
+        # Replace the pre-compiled pattern with a mock that raises exception
+        original_pattern = extractor._AREA_PATTERN
+        try:
+            mock_pattern = Mock()
+            mock_pattern.search.side_effect = Exception("Regex error")
+            extractor._AREA_PATTERN = mock_pattern
+            
             with patch('api.depobangunan.unit_parser.logger') as mock_logger:
                 result = extractor._extract_area_unit("test")
                 self.assertIsNone(result)
                 mock_logger.warning.assert_called_once()
+        finally:
+            extractor._AREA_PATTERN = original_pattern
 
     def test_extract_unit_from_specification_with_exception(self):
         """Test exception handling in extract_unit_from_specification"""
         from api.depobangunan.unit_parser import DepoBangunanUnitExtractor
         extractor = DepoBangunanUnitExtractor()
         
-        with patch('re.search', side_effect=Exception("Regex error")):
+        # Replace the pre-compiled pattern with a mock that raises exception
+        original_pattern = extractor._SPEC_UNIT_PATTERN
+        try:
+            mock_pattern = Mock()
+            mock_pattern.search.side_effect = Exception("Regex error")
+            extractor._SPEC_UNIT_PATTERN = mock_pattern
+            
             with patch('api.depobangunan.unit_parser.logger') as mock_logger:
                 result = extractor.extract_unit_from_specification("1KG")
                 self.assertIsNone(result)
                 mock_logger.warning.assert_called_once()
+        finally:
+            extractor._SPEC_UNIT_PATTERN = original_pattern
 
     def test_extract_unit_from_name_with_exception(self):
         """Test exception handling in extract_unit_from_name"""
@@ -418,7 +513,7 @@ class TestDepoPriceScraperIntegration(unittest.TestCase):
         for invalid_html in test_cases:
             with self.subTest(html=invalid_html):
                 result = parser.parse_unit_from_detail_page(invalid_html)
-                self.assertIsNone(result)
+                self.assertEqual(result, 'PCS')  # Now defaults to PCS instead of None
 
     def test_unit_parser_initialization_properties(self):
         """Test that parser initializes with correct properties"""

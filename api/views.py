@@ -9,6 +9,7 @@ from .depobangunan.factory import create_depo_scraper
 from .gemilang.factory import create_gemilang_scraper
 from .juragan_material.factory import create_juraganmaterial_scraper
 from .mitra10.factory import create_mitra10_scraper
+from .tokopedia.factory import create_tokopedia_scraper
 
 from .validation import (
     InputValidator, 
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 INTERNAL_SERVER_ERROR_MSG = 'Internal server error'
+INVALID_JSON_FORMAT_MSG = 'Invalid JSON format'
 
 # API Token Configuration
 # In production, move these to environment variables or database
@@ -78,6 +80,7 @@ def get_scraper_factory(vendor: str) -> IPriceScraper:
         'gemilang': create_gemilang_scraper,
         'juragan_material': create_juraganmaterial_scraper,
         'mitra10': create_mitra10_scraper,
+        'tokopedia': create_tokopedia_scraper
     }
     
     if vendor not in scrapers:
@@ -230,7 +233,7 @@ def validate_scraper_input_json(request):
         except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid JSON format',
+                'error': INVALID_JSON_FORMAT_MSG,
                 'code': 'INVALID_JSON'
             }, status=400)
         
@@ -299,7 +302,7 @@ def validate_scraper_input_api(request):
         except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid JSON format',
+                'error': INVALID_JSON_FORMAT_MSG,
                 'code': 'INVALID_JSON'
             }, status=400)
         
@@ -416,7 +419,7 @@ def validate_scraper_input_legacy_api(request):
         except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid JSON format',
+                'error': INVALID_JSON_FORMAT_MSG,
                 'code': 'INVALID_JSON'
             }, status=400)
         
@@ -491,7 +494,7 @@ def validate_scraping_params_endpoint(request):
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON format',
+            'error': INVALID_JSON_FORMAT_MSG,
             'code': 'INVALID_JSON'
         }, status=400)
     
@@ -633,7 +636,7 @@ def validate_vendor_input(request, vendor):
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON format',
+            'error': INVALID_JSON_FORMAT_MSG,
             'code': 'INVALID_JSON'
         }, status=400)
     except Exception as e:

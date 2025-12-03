@@ -279,7 +279,7 @@ class InputValidator:
             Tuple of (is_valid, error_message, sanitized_value)
         """
         if not keyword:
-            return False, "Keyword is required", None
+            return False, "Keyword parameter is required", None
         
         # Length validation
         if len(keyword) > max_length:
@@ -289,7 +289,7 @@ class InputValidator:
         keyword = keyword.strip()
         
         if not keyword:
-            return False, "Keyword cannot be empty", None
+            return False, "Keyword parameter is required", None
         
         # Whitelist validation - only allow safe characters
         if not cls.KEYWORD_PATTERN.match(keyword):
@@ -318,53 +318,92 @@ class InputValidator:
         Validate integer input with range checking.
         """
         if value is None:
-            return False, f"{field_name} is required", None
+            return False, f"{field_name.capitalize()} parameter is required", None
         
         # Type checking
         if isinstance(value, str):
-            if not cls.NUMERIC_PATTERN.match(value):
-                return False, f"{field_name} must be a valid integer", None
+            # Allow negative sign for integers
+            if not value.lstrip('-').isdigit():
+                return False, f"{field_name.capitalize()} parameter must be a valid integer", None
             try:
                 value = int(value)
             except ValueError:
-                return False, f"{field_name} must be a valid integer", None
+                return False, f"{field_name.capitalize()} parameter must be a valid integer", None
         elif not isinstance(value, int):
-            return False, f"{field_name} must be an integer", None
+            return False, f"{field_name.capitalize()} parameter must be an integer", None
         
         # Range validation
         if min_value is not None and value < min_value:
-            return False, f"{field_name} must be at least {min_value}", None
+            return False, f"{field_name.capitalize()} parameter must be at least {min_value}", None
         
         if max_value is not None and value > max_value:
-            return False, f"{field_name} must be at most {max_value}", None
+            return False, f"{field_name.capitalize()} parameter must be at most {max_value}", None
         
         return True, "", value
     
     @classmethod
     def validate_boolean(cls, value: Any, field_name: str) -> Tuple[bool, str, Optional[bool]]:
         """
-        Validate boolean input.
+        Validate boolean input with strict validation.
+        Only accepts: True, False, 'true', 'false', '1', '0', 'yes', 'no'
+        Rejects SQL injection attempts and invalid values.
         """
         if value is None:
             return True, "", None  # Return None to allow view to set default
-        
-        if value == '':
-            # Empty string is invalid, not a missing value
-            return False, f"{field_name} must be a boolean value", None
         
         if isinstance(value, bool):
             return True, "", value
         
         if isinstance(value, str):
-            value_lower = value.lower()
-            if value_lower in ['true', '1', 'yes']:
-                return True, "", True
-            elif value_lower in ['false', '0', 'no']:
-                return True, "", False
-            else:
-                return False, f"{field_name} must be a boolean value", None
+            return cls._validate_boolean_string(value, field_name)
         
         return False, f"{field_name} must be a boolean value", None
+    
+    @classmethod
+    def _validate_boolean_string(cls, value: str, field_name: str) -> Tuple[bool, str, Optional[bool]]:
+        """
+        Helper method to validate boolean string values.
+        Extracted to reduce cognitive complexity.
+        """
+        value_stripped = value.strip().lower()
+        
+        # Reject empty strings
+        if not value_stripped:
+            return False, f"{field_name} cannot be empty", None
+        
+        # Detect SQL injection patterns
+        if cls._contains_sql_injection_pattern(value_stripped):
+            # Don't log user-controlled data - just log field name
+            logger.warning(f"SQL injection attempt detected in boolean field '{field_name}'")
+            return False, f"{field_name} contains forbidden characters", None
+        
+        # Only accept valid boolean strings
+        return cls._parse_boolean_value(value_stripped, field_name)
+    
+    @classmethod
+    def _contains_sql_injection_pattern(cls, value: str) -> bool:
+        """
+        Check if value contains SQL injection patterns.
+        Extracted to reduce cognitive complexity.
+        """
+        sql_patterns = [
+            'select', 'insert', 'update', 'delete', 'drop', 'union',
+            '--', ';', '/*', '*/', 'xp_', 'sp_', 'exec', 'execute', "'", '"'
+        ]
+        return any(pattern in value for pattern in sql_patterns)
+    
+    @classmethod
+    def _parse_boolean_value(cls, value_stripped: str, field_name: str) -> Tuple[bool, str, Optional[bool]]:
+        """
+        Parse the boolean value from valid string representations.
+        Extracted to reduce cognitive complexity.
+        """
+        if value_stripped in ['true', '1', 'yes']:
+            return True, "", True
+        elif value_stripped in ['false', '0', 'no']:
+            return True, "", False
+        else:
+            return False, f"{field_name} must be 'true', 'false', '1', '0', 'yes', or 'no'", None
     
     @classmethod
     def _detect_sql_injection(cls, value: str) -> bool:

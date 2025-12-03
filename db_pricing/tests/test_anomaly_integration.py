@@ -37,13 +37,13 @@ class TestMultipleVendorAnomalies(TestCase):
         mitra10_service.save([{
             "name": "Mitra10 Product",
             "price": 10000,
-            "url": "https://mitra10.com/test",
+            "url": "https://www.mitra10.com/test",
             "unit": "PCS"
         }])
         mitra10_service.save_with_price_update([{
             "name": "Mitra10 Product",
             "price": 12000,
-            "url": "https://mitra10.com/test",
+            "url": "https://www.mitra10.com/test",
             "unit": "PCS"
         }])
         
@@ -81,13 +81,13 @@ class TestMultipleVendorAnomalies(TestCase):
             mitra10_service.save([{
                 "name": f"Product {i}",
                 "price": 10000,
-                "url": f"https://test.com/{i}",
+                "url": f"https://www.mitra10.com/test{i}",
                 "unit": "PCS"
             }])
             mitra10_service.save_with_price_update([{
                 "name": f"Product {i}",
                 "price": 12000,
-                "url": f"https://test.com/{i}",
+                "url": f"https://www.mitra10.com/test{i}",
                 "unit": "PCS"
             }])
         

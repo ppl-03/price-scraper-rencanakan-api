@@ -11,6 +11,9 @@ class BaseTokopediaAPITest(TestCase):
         self.client = Client()
         self.scrape_url = reverse('tokopedia:scrape_products')
         self.scrape_with_filters_url = reverse('tokopedia:scrape_products_with_filters')
+        # Add API token for authentication (required for OWASP A01:2021 - Broken Access Control)
+        self.api_token = 'dev-token-12345'
+        self.auth_headers = {'HTTP_X_API_TOKEN': self.api_token}
     
     def _create_mock_product(self, name: str, price: int, url: str, location: str = None):
         """Create a mock product object"""
@@ -73,6 +76,14 @@ class BaseTokopediaAPITest(TestCase):
         self.assertIn('products', response_data)
         self.assertIn('error_message', response_data)
         self.assertIn('url', response_data)
+    
+    def _get(self, url, data=None):
+        """Helper method to make authenticated GET request"""
+        return self.client.get(url, data or {}, **self.auth_headers)
+    
+    def _post(self, url, data=None):
+        """Helper method to make authenticated POST request"""
+        return self.client.post(url, data or {}, **self.auth_headers)
 
 
 class TokopediaAPITest(BaseTokopediaAPITest):
@@ -84,6 +95,89 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         self.assertEqual(self.scrape_with_filters_url, '/api/tokopedia/scrape-with-filters/')
     
     # ========== Tests for scrape_products endpoint ==========
+    
+    class TokopediaDatabaseAndUlasanTests(TestCase):
+        """Tests to increase coverage for database saving and ulasan endpoint paths."""
+
+        def test_save_products_to_database_with_categorization(self):
+            from api.tokopedia import views as tok_views
+            # Patch the DB service to return inserted items
+            with patch('api.tokopedia.views.TokopediaDatabaseService') as mock_db_service_cls, \
+                 patch('db_pricing.models.TokopediaProduct') as mock_product_model, \
+                 patch('api.tokopedia.views.AutoCategorizationService') as mock_cat_cls:
+
+                mock_db_service = mock_db_service_cls.return_value
+                mock_db_service.save_with_price_update.return_value = {
+                    'success': True,
+                    'inserted': 2,
+                    'updated': 0,
+                    'anomalies': []
+                }
+
+                # Prepare a mock queryset that supports slicing and values_list
+                mock_uncat = MagicMock()
+                mock_uncat.__getitem__.return_value = mock_uncat
+                mock_uncat.values_list.return_value = [11, 12]
+
+                mock_product_model.objects.filter.return_value.order_by.return_value = mock_uncat
+
+                mock_cat = mock_cat_cls.return_value
+                mock_cat.categorize_products.return_value = {'categorized': 1}
+
+                # Call the function with a non-empty products list
+                result = tok_views._save_products_to_database([{'name': 'p', 'price': 1}])
+
+                # Assertions
+                self.assertIn('categorized', result)
+                self.assertEqual(result['categorized'], 1)
+                mock_db_service.save_with_price_update.assert_called_once()
+                mock_cat.categorize_products.assert_called_once()
+
+        def test_save_products_to_database_handles_exception(self):
+            from api.tokopedia import views as tok_views
+            with patch('api.tokopedia.views.TokopediaDatabaseService') as mock_db_service_cls:
+                mock_db_service = mock_db_service_cls.return_value
+                mock_db_service.save_with_price_update.side_effect = Exception('DB fail')
+
+                result = tok_views._save_products_to_database([{'name': 'p'}])
+
+                # Should return failure structure
+                self.assertFalse(result.get('success'))
+                self.assertEqual(result.get('categorized'), 0)
+
+        def test_scrape_products_ulasan_success_and_exception(self):
+            from api.tokopedia import views as tok_views
+            from django.test import RequestFactory
+            import json
+
+            factory = RequestFactory()
+            req = factory.get('/?q=semen')
+
+            # Success path: patch TokopediaPriceScraper to return a successful result
+            with patch('api.tokopedia.views.TokopediaPriceScraper') as mock_scraper_cls:
+                mock_scraper = mock_scraper_cls.return_value
+                mock_result = MagicMock()
+                mock_result.success = True
+                mock_result.products = []
+                mock_result.url = 'https://tokopedia/search?q=semen&ob=5'
+                mock_result.error_message = None
+                mock_scraper.scrape_products_with_filters.return_value = mock_result
+
+                response = tok_views.scrape_products_ulasan(req)
+                data = json.loads(response.content)
+                self.assertTrue(data['success'])
+                self.assertEqual(data['url'], 'https://tokopedia/search?q=semen&ob=5')
+
+            # Exception path: make scraper raise
+            req2 = factory.get('/?q=semen')
+            with patch('api.tokopedia.views.TokopediaPriceScraper') as mock_scraper_cls:
+                mock_scraper = mock_scraper_cls.return_value
+                mock_scraper.scrape_products_with_filters.side_effect = Exception('boom')
+
+                response = tok_views.scrape_products_ulasan(req2)
+                data = json.loads(response.content)
+                self.assertFalse(data['success'])
+                self.assertIn('Tokopedia scraper (ulasan) error', data['error_message'])
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_successful_scrape_with_products(self, mock_create_scraper):
@@ -102,7 +196,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
         # Make the API call
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': 'semen',
             'sort_by_price': 'true',
             'page': '0'
@@ -133,7 +227,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         result = self._create_mock_result(url="https://www.tokopedia.com/search?q=nonexistent")
         self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': 'nonexistent',
             'sort_by_price': 'true',
             'page': '0'
@@ -143,7 +237,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         self.assertIsNone(response_data['error_message'])
     
     def test_missing_query_parameter(self):
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'sort_by_price': 'true',
             'page': '0'
         })
@@ -151,7 +245,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         self._assert_error_response(response, 400, 'Query parameter is required')
     
     def test_empty_query_parameter(self):
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': '',
             'sort_by_price': 'true',
             'page': '0'
@@ -160,7 +254,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         self._assert_error_response(response, 400, 'Query parameter cannot be empty')
     
     def test_whitespace_only_query_parameter(self):
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': '   ',
             'sort_by_price': 'true',
             'page': '0'
@@ -169,7 +263,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         self._assert_error_response(response, 400, 'Query parameter cannot be empty')
     
     def test_invalid_page_parameter(self):
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': 'semen',
             'sort_by_price': 'true',
             'page': 'invalid'
@@ -184,12 +278,12 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
         # Test truthy value
-        response = self.client.get(self.scrape_url, {'q': 'semen', 'sort_by_price': 'true'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'sort_by_price': 'true'})
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products.assert_called_with(keyword='semen', sort_by_price=True, page=0, limit=20)
         
         # Test falsy value
-        response = self.client.get(self.scrape_url, {'q': 'semen', 'sort_by_price': 'false'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'sort_by_price': 'false'})
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products.assert_called_with(keyword='semen', sort_by_price=False, page=0, limit=20)
     
@@ -198,7 +292,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': 'semen'
         })
         
@@ -219,7 +313,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         )
         self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': 'semen',
             'sort_by_price': 'true',
             'page': '0'
@@ -239,13 +333,13 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         mock_create_scraper.return_value = mock_scraper
         mock_scraper.scrape_products.side_effect = Exception("Unexpected error")
         
-        response = self.client.get(self.scrape_url, {'q': 'semen'})
+        response = self._get(self.scrape_url, {'q': 'semen'})
         
         self._assert_error_response(response, 500, 'Tokopedia scraper error: Unexpected error')
     
     def test_method_not_allowed(self):
         """Test that only GET method is allowed"""
-        response = self.client.post(self.scrape_url, {'q': 'semen'})
+        response = self._post(self.scrape_url, {'q': 'semen'})
         self.assertEqual(response.status_code, 405)
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -253,7 +347,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': 'semen & tablet',
             'sort_by_price': 'true',
             'page': '0'
@@ -272,7 +366,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {
+        response = self._get(self.scrape_url, {
             'q': 'semen',
             'sort_by_price': 'true',
             'page': '999'
@@ -292,7 +386,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {'q': 'semen', 'page': '-1'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'page': '-1'})
         
         self.assertEqual(response.status_code, 400)
         response_data = response.json()
@@ -302,16 +396,16 @@ class TokopediaAPITest(BaseTokopediaAPITest):
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_limit_exceeds_maximum(self, mock_create_scraper):
-        """Test that limit values exceeding 1000 are rejected for security"""
+        """Test that limit values exceeding 100 are rejected for security"""
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {'q': 'semen', 'limit': '5000'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'limit': '200'})
         
         self.assertEqual(response.status_code, 400)
         response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('must not exceed 1000', response_data['error_message'])
+        self.assertIn('error', response_data)
+        self.assertIn('exceeds maximum', response_data['error'])
         mock_scraper.scrape_products.assert_not_called()
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -320,7 +414,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {'q': 'semen', 'limit': '0'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'limit': '0'})
         
         self.assertEqual(response.status_code, 400)
         response_data = response.json()
@@ -330,21 +424,21 @@ class TokopediaAPITest(BaseTokopediaAPITest):
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_limit_at_maximum_allowed(self, mock_create_scraper):
-        """Test that limit at exactly 1000 is accepted"""
+        """Test that limit at exactly 100 is accepted"""
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {'q': 'semen', 'limit': '1000'})
+        response = self._get(self.scrape_url, {'q': 'semen', 'limit': '100'})
         
         self.assertEqual(response.status_code, 200)
-        mock_scraper.scrape_products.assert_called_with(keyword='semen', sort_by_price=True, page=0, limit=1000)
+        mock_scraper.scrape_products.assert_called_with(keyword='semen', sort_by_price=True, page=0, limit=100)
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_factory_exception_handling(self, mock_create_scraper):
         """Test exception handling when scraper factory fails"""
         mock_create_scraper.side_effect = Exception("Factory error")
         
-        response = self.client.get(self.scrape_url, {'q': 'semen'})
+        response = self._get(self.scrape_url, {'q': 'semen'})
         
         self._assert_error_response(response, 500, 'Tokopedia scraper error: Factory error')
     
@@ -357,7 +451,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         )
         self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {'q': 'semen'})
+        response = self._get(self.scrape_url, {'q': 'semen'})
         
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
@@ -380,7 +474,7 @@ class TokopediaAPITest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_url, {'q': '  semen  '})
+        response = self._get(self.scrape_url, {'q': '  semen  '})
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products.assert_called_with(keyword='semen', sort_by_price=True, page=0, limit=20)
@@ -405,7 +499,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'sort_by_price': 'true',
             'page': '0',
@@ -436,7 +530,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'min_price': '50000'
         })
@@ -457,7 +551,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'max_price': '100000'
         })
@@ -478,7 +572,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'location': 'Bandung'
         })
@@ -499,7 +593,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {'q': 'semen'})
+        response = self._get(self.scrape_with_filters_url, {'q': 'semen'})
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products_with_filters.assert_called_with(
@@ -513,7 +607,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         )
     
     def test_filters_missing_query_parameter(self):
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'min_price': '50000',
             'max_price': '100000'
         })
@@ -521,7 +615,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         self._assert_error_response(response, 400, 'Query parameter is required')
     
     def test_filters_empty_query_parameter(self):
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': '',
             'min_price': '50000'
         })
@@ -529,7 +623,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         self._assert_error_response(response, 400, 'Query parameter cannot be empty')
     
     def test_filters_invalid_min_price(self):
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'min_price': 'invalid'
         })
@@ -537,7 +631,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         self._assert_error_response(response, 400, 'min_price parameter must be a valid integer')
     
     def test_filters_invalid_max_price(self):
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'max_price': 'invalid'
         })
@@ -545,7 +639,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         self._assert_error_response(response, 400, 'max_price parameter must be a valid integer')
     
     def test_filters_invalid_page_parameter(self):
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'page': 'invalid'
         })
@@ -558,7 +652,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
         # Test truthy value
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'sort_by_price': 'true'
         })
@@ -574,7 +668,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         )
         
         # Test falsy value
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'sort_by_price': 'false'
         })
@@ -597,7 +691,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         )
         self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'min_price': '50000'
         })
@@ -616,13 +710,13 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         mock_create_scraper.return_value = mock_scraper
         mock_scraper.scrape_products_with_filters.side_effect = Exception("Unexpected error")
         
-        response = self.client.get(self.scrape_with_filters_url, {'q': 'semen'})
+        response = self._get(self.scrape_with_filters_url, {'q': 'semen'})
         
         self._assert_error_response(response, 500, 'Tokopedia scraper with filters error: Unexpected error')
     
     def test_filters_method_not_allowed(self):
         """Test that only GET method is allowed for filters endpoint"""
-        response = self.client.post(self.scrape_with_filters_url, {'q': 'semen'})
+        response = self._post(self.scrape_with_filters_url, {'q': 'semen'})
         self.assertEqual(response.status_code, 405)
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -630,7 +724,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen gaming',
             'sort_by_price': 'false',
             'page': '2',
@@ -659,7 +753,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         )
         self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'min_price': '50000'
         })
@@ -685,7 +779,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {'q': '  semen  ', 'min_price': '50000'})
+        response = self._get(self.scrape_with_filters_url, {'q': '  semen  ', 'min_price': '50000'})
         
         self.assertEqual(response.status_code, 200)
         mock_scraper.scrape_products_with_filters.assert_called_with(
@@ -698,7 +792,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'min_price': '0',
             'max_price': '0'
@@ -747,7 +841,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         mock_create_scraper.return_value = mock_scraper
         mock_scraper.scrape_products.side_effect = Exception("Unexpected error occurred")
         
-        response = self.client.get(self.scrape_url, {'q': 'semen'})
+        response = self._get(self.scrape_url, {'q': 'semen'})
         
         self._assert_error_response(response, 500, "Tokopedia scraper error: Unexpected error occurred")
     
@@ -756,7 +850,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         """Test generic exception handling in scrape_products (line 115)"""
         mock_create_scraper.side_effect = RuntimeError("Factory initialization failed")
         
-        response = self.client.get(self.scrape_url, {'q': 'semen'})
+        response = self._get(self.scrape_url, {'q': 'semen'})
         
         # Should catch and wrap the exception
         self.assertEqual(response.status_code, 500)
@@ -772,7 +866,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         mock_create_scraper.return_value = mock_scraper
         mock_scraper.scrape_products_with_filters.side_effect = Exception("Network timeout")
         
-        response = self.client.get(self.scrape_with_filters_url, {'q': 'semen'})
+        response = self._get(self.scrape_with_filters_url, {'q': 'semen'})
         
         self._assert_error_response(response, 500, "Tokopedia scraper with filters error: Network timeout")
     
@@ -781,7 +875,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         """Test generic exception in scrape_products_with_filters (line 165)"""
         mock_create_scraper.side_effect = ValueError("Invalid configuration")
         
-        response = self.client.get(self.scrape_with_filters_url, {'q': 'semen'})
+        response = self._get(self.scrape_with_filters_url, {'q': 'semen'})
         
         # Should catch and wrap the exception
         self.assertEqual(response.status_code, 500)
@@ -819,20 +913,20 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
     def test_filters_limit_exceeds_maximum(self, mock_create_scraper):
-        """Test that limit values exceeding 1000 are rejected for security in filters endpoint"""
+        """Test that limit values exceeding 100 are rejected for security in filters endpoint"""
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
-            'limit': '2000'  # Exceeds max of 1000
+            'limit': '200'  # Exceeds max of 100
         })
         
         # Should reject excessive limits with 400 Bad Request
         self.assertEqual(response.status_code, 400)
         response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('must not exceed 1000', response_data['error_message'])
+        self.assertIn('error', response_data)
+        self.assertIn('exceeds maximum', response_data['error'])
         mock_scraper.scrape_products_with_filters.assert_not_called()
     
     @patch('api.tokopedia.views.create_tokopedia_scraper')
@@ -841,7 +935,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {
+        response = self._get(self.scrape_with_filters_url, {
             'q': 'semen',
             'page': '-5'
         })
@@ -859,7 +953,7 @@ class TokopediaAPIWithFiltersTest(BaseTokopediaAPITest):
         result = self._create_mock_result()
         mock_scraper = self._setup_mock_scraper(mock_create_scraper, result)
         
-        response = self.client.get(self.scrape_with_filters_url, {'q': 'semen', 'min_price': '-1000'})
+        response = self._get(self.scrape_with_filters_url, {'q': 'semen', 'min_price': '-1000'})
         
         self.assertEqual(response.status_code, 400)
         response_data = response.json()
