@@ -5,10 +5,6 @@
 {% block extra_css %}
 {% load static %}
 <style>
-    /* Right-align price column */
-    .price-align-right, .c-price {
-      text-align: right !important;
-    }
     body { background:#f7f9fb; font-family: Arial, sans-serif; color:#333; }
 
     /* Top bar with only the logo + avatar */
@@ -18,34 +14,46 @@
     .avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; }
 
     .content-wrapper{ margin-top:24px; }
-    .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+    .card{ border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); overflow: visible; }
 
     /* Results card minimum height for consistency */
-    #resultsCard { min-height: 600px; }
+    #resultsCard { min-height: 600px; overflow: visible; }
+    #resultsWrap { overflow: visible; }
 
     .table thead{ background:#fff; border-bottom:2px solid #e9ecef; }
     .table th{ border:none; color:#444; font-weight:600; user-select:none; cursor:pointer; }
     
+    /* Table scrolling wrapper */
+    .table-responsive {
+      overflow-x: visible;
+      -webkit-overflow-scrolling: touch;
+    }
+    
     /* Fixed column widths for consistent table layout */
     .table { table-layout: fixed; width: 100%; }
-    .table th:nth-child(1), .table td:nth-child(1) { width: 32%; } /* Nama Produk */
-    .table th:nth-child(2), .table td:nth-child(2) { width: 15%; } /* Kategori */
-    .table th:nth-child(3), .table td:nth-child(3) { width: 12%; } /* Vendor */
+    .table th:nth-child(1), .table td:nth-child(1) { width: 4%; } /* No */
+    .table th:nth-child(2), .table td:nth-child(2) { width: 20%; } /* Nama Produk */
+    .table th:nth-child(3), .table td:nth-child(3) { width: 10%; } /* Kategori */
     .table th:nth-child(4), .table td:nth-child(4) { width: 10%; } /* Harga */
-    .table th:nth-child(5), .table td:nth-child(5) { width: 8%; }  /* Unit */
-    .table th:nth-child(6), .table td:nth-child(6) { width: 20%; } /* Lokasi */
+    .table th:nth-child(5), .table td:nth-child(5) { width: 6%; }  /* Unit */
+    .table th:nth-child(6), .table td:nth-child(6) { width: 11%; } /* Vendor */
+    .table th:nth-child(7), .table td:nth-child(7) { width: 17%; } /* Lokasi */
+    .table th:nth-child(8), .table td:nth-child(8) { width: 22%; } /* Aksi */
     
-    /* Text overflow handling and cell styling */
+    /* Text overflow handling and cell styling - enable wrapping for all cells */
     .table td { 
       vertical-align: middle;
       border-color: #f1f3f5;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
     
-    /* Allow wrapping for product names only */
-    .table td.c-item {
+    /* Ensure text wraps properly in all cells */
+    .table td.c-item,
+    .table td.c-category,
+    .table td.c-location,
+    .table td.c-vendor {
       white-space: normal;
       word-wrap: break-word;
     }
@@ -344,6 +352,13 @@
     #categoryEditModal .btn-close {
       filter: brightness(0) invert(1);
     }
+    #unitEditModal .modal-header {
+      background: linear-gradient(135deg, #00365a 0%, #022b47 100%);
+      color: white;
+    }
+    #unitEditModal .btn-close {
+      filter: brightness(0) invert(1);
+    }
   </style>
 {% endblock %}
 
@@ -521,17 +536,18 @@
 
       <!-- Table -->
       <div id="resultsWrap" class="card-body p-0">
+        <div class="table-responsive">
         <table class="table table-hover mb-0" id="pricesTable">
           <thead>
             <tr>
-              <th style="width:5%">No.</th>
-              <th class="th-sort" data-key="item" style="width:25%">Nama Produk</th>
-              <th class="th-sort" data-key="category" style="width:15%">Kategori</th>
-              <th class="th-sort " data-key="price" style="width:10%">Harga</th>
-              <th style="width:7%">Unit</th>
-              <th class="th-sort" data-key="vendor" style="width:13%">Vendor</th>
-              <th class="th-sort" data-key="location" style="width:18%">Lokasi</th>
-              <th style="width:5%" class="edit-mode-header">Aksi</th>
+              <th>No.</th>
+              <th class="th-sort" data-key="item">Nama Produk</th>
+              <th class="th-sort" data-key="category">Kategori</th>
+              <th class="th-sort" data-key="price">Harga</th>
+              <th>Unit</th>
+              <th class="th-sort" data-key="vendor">Vendor</th>
+              <th class="th-sort" data-key="location">Lokasi</th>
+              <th class="edit-mode-header">Aksi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -572,12 +588,12 @@
                   <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
                           onclick="openCategoryEditModal(this)" 
                           title="Edit Category">
-                    <i class="bi bi-pencil"></i>
+                    <i class="bi bi-pencil"></i> Edit Category
                   </button>
-                  <button class="btn btn-sm btn-outline-success edit-unit-btn" 
+                  <button class="btn btn-sm btn-outline-primary edit-unit-btn" 
                           onclick="openUnitEditModal(this)" 
                           title="Edit Unit">
-                    <i class="bi bi-rulers"></i>
+                    <i class="bi bi-rulers"></i> Edit Unit
                   </button>
                 </td>
               </tr>
@@ -592,6 +608,7 @@
             {% endfor %}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
 
@@ -1148,12 +1165,12 @@
           <button class="btn btn-sm btn-outline-primary edit-category-btn me-1" 
                   onclick="openCategoryEditModal(this)" 
                   title="Edit Category">
-            <i class="bi bi-pencil"></i>
+            <i class="bi bi-pencil"></i> Edit Category
           </button>
-          <button class="btn btn-sm btn-outline-success edit-unit-btn" 
+          <button class="btn btn-sm btn-outline-primary edit-unit-btn" 
                   onclick="openUnitEditModal(this)" 
                   title="Edit Unit">
-            <i class="bi bi-rulers"></i>
+            <i class="bi bi-rulers"></i> Edit Unit
           </button>
         </td>`;
       
@@ -1501,7 +1518,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-          <button type="button" class="btn btn-success" id="saveUnitBtn" onclick="saveUnit()">
+          <button type="button" class="btn btn-primary" id="saveUnitBtn" onclick="saveUnit()">
             <span class="save-unit-text">Simpan Perubahan</span>
             <span class="save-unit-spinner spinner-border spinner-border-sm ms-2" style="display:none" aria-hidden="true"></span>
           </button>
