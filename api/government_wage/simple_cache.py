@@ -25,9 +25,9 @@ def make_cache_key(*args, **kwargs) -> str:
     key_parts = [str(arg) for arg in args]
     key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
     
-    # Create a hash of the combined key parts
+    # Create a hash of the combined key parts using SHA-256 (secure hash algorithm)
     key_string = ":".join(key_parts)
-    key_hash = hashlib.md5(key_string.encode()).hexdigest()
+    key_hash = hashlib.sha256(key_string.encode()).hexdigest()
     
     return f"gov_wage:{key_hash}"
 
