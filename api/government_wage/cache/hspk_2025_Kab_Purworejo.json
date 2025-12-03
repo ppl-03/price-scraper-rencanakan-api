@@ -1,0 +1,112 @@
+[
+  {
+    "item_number": "1",
+    "work_code": "1.1.1.1",
+    "work_description": "Pembuatan 1 m' pagar sementara dari kayu tinggi 2 meter (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.1.1 (c))",
+    "unit": "m'",
+    "unit_price_idr": 1070207,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "2",
+    "work_code": "1.1.1.2",
+    "work_description": "Pembuatan 1 m' pagar sementara dari seng gelombang rangka kayu tinggi 2 meter (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.1.2 (c))",
+    "unit": "m'",
+    "unit_price_idr": 627643,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "3",
+    "work_code": "1.1.1.3",
+    "work_description": "Pembuatan 1 m' pagar sementara dari kawat duri tinggi 2 meter (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.1.3 (c))",
+    "unit": "m'",
+    "unit_price_idr": 923052,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "4",
+    "work_code": "1.1.1.4",
+    "work_description": "Pembuatan 1 m' pagar sementara seng gelombang rangka baja L.40.40.4, tinggi pagar 1,8 m' (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.1.4 (a))",
+    "unit": "m'",
+    "unit_price_idr": 411187,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "5",
+    "work_code": "1.1.1.5",
+    "work_description": "Pembuatan 1 m2 Pagar BRC Galvanis (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023",
+    "unit": "m2",
+    "unit_price_idr": 19345,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "6",
+    "work_code": "1.1.1.6",
+    "work_description": "Pemasangan 1 m2 Panel Beton Pracetak 50x50x240 untuk Pagar (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.1.7 (c))",
+    "unit": "m2",
+    "unit_price_idr": 435969,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "7",
+    "work_code": "1.1.2.1",
+    "work_description": "1 buah papan nama pekerjaan ukuran 0,8x1,2 menggunakan multiflex 18 mm, frame besi siku dan tiang kayu 8/12 (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.3.f.1 (a))",
+    "unit": "Buah",
+    "unit_price_idr": 1851589,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "8",
+    "work_code": "1.1.2.2",
+    "work_description": "1 buah papan nama pekerjaan ukuran 0,6x0,8 menggunakan multiplex 10 mm, frame aluminium siku & tiang kayu 5/7, printing banner plastik (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.3.f.2 (a))",
+    "unit": "Buah",
+    "unit_price_idr": 607100,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "9",
+    "work_code": "1.1.2.3",
+    "work_description": "Pembuatan 1 m2 kantor sementara/rumah jaga/gudang semen dan peralatan lantai plesteran, dinding setengah tembok (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.3.c (c))",
+    "unit": "m2",
+    "unit_price_idr": 2427888,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  },
+  {
+    "item_number": "10",
+    "work_code": "1.1.2.5",
+    "work_description": "Pembuatan 1 m2 Jalan sementara Lapis Macadam (Lihat Peraturan Menteri Pekerjaan Umum dan Perumahan Rakyat Nomor 8 Tahun 2023 Lampiran B U.1.3.g.4 (b))",
+    "unit": "m2",
+    "unit_price_idr": 1654250,
+    "region": "Kab. Purworejo",
+    "edition": "Edisi Ke - 2",
+    "year": "2025",
+    "sector": "Bidang Cipta Karya dan Perumahan"
+  }
+]
