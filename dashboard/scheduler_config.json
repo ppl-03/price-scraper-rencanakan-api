@@ -1,0 +1,18 @@
+{
+    "enabled": false,
+    "schedule_type": "disabled",
+    "custom_interval": "1",
+    "custom_unit": "minutes",
+    "custom_time": "00:00",
+    "custom_days": [],
+    "vendors": [
+        "gemilang",
+        "depobangunan",
+        "juragan_material",
+        "mitra10",
+        "tokopedia"
+    ],
+    "search_keyword": "Semen",
+    "last_run": "2025-12-03T05:23:15.928024+00:00",
+    "next_run": null
+}

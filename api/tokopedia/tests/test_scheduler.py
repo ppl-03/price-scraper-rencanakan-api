@@ -74,19 +74,9 @@ class TestTokopediaScheduler(unittest.TestCase):
         products = [SimpleNamespace(name='P1', price='50', url='https://url', unit='box')]
         self._setup_mock_scraper(scheduler, ['category1'], products)
         
-        result = scheduler.run(vendors=['tokopedia'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['tokopedia'], search_keyword="semen")
         vendor_data = result['vendors']['tokopedia']
         self.assertEqual(vendor_data['scrape_attempts'], 1)
-
-    def test_run_multiple_pages(self):
-        """Test scraping multiple pages per keyword"""
-        from api.tokopedia.scheduler import TokopediaScheduler
-        scheduler = TokopediaScheduler()
-        
-        self._setup_mock_scraper(scheduler, ['cat1'], [], db_save_result=None)
-        
-        result = scheduler.run(vendors=['tokopedia'], pages_per_keyword=3)
-        self.assertEqual(result['vendors']['tokopedia']['scrape_attempts'], 3)
 
     def test_run_products_saved(self):
         """Test that scraped products are saved correctly"""
@@ -99,7 +89,7 @@ class TestTokopediaScheduler(unittest.TestCase):
         ]
         self._setup_mock_scraper(scheduler, ['test'], products)
         
-        result = scheduler.run(vendors=['tokopedia'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['tokopedia'], search_keyword="semen")
         self.assertEqual(result['vendors']['tokopedia']['saved'], 2)
 
     def test_run_with_scrape_failure(self):
@@ -109,7 +99,7 @@ class TestTokopediaScheduler(unittest.TestCase):
         
         self._setup_mock_scraper(scheduler, ['test'], [], success=False, db_save_result=None)
         
-        result = scheduler.run(vendors=['tokopedia'])
+        result = scheduler.run(vendors=['tokopedia'],search_keyword="semen")
         self.assertEqual(result['vendors']['tokopedia']['saved'], 0)
 
     def test_run_with_empty_products(self):

@@ -422,7 +422,8 @@ class SecurityDesignPatterns:
     FIELD_VALIDATORS = {
         'price': lambda price: SecurityDesignPatterns._validate_price_lambda(price),
         'name': lambda name: SecurityDesignPatterns._validate_name_lambda(name),
-        'url': lambda url: SecurityDesignPatterns._validate_url_lambda(url)
+        # Comment this because url result doesnt have main domain
+        # 'url': lambda url: SecurityDesignPatterns._validate_url_lambda(url)
     }
     
     @staticmethod

@@ -39,4 +39,5 @@ urlpatterns = [
     path("scheduler/update/", scheduler_views.update_schedule, name="update_schedule"),
     path("scheduler/run-now/", scheduler_views.run_scheduler_now, name="run_scheduler_now"),
     path("scheduler/status/", scheduler_views.get_scheduler_status, name="get_scheduler_status"),
+    path('scheduler/debug/', scheduler_views.scheduler_debug, name='scheduler_debug'),
 ]
