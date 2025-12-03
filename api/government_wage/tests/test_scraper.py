@@ -54,7 +54,7 @@ class TestGovernmentWageScraper(TestCase):
     def test_scrape_region_data_success(self):
         from api.government_wage.scraper import GovernmentWageItem
         
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         self.mock_http_client.get.return_value = "<html>test</html>"
         
         mock_item = GovernmentWageItem(
@@ -74,7 +74,7 @@ class TestGovernmentWageScraper(TestCase):
         self.assertEqual(result[0].work_code, "6.1.1")
     
     def test_scrape_region_with_default_region(self):
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         self.mock_http_client.get.return_value = "<html>test</html>"
         self.mock_html_parser.parse_government_wage_data = Mock(return_value=[])
         
@@ -86,7 +86,7 @@ class TestGovernmentWageScraper(TestCase):
         self.mock_http_client.region_label = None
         self.mock_http_client.auto_select_region = None
         
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         self.mock_http_client.get.return_value = "<html>test</html>"
         self.mock_html_parser.parse_government_wage_data = Mock(return_value=[])
         
@@ -105,7 +105,7 @@ class TestGovernmentWageScraper(TestCase):
     def test_scrape_all_regions_success(self):
         from api.government_wage.scraper import GovernmentWageItem
         
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         self.mock_http_client.get.return_value = "<html>test</html>"
         
         mock_item = GovernmentWageItem(
@@ -127,7 +127,7 @@ class TestGovernmentWageScraper(TestCase):
     def test_scrape_all_regions_continues_on_error(self):
         from api.government_wage.scraper import GovernmentWageItem
         
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         
         self.mock_http_client.get.side_effect = [
             "<html>test</html>",
@@ -153,7 +153,7 @@ class TestGovernmentWageScraper(TestCase):
     def test_search_by_work_code_with_region(self):
         from api.government_wage.scraper import GovernmentWageItem
         
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         self.mock_http_client.get.return_value = "<html>test</html>"
         
         mock_item = GovernmentWageItem(
@@ -175,7 +175,7 @@ class TestGovernmentWageScraper(TestCase):
     def test_search_by_work_code_without_region(self):
         from api.government_wage.scraper import GovernmentWageItem
         
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         self.mock_http_client.get.return_value = "<html>test</html>"
         
         mock_item = GovernmentWageItem(
@@ -205,7 +205,7 @@ class TestGovernmentWageScraper(TestCase):
         self.mock_http_client.region_label = None
         self.mock_http_client.auto_select_region = None
         
-        self.mock_url_builder.build_search_url.return_value = "http://test.com"
+        self.mock_url_builder.build_search_url.return_value = "https://test.com"
         self.mock_http_client.get.return_value = "<html>test</html>"
         self.mock_html_parser.parse_government_wage_data = Mock(return_value=[])
         

@@ -20,7 +20,7 @@ class TestFileCaching(unittest.TestCase):
         self.test_items = [
             GovernmentWageItem(
                 item_number="1",
-                work_code="1.1.1.1",
+                work_code="A.1.1.1",
                 work_description="Test work",
                 unit="m'",
                 unit_price_idr=100000,
@@ -43,7 +43,7 @@ class TestFileCaching(unittest.TestCase):
             data = json.load(f)
         
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['work_code'], "1.1.1.1")
+        self.assertEqual(data[0]['work_code'], "A.1.1.1")
         self.assertEqual(data[0]['region'], self.test_region)
     
     @patch('api.government_wage.scraper.get_cache_directory')
@@ -56,7 +56,7 @@ class TestFileCaching(unittest.TestCase):
         
         self.assertIsNotNone(loaded_items)
         self.assertEqual(len(loaded_items), 1)
-        self.assertEqual(loaded_items[0].work_code, "1.1.1.1")
+        self.assertEqual(loaded_items[0].work_code, "A.1.1.1")
     
     @patch('api.government_wage.scraper.get_cache_directory')
     def test_load_from_local_file_not_exists(self, mock_get_dir):
