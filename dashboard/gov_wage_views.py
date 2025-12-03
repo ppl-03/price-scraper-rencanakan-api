@@ -287,16 +287,17 @@ def get_pagination_info(request):
 def get_available_regions(request):
     try:
         regions = [
-            {'value': DEFAULT_REGION, 'name': 'Kabupaten Cilacap', 'province': DEFAULT_PROVINCE},
-            {'value': 'Kab. Banyumas', 'name': 'Kabupaten Banyumas', 'province': DEFAULT_PROVINCE},
-            {'value': 'Kab. Purbalingga', 'name': 'Kabupaten Purbalingga', 'province': DEFAULT_PROVINCE},
-            {'value': 'Kab. Banjarnegara', 'name': 'Kabupaten Banjarnegara', 'province': DEFAULT_PROVINCE},
-            {'value': 'Kab. Kebumen', 'name': 'Kabupaten Kebumen', 'province': DEFAULT_PROVINCE},
-            {'value': 'Kab. Purworejo', 'name': 'Kabupaten Purworejo', 'province': DEFAULT_PROVINCE},
-            {'value': 'Kab. Wonosobo', 'name': 'Kabupaten Wonosobo', 'province': DEFAULT_PROVINCE},
-            {'value': 'Kab. Magelang', 'name': 'Kabupaten Magelang', 'province': DEFAULT_PROVINCE},
             {'value': 'Kab. Boyolali', 'name': 'Kabupaten Boyolali', 'province': DEFAULT_PROVINCE},
+            {'value': DEFAULT_REGION, 'name': 'Kabupaten Cilacap', 'province': DEFAULT_PROVINCE},
             {'value': 'Kab. Klaten', 'name': 'Kabupaten Klaten', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Kudus', 'name': 'Kabupaten Kudus', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Magelang', 'name': 'Kabupaten Magelang', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Pati', 'name': 'Kabupaten Pati', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Purworejo', 'name': 'Kabupaten Purworejo', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kab. Semarang', 'name': 'Kabupaten Semarang', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kota Magelang', 'name': 'Kota Magelang', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kota Semarang', 'name': 'Kota Semarang', 'province': DEFAULT_PROVINCE},
+            {'value': 'Kota Surakarta', 'name': 'Kota Surakarta', 'province': DEFAULT_PROVINCE},
         ]
         
         return JsonResponse({

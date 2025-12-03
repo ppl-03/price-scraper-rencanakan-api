@@ -364,10 +364,17 @@
               <label for="regencySelect" class="form-label">Kabupaten/Kota</label>
               <select id="regencySelect" class="form-select">
                 <option value="">Pilih Kabupaten/Kota</option>
-                <option value="cilacap" selected>Kabupaten Cilacap</option>
-                <option value="banyumas">Kabupaten Banyumas</option>
-                <option value="purbalingga">Kabupaten Purbalingga</option>
-                <!-- Add more regencies -->
+                <option value="Kab. Boyolali">Kabupaten Boyolali</option>
+                <option value="Kab. Cilacap" selected>Kabupaten Cilacap</option>
+                <option value="Kab. Klaten">Kabupaten Klaten</option>
+                <option value="Kab. Kudus">Kabupaten Kudus</option>
+                <option value="Kab. Magelang">Kabupaten Magelang</option>
+                <option value="Kab. Pati">Kabupaten Pati</option>
+                <option value="Kab. Purworejo">Kabupaten Purworejo</option>
+                <option value="Kab. Semarang">Kabupaten Semarang</option>
+                <option value="Kota Magelang">Kota Magelang</option>
+                <option value="Kota Semarang">Kota Semarang</option>
+                <option value="Kota Surakarta">Kota Surakarta</option>
               </select>
             </div>
           </div>
@@ -561,8 +568,8 @@
         
         // Handle numeric fields
         if (currentSort.field === 'unit_price_idr' || currentSort.field === 'item_number') {
-          aVal = parseFloat(aVal) || 0;
-          bVal = parseFloat(bVal) || 0;
+          aVal = Number.parseFloat(aVal) || 0;
+          bVal = Number.parseFloat(bVal) || 0;
         } else {
           // String comparison
           aVal = String(aVal || '').toLowerCase();
@@ -583,8 +590,8 @@
       if (range === '2000000-') return [2000000, Infinity];
       
       const parts = range.split('-');
-      const min = parseInt(parts[0]) || 0;
-      const max = parts[1] ? parseInt(parts[1]) : Infinity;
+      const min = Number.parseInt(parts[0]) || 0;
+      const max = parts[1] ? Number.parseInt(parts[1]) : Infinity;
       return [min, max];
     }
 
@@ -653,9 +660,9 @@
       
       // Log first 3 items to verify data
       console.log('First 3 items in allData:');
-      allData.slice(0, 3).forEach((item, idx) => {
+      for (const [idx, item] of allData.slice(0, 3).entries()) {
         console.log(`  ${idx + 1}. ${item.work_code} - ${item.work_description.substring(0, 60)}...`);
-      });
+      }
       
       // Client-side filtering without API call
       console.log('🔍 Calling applyClientFilters...');
@@ -664,9 +671,9 @@
       
       if (filteredData.length > 0) {
         console.log('Filtered items:');
-        filteredData.slice(0, 5).forEach((item, idx) => {
+        for (const [idx, item] of filteredData.slice(0, 5).entries()) {
           console.log(`  ${idx + 1}. ${item.work_code} - ${item.work_description.substring(0, 60)}...`);
-        });
+        }
       }
       
       filteredData = applyClientSort(filteredData);
@@ -762,10 +769,9 @@
     function debounce(func, wait) {
       let timeout;
       return function executedFunction(...args) {
-        const context = this;
         const later = () => {
           clearTimeout(timeout);
-          func.apply(context, args);
+          func.apply(this, args);
         };
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
@@ -981,7 +987,24 @@
       const regencySelectEl = document.getElementById('regencySelect');
       regencySelectEl.innerHTML = '<option value="">Pilih Kabupaten/Kota</option>';
       
-      for (const regency of regencies) {
+      // Default list of supported regencies if not provided by API
+      const defaultRegencies = [
+        { value: 'Kab. Boyolali', name: 'Kabupaten Boyolali' },
+        { value: 'Kab. Cilacap', name: 'Kabupaten Cilacap' },
+        { value: 'Kab. Klaten', name: 'Kabupaten Klaten' },
+        { value: 'Kab. Kudus', name: 'Kabupaten Kudus' },
+        { value: 'Kab. Magelang', name: 'Kabupaten Magelang' },
+        { value: 'Kab. Pati', name: 'Kabupaten Pati' },
+        { value: 'Kab. Purworejo', name: 'Kabupaten Purworejo' },
+        { value: 'Kab. Semarang', name: 'Kabupaten Semarang' },
+        { value: 'Kota Magelang', name: 'Kota Magelang' },
+        { value: 'Kota Semarang', name: 'Kota Semarang' },
+        { value: 'Kota Surakarta', name: 'Kota Surakarta' }
+      ];
+      
+      const regencyList = regencies && regencies.length > 0 ? regencies : defaultRegencies;
+      
+      for (const regency of regencyList) {
         const option = document.createElement('option');
         option.value = regency.value;
         option.textContent = regency.name;
@@ -993,7 +1016,7 @@
     // Sort functionality
     for (const header of document.querySelectorAll('.th-sort')) {
       header.addEventListener('click', function() {
-        const field = this.dataset.sort;
+        const field = header.dataset.sort;
         
         // Map frontend field names to data field names
         const fieldMap = {
@@ -1014,10 +1037,10 @@
         // Determine sort direction
         if (currentSort.field === dataField && currentSort.direction === 'asc') {
           currentSort.direction = 'desc';
-          this.classList.add('desc');
+          header.classList.add('desc');
         } else {
           currentSort.direction = 'asc';
-          this.classList.add('asc');
+          header.classList.add('asc');
         }
         currentSort.field = dataField;
         
