@@ -59,16 +59,16 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
     def test_get_methods(self):
         with patch.object(self.client, '_async_get', new_callable=AsyncMock) as mock_async:
             mock_async.return_value = "<html>test</html>"
-            result = self.client.get("http://test.com")
+            result = self.client.get("https://test.com")
             self.assertEqual(result, "<html>test</html>")
             
             mock_async.side_effect = asyncio.TimeoutError()
             with self.assertRaises(HttpClientError):
-                self.client.get("http://test.com", timeout=1)
+                self.client.get("https://test.com", timeout=1)
             
             mock_async.side_effect = RuntimeError("error")
             with self.assertRaises(HttpClientError):
-                self.client.get("http://test.com")
+                self.client.get("https://test.com")
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
     def test_async_get_success(self, mock_playwright):
@@ -84,7 +84,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
         
         self.client.auto_select_region = True
         self.client.region_label = "Kab. Cilacap"
-        result = self.loop.run_until_complete(self.client._async_get("http://test.com"))
+        result = self.loop.run_until_complete(self.client._async_get("https://test.com"))
         
         self.assertEqual(result, "<html>test</html>")
         mock_page.select_option.assert_called_once()
@@ -96,15 +96,15 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
         mock_response = AsyncMock(ok=False, status=404)
         mock_page.goto = AsyncMock(return_value=mock_response)
         with self.assertRaises(HttpClientError):
-            self.loop.run_until_complete(self.client._async_get("http://test.com"))
+            self.loop.run_until_complete(self.client._async_get("https://test.com"))
         
         mock_page.goto = AsyncMock(return_value=None)
         with self.assertRaises(HttpClientError):
-            self.loop.run_until_complete(self.client._async_get("http://test.com"))
+            self.loop.run_until_complete(self.client._async_get("https://test.com"))
         
         mock_page.goto = AsyncMock(side_effect=RuntimeError("fail"))
         with self.assertRaises(HttpClientError):
-            self.loop.run_until_complete(self.client._async_get("http://test.com"))
+            self.loop.run_until_complete(self.client._async_get("https://test.com"))
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
     def test_async_get_region_fallback(self, mock_playwright):
@@ -124,7 +124,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
         
         self.client.auto_select_region = True
         self.client.region_label = "Kab. Cilacap"
-        self.loop.run_until_complete(self.client._async_get("http://test.com"))
+        self.loop.run_until_complete(self.client._async_get("https://test.com"))
         
         mock_page.click.assert_called_once()
     
@@ -148,7 +148,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
         mock_page.content = AsyncMock(return_value="<html>test</html>")
         
         self.client.auto_select_region = True
-        result = self.loop.run_until_complete(self.client._async_get("http://test.com"))
+        result = self.loop.run_until_complete(self.client._async_get("https://test.com"))
         self.assertEqual(result, "<html>test</html>")
     
     @patch('api.government_wage.gov_playwright_client.async_playwright')
@@ -165,7 +165,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
         
         self.client.search_keyword = "test"
         self.client.auto_select_region = False
-        self.loop.run_until_complete(self.client._async_get("http://test.com"))
+        self.loop.run_until_complete(self.client._async_get("https://test.com"))
         
         mock_page.fill.assert_called_once()
     
@@ -190,7 +190,7 @@ class TestGovernmentWagePlaywrightClient(unittest.TestCase):
         
         self.client.search_keyword = "test"
         self.client.auto_select_region = False
-        result = self.loop.run_until_complete(self.client._async_get("http://test.com"))
+        result = self.loop.run_until_complete(self.client._async_get("https://test.com"))
         self.assertEqual(result, "<html>test</html>")
     
     def test_close_and_context_manager(self):

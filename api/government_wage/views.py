@@ -26,6 +26,14 @@ def scrape_region_data(request):
         
         region = region.strip()
         year = request.GET.get('year', '2025')
+        
+        # Validate inputs to prevent path traversal attacks
+        from .scraper import _validate_region, _validate_year
+        try:
+            region = _validate_region(region)
+            year = _validate_year(year)
+        except ValueError as ve:
+            return _create_error_response(str(ve))
         force_refresh = request.GET.get('force_refresh', 'false').lower() == 'true'
         
         # Get data from cache or scrape if needed
@@ -76,6 +84,14 @@ def search_by_work_code(request):
         work_code = work_code.strip()
         region = request.GET.get('region', 'Kab. Cilacap')  # Default to Cilacap
         year = request.GET.get('year', '2025')
+        
+        # Validate inputs to prevent path traversal attacks
+        from .scraper import _validate_region, _validate_year
+        try:
+            region = _validate_region(region)
+            year = _validate_year(year)
+        except ValueError as ve:
+            return _create_error_response(str(ve))
         
         # Get cached data for the region
         items = get_cached_or_scrape(region, year, force_refresh=False)
@@ -150,6 +166,14 @@ def scrape_all_regions(request):
         
         max_regions_param = request.GET.get('max_regions')
         year = request.GET.get('year', '2025')
+        
+        # Validate year to prevent path traversal attacks
+        from .scraper import _validate_year
+        try:
+            year = _validate_year(year)
+        except ValueError as ve:
+            return _create_error_response(str(ve))
+        
         max_regions = None
         
         if max_regions_param:

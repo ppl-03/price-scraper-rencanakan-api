@@ -171,6 +171,38 @@ def create_government_wage_scraper(headless: bool = True, browser_type: str = "c
 
 
 # ==================== FILE CACHING FUNCTIONS ====================
+def _validate_region(region: str) -> str:
+    if not region:
+        raise ValueError("Region cannot be empty")
+    
+    # Remove any path traversal attempts
+    if ".." in region or "/" in region or "\\" in region:
+        raise ValueError("Invalid region parameter: path traversal detected")
+    
+    # Only allow safe characters: letters, numbers, spaces, dots, hyphens
+    import re
+    if not re.match(r'^[a-zA-Z0-9\s\.\-]+$', region):
+        raise ValueError("Invalid region parameter: contains unsafe characters")
+    
+    return region.strip()
+
+
+def _validate_year(year: str) -> str:
+    if not year:
+        raise ValueError("Year cannot be empty")
+    
+    # Must be exactly 4 digits
+    import re
+    if not re.match(r'^\d{4}$', year):
+        raise ValueError("Invalid year parameter: must be a 4-digit year")
+    
+    year_int = int(year)
+    if year_int < 2000 or year_int > 2100:
+        raise ValueError("Invalid year parameter: must be between 2000 and 2100")
+    
+    return year
+
+
 def get_cache_directory() -> str:
     # Store cache files in: api/government_wage/cache/
     cache_dir = os.path.join(os.path.dirname(__file__), 'cache')
@@ -179,15 +211,23 @@ def get_cache_directory() -> str:
 
 
 def get_cache_filename(region: str, year: str = "2025") -> str:
+    # Validate inputs to prevent path traversal
+    validated_region = _validate_region(region)
+    validated_year = _validate_year(year)
+    
     # Clean region name for filename (remove spaces, special chars)
-    safe_region = region.replace(" ", "_").replace(".", "")
-    return f"hspk_{year}_{safe_region}.json"
+    safe_region = validated_region.replace(" ", "_").replace(".", "")
+    return f"hspk_{validated_year}_{safe_region}.json"
 
 
 def save_to_local_file(items: List[GovernmentWageItem], region: str, year: str = "2025") -> str:
     try:
+        # Validate inputs first
+        validated_region = _validate_region(region)
+        validated_year = _validate_year(year)
+        
         cache_dir = get_cache_directory()
-        filename = get_cache_filename(region, year)
+        filename = get_cache_filename(validated_region, validated_year)
         filepath = os.path.join(cache_dir, filename)
         
         # Convert dataclass objects to dictionaries
@@ -207,8 +247,12 @@ def save_to_local_file(items: List[GovernmentWageItem], region: str, year: str =
 
 def load_from_local_file(region: str, year: str = "2025") -> Optional[List[GovernmentWageItem]]:
     try:
+        # Validate inputs first
+        validated_region = _validate_region(region)
+        validated_year = _validate_year(year)
+        
         cache_dir = get_cache_directory()
-        filename = get_cache_filename(region, year)
+        filename = get_cache_filename(validated_region, validated_year)
         filepath = os.path.join(cache_dir, filename)
         
         # Check if file exists
