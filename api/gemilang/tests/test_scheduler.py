@@ -69,22 +69,9 @@ class TestGemilangScheduler(unittest.TestCase):
                 with patch.object(scheduler, 'load_db_service') as mock_db:
                     mock_db.return_value.save.return_value = (True, None)
                     
-                    result = scheduler.run(vendors=['gemilang'], pages_per_keyword=1)
+                    result = scheduler.run(vendors=['gemilang'], search_keyword="semen")
                     vendor_data = result['vendors']['gemilang']
                     self.assertEqual(vendor_data['scrape_attempts'], 1)
-
-    def test_run_multiple_pages(self):
-        from api.gemilang.scheduler import GemilangScheduler
-        scheduler = GemilangScheduler()
-        
-        with patch.object(scheduler, 'get_categories', return_value=['cat1']):
-            with patch.object(scheduler, 'create_scraper') as mock_scraper:
-                mock_result = SimpleNamespace(success=True, products=[])
-                mock_scraper.return_value.scrape_products.return_value = mock_result
-                
-                with patch.object(scheduler, 'load_db_service', return_value=None):
-                    result = scheduler.run(vendors=['gemilang'], pages_per_keyword=3)
-                    self.assertEqual(result['vendors']['gemilang']['scrape_attempts'], 3)
 
     def test_run_products_saved(self):
         from api.gemilang.scheduler import GemilangScheduler
@@ -106,14 +93,15 @@ class TestGemilangScheduler(unittest.TestCase):
                     self.assertEqual(result['vendors']['gemilang']['saved'], 2)
                     self.assertEqual(result['vendors']['gemilang']['products_found'], 2)
 
-    def test_run_no_categories(self):
-        from api.gemilang.scheduler import GemilangScheduler
-        scheduler = GemilangScheduler()
+    # No categorizer for each vendor
+    # def test_run_no_categories(self):
+    #     from api.gemilang.scheduler import GemilangScheduler
+    #     scheduler = GemilangScheduler()
         
-        with patch.object(scheduler, 'get_categories', return_value=[]):
-            result = scheduler.run(vendors=['gemilang'])
-            self.assertEqual(result['vendors']['gemilang']['status'], 'skipped_no_categories')
-            self.assertEqual(result['failed_vendors'], 1)
+    #     with patch.object(scheduler, 'get_categories', return_value=[]):
+    #         result = scheduler.run(vendors=['gemilang'], search_keyword="semen")
+    #         self.assertEqual(result['vendors']['gemilang']['status'], 'skipped_no_categories')
+    #         self.assertEqual(result['failed_vendors'], 1)
 
     def test_run_scraper_creation_fails(self):
         from api.gemilang.scheduler import GemilangScheduler

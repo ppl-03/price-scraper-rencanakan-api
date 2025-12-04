@@ -24,6 +24,7 @@ class FieldValidator:
 class KeywordValidator(FieldValidator):
     MAX_KEYWORD_LENGTH = 100
     MIN_KEYWORD_LENGTH = 2
+    CONTROL_CHAR_PATTERN = re.compile("[<>'\"\\\\\x00-\x1f\x7f-\x9f]")
     MALICIOUS_PATTERNS = [
         r'<script[^>]*>.*?</script>',
         r'javascript:',
@@ -43,8 +44,9 @@ class KeywordValidator(FieldValidator):
 
     @staticmethod
     def _sanitize_keyword(keyword: str) -> str:
+        # Strip HTML tags and any control characters that can break downstream scrapers
         keyword = re.sub(r'<[^>]+>', '', keyword)
-        keyword = re.sub(r"[<>'\"\\\\\x00-\x1f\x7f-\x9f]", '', keyword)
+        keyword = KeywordValidator.CONTROL_CHAR_PATTERN.sub('', keyword)
         keyword = ' '.join(keyword.split())
         return keyword.strip()
 

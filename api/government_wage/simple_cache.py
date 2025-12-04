@@ -1,83 +1,88 @@
 """
-Simple in-memory cache for government wage data
-Works without Django cache settings
+Simple in-memory cache for government wage data.
+This module provides a basic caching mechanism to avoid repeated scraping.
 """
-import time
 import hashlib
-import logging
-from typing import Dict, Any, Optional, Tuple
-import threading
-
-logger = logging.getLogger(__name__)
+from typing import Any, Optional
 
 
-class SimpleCache:
-    """Thread-safe in-memory cache"""
+# Simple in-memory cache dictionary
+_cache = {}
+
+
+def make_cache_key(*args, **kwargs) -> str:
+    """
+    Create a cache key from arguments.
     
-    def __init__(self, default_timeout: int = 900):
-        self.default_timeout = default_timeout
-        self._cache: Dict[str, Tuple[Any, float]] = {}
-        self._lock = threading.RLock()
-        
-    def get(self, key: str) -> Optional[Any]:
-        """Get item from cache"""
-        with self._lock:
-            if key not in self._cache:
-                return None
-                
-            value, expiry_time = self._cache[key]
-            
-            # Check if expired
-            if time.time() > expiry_time:
-                del self._cache[key]
-                return None
-                
-            return value
+    Args:
+        *args: Positional arguments to include in the key
+        **kwargs: Keyword arguments to include in the key
     
-    def set(self, key: str, value: Any, timeout: Optional[int] = None) -> None:
-        """Set item in cache"""
-        timeout = timeout or self.default_timeout
-        expiry_time = time.time() + timeout
-        
-        with self._lock:
-            self._cache[key] = (value, expiry_time)
+    Returns:
+        A string cache key
+    """
+    # Convert all arguments to strings and join them
+    key_parts = [str(arg) for arg in args]
+    key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
     
-    def clear(self) -> None:
-        """Clear all cache"""
-        with self._lock:
-            self._cache.clear()
+    # Create a hash of the combined key parts using SHA-256 (secure hash algorithm)
+    key_string = ":".join(key_parts)
+    key_hash = hashlib.sha256(key_string.encode()).hexdigest()
     
-    def get_stats(self) -> Dict[str, int]:
-        """Get cache statistics"""
-        with self._lock:
-            current_time = time.time()
-            valid_keys = sum(1 for _, expiry in self._cache.values() if expiry > current_time)
-            return {
-                'total_keys': len(self._cache),
-                'valid_keys': valid_keys,
-                'expired_keys': len(self._cache) - valid_keys
-            }
+    return f"gov_wage:{key_hash}"
 
 
-# Global cache instance
-_cache_instance = None
-_cache_lock = threading.Lock()
-
-
-def get_cache() -> SimpleCache:
-    """Get or create cache instance"""
-    global _cache_instance
+def get_cache(key: str) -> Optional[Any]:
+    """
+    Get a value from the cache.
     
-    if _cache_instance is None:
-        with _cache_lock:
-            if _cache_instance is None:
-                _cache_instance = SimpleCache(default_timeout=900)  # 15 minutes
-                logger.info("Initialized simple cache for government wage API")
+    Args:
+        key: The cache key to retrieve
     
-    return _cache_instance
+    Returns:
+        The cached value if it exists, None otherwise
+    """
+    return _cache.get(key)
 
 
-def make_cache_key(prefix: str, data: str) -> str:
-    """Create a cache key"""
-    hash_value = hashlib.sha256(data.encode()).hexdigest()
-    return f"gov_wage_{prefix}_{hash_value}"
+def set_cache(key: str, value: Any, timeout: Optional[int] = None) -> None:
+    """
+    Set a value in the cache.
+    
+    Args:
+        key: The cache key
+        value: The value to cache
+        timeout: Optional timeout in seconds (not implemented in simple version)
+    """
+    _cache[key] = value
+
+
+def delete_cache(key: str) -> None:
+    """
+    Delete a value from the cache.
+    
+    Args:
+        key: The cache key to delete
+    """
+    if key in _cache:
+        del _cache[key]
+
+
+def clear_cache() -> None:
+    """
+    Clear all cached values.
+    """
+    _cache.clear()
+
+
+def get_cache_stats() -> dict:
+    """
+    Get statistics about the cache.
+    
+    Returns:
+        Dictionary with cache statistics
+    """
+    return {
+        'size': len(_cache),
+        'keys': list(_cache.keys())
+    }

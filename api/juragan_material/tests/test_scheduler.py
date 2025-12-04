@@ -71,19 +71,9 @@ class TestJuraganMaterialScheduler(unittest.TestCase):
         products = [SimpleNamespace(name='P1', price='50', url='https://url', unit='box')]
         self._setup_mock_scraper(scheduler, ['category1'], products)
         
-        result = scheduler.run(vendors=['juragan_material'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['juragan_material'], search_keyword='semen')
         vendor_data = result['vendors']['juragan_material']
         self.assertEqual(vendor_data['scrape_attempts'], 1)
-
-    def test_run_multiple_pages(self):
-        """Test scraping multiple pages per keyword"""
-        from api.juragan_material.scheduler import JuraganMaterialScheduler
-        scheduler = JuraganMaterialScheduler()
-        
-        self._setup_mock_scraper(scheduler, ['cat1'], [], db_save_result=None)
-        
-        result = scheduler.run(vendors=['juragan_material'], pages_per_keyword=3)
-        self.assertEqual(result['vendors']['juragan_material']['scrape_attempts'], 3)
 
     def test_run_products_saved(self):
         """Test that scraped products are saved correctly"""
@@ -96,7 +86,7 @@ class TestJuraganMaterialScheduler(unittest.TestCase):
         ]
         self._setup_mock_scraper(scheduler, ['test'], products)
         
-        result = scheduler.run(vendors=['juragan_material'], pages_per_keyword=1)
+        result = scheduler.run(vendors=['juragan_material'], search_keyword='semen')
         self.assertEqual(result['vendors']['juragan_material']['saved'], 2)
 
     def test_run_with_scrape_failure(self):

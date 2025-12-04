@@ -10,6 +10,8 @@ from pathlib import Path
 import os
 import environ
 import pymysql
+import sentry_sdk
+
 pymysql.install_as_MySQLdb()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,6 +19,16 @@ env = environ.Env(
     DEBUG=(bool, True),
 )
 environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
+
+
+sentry_sdk.init(
+    dsn="https://c4ca31a3f2dd9c1b48cafc587cad0a03@o4510392092983296.ingest.us.sentry.io/4510392095801344",
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+    traces_sample_rate=1.0,
+
+)
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 # SECURITY WARNING: keep the secret key used in production secret!

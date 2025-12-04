@@ -1,4 +1,5 @@
 from django.test import TestCase
+from unittest.mock import Mock, patch
 from db_pricing.models import DepoBangunanProduct
 from api.depobangunan.database_service import DepoBangunanDatabaseService
 
@@ -240,3 +241,113 @@ class TestDepoBangunanDatabaseService(TestCase):
         self.assertEqual(result["updated_count"], 0)
         self.assertEqual(result["new_count"], 0)
         self.assertEqual(DepoBangunanProduct.objects.count(), 0)
+    
+    def test_check_anomaly_with_zero_existing_price(self):
+        """Line 110: existing_price == 0 returns None"""
+        service = DepoBangunanDatabaseService()
+        item = {
+            "name": "Test Product",
+            "url": "https://example.com/product",
+            "unit": "PCS"
+        }
+        existing_price = 0
+        new_price = 100000
+        
+        result = service._check_anomaly(item, existing_price, new_price)
+        
+        self.assertIsNone(result)
+
+    def test_check_anomaly_with_large_price_change(self):
+        """Line 113: price_diff >= 15% returns anomaly dict"""
+        service = DepoBangunanDatabaseService()
+        item = {
+            "name": "Test Product",
+            "url": "https://example.com/product",
+            "unit": "PCS"
+        }
+        existing_price = 100000
+        new_price = 120000  # 20% increase
+        
+        result = service._check_anomaly(item, existing_price, new_price)
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result["name"], "Test Product")
+        self.assertEqual(result["old_price"], 100000)
+        self.assertEqual(result["new_price"], 120000)
+        self.assertEqual(result["change_percent"], 20.0)
+
+    def test_save_detected_anomalies_empty_list(self):
+        """Lines 128-130: empty anomalies list returns early"""
+        service = DepoBangunanDatabaseService()
+        anomalies = []
+        
+        # Should return early without calling PriceAnomalyService
+        result = service._save_detected_anomalies(anomalies)
+        
+        self.assertIsNone(result)
+
+    @patch('api.depobangunan.database_service.PriceAnomalyService.save_anomalies')
+    def test_update_product_price_with_anomaly_detected(self, mock_save_anomalies):
+        """Lines 65-71: anomaly detected, warning logged, price not updated"""
+        service = DepoBangunanDatabaseService()
+        service.logger = Mock()
+        
+        cursor = Mock()
+        item = {
+            "name": "Test Product",
+            "url": "https://example.com/product",
+            "unit": "PCS",
+            "price": 120000  # 20% increase from 100000
+        }
+        existing_id = 1
+        existing_price = 100000
+        now = Mock()
+        anomalies = []
+        
+        result = service._update_product_price(
+            cursor, item, existing_id, existing_price, now, anomalies
+        )
+        
+        # Should not update (returns 0)
+        self.assertEqual(result, 0)
+        
+        # Should append anomaly
+        self.assertEqual(len(anomalies), 1)
+        self.assertEqual(anomalies[0]["name"], "Test Product")
+        
+        # Should log warning
+        service.logger.warning.assert_called_once()
+        
+        # Should NOT execute UPDATE query
+        cursor.execute.assert_not_called()
+    
+    @patch('api.depobangunan.database_service.PriceAnomalyService.save_anomalies')
+    def test_save_detected_anomalies_with_errors(self, mock_save_anomalies):
+        """Lines 128-130: logs error when anomaly save fails"""
+        service = DepoBangunanDatabaseService()
+        service.logger = Mock()
+        
+        # Mock save_anomalies to return failure
+        mock_save_anomalies.return_value = {
+            'success': False,
+            'errors': ['Database error']
+        }
+        
+        anomalies = [
+            {
+                "name": "Test Product",
+                "url": "https://example.com/product",
+                "unit": "PCS",
+                "old_price": 100000,
+                "new_price": 120000,
+                "change_percent": 20.0
+            }
+        ]
+        
+        service._save_detected_anomalies(anomalies)
+        
+        # Should call PriceAnomalyService
+        mock_save_anomalies.assert_called_once_with('depobangunan', anomalies)
+        
+        # Should log error
+        service.logger.error.assert_called_once()

@@ -18,6 +18,7 @@ urlpatterns = [
 
     # keep utility endpoints (gov-wage and scheduler) if still needed
     path("gov-wage/", gov_wage_views.gov_wage_page, name="gov_wage_page"),
+    path("api/gov-wage/test/", gov_wage_views.test_api, name="test_api"),
     path("api/gov-wage/data/", gov_wage_views.get_wage_data, name="get_wage_data"),
     path("api/gov-wage/pagination/", gov_wage_views.get_pagination_info, name="get_pagination_info"),
     path("api/gov-wage/regions/", gov_wage_views.get_available_regions, name="get_available_regions"),
@@ -38,4 +39,4 @@ urlpatterns = [
     path("api/unit/update/", views_db.update_product_unit, name="update_product_unit"),
     path("api/unit/bulk-update/", views_db.bulk_update_units, name="bulk_update_units"),
     path("api/unit/vendors/", views_db.get_available_vendors_unit, name="get_available_vendors_unit"),
-]
+    ]

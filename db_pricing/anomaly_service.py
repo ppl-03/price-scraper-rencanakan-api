@@ -9,8 +9,13 @@ from django.db import transaction, connection
 from django.utils import timezone
 from db_pricing.models import PriceAnomaly
 import logging
+from db_pricing.sentry_monitoring import PriceAnomalySentryMonitor
 
 logger = logging.getLogger(__name__)
+
+# Error message constants
+ERROR_ANOMALY_NOT_FOUND = 'Anomaly not found'
+ERROR_NO_MATCHING_PRODUCT = 'No matching product found to update'
 
 
 class PriceAnomalyService:
@@ -23,6 +28,115 @@ class PriceAnomalyService:
         'depobangunan': 'depobangunan',
         'juragan_material': 'juragan_material',
     }
+    
+    @classmethod
+    def _validate_vendor(cls, vendor: str) -> Optional[str]:
+        """Validate vendor exists in VENDOR_MAP. Returns error message if invalid."""
+        if vendor not in cls.VENDOR_MAP:
+            return f"Invalid vendor: {vendor}"
+        return None
+    
+    @classmethod
+    def _set_sentry_context(cls, vendor: str, anomalies: List[Dict[str, Any]]) -> None:
+        """Set Sentry context for anomaly batch. Silent failure."""
+        try:
+            sample = anomalies[0] if anomalies else None
+            PriceAnomalySentryMonitor.set_anomaly_context(vendor, len(anomalies), sample=sample)
+        except Exception:
+            logger.debug("Failed to set anomaly Sentry context")
+    
+    @classmethod
+    def _validate_anomaly_fields(cls, anomaly: Dict[str, Any]) -> Optional[str]:
+        """Validate required fields. Returns error message if invalid."""
+        product_name = anomaly.get('name', '')
+        product_url = anomaly.get('url', '')
+        
+        if not product_name or not product_url:
+            return f"Missing required fields for anomaly: {anomaly}"
+        return None
+    
+    @classmethod
+    def _create_anomaly_record(cls, vendor: str, anomaly: Dict[str, Any]) -> None:
+        """Create a single PriceAnomaly database record."""
+        PriceAnomaly.objects.create(
+            vendor=cls.VENDOR_MAP[vendor],
+            product_name=anomaly.get('name', ''),
+            product_url=anomaly.get('url', ''),
+            unit=anomaly.get('unit', ''),
+            location=anomaly.get('location', ''),
+            old_price=anomaly.get('old_price', 0),
+            new_price=anomaly.get('new_price', 0),
+            change_percent=anomaly.get('change_percent', 0),
+            status='pending',
+            detected_at=timezone.now()
+        )
+    
+    @classmethod
+    def _log_saved_anomaly(cls, vendor: str, anomaly: Dict[str, Any]) -> None:
+        """Log successful anomaly save."""
+        logger.info(
+            f"Saved price anomaly for {vendor}: {anomaly.get('name', '')} "
+            f"({anomaly.get('old_price', 0)} -> {anomaly.get('new_price', 0)}, "
+            f"{anomaly.get('change_percent', 0)}%)"
+        )
+    
+    @classmethod
+    def _handle_anomaly_save_error(cls, anomaly: Dict[str, Any], exception: Exception, errors: List[str]) -> None:
+        """Handle error during individual anomaly save."""
+        error_msg = f"Error saving anomaly {anomaly.get('name', 'unknown')}: {str(exception)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        try:
+            PriceAnomalySentryMonitor.capture_exception(exception, context={"anomaly": anomaly.get('name', '')})
+        except Exception:
+            logger.debug("Failed to capture anomaly save exception to Sentry")
+    
+    @classmethod
+    def _save_single_anomaly(cls, vendor: str, anomaly: Dict[str, Any], errors: List[str]) -> bool:
+        """
+        Save a single anomaly to database.
+        Returns True if saved successfully, False otherwise.
+        """
+        try:
+            # Validate required fields
+            validation_error = cls._validate_anomaly_fields(anomaly)
+            if validation_error:
+                logger.warning(validation_error)
+                errors.append(validation_error)
+                return False
+            
+            # Create record
+            cls._create_anomaly_record(vendor, anomaly)
+            cls._log_saved_anomaly(vendor, anomaly)
+            return True
+            
+        except Exception as e:
+            cls._handle_anomaly_save_error(anomaly, e, errors)
+            return False
+    
+    @classmethod
+    def _track_save_errors(cls, errors: List[str], saved_count: int) -> None:
+        """Track save errors to Sentry if any exist."""
+        if errors:
+            try:
+                PriceAnomalySentryMonitor.track_save_result(False, saved_count, errors)
+            except Exception:
+                logger.debug("Failed to report save errors to Sentry")
+    
+    @classmethod
+    def _handle_transaction_error(cls, vendor: str, exception: Exception) -> Dict[str, Any]:
+        """Handle transaction-level error during save."""
+        error_msg = f"Transaction error saving anomalies for {vendor}: {str(exception)}"
+        logger.error(error_msg)
+        try:
+            PriceAnomalySentryMonitor.capture_exception(exception, context={"vendor": vendor})
+        except Exception:
+            logger.debug("Failed to capture transaction exception to Sentry")
+        return {
+            'success': False,
+            'saved_count': 0,
+            'errors': [error_msg]
+        }
     
     @classmethod
     def save_anomalies(cls, vendor: str, anomalies: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -47,71 +161,30 @@ class PriceAnomalyService:
                 - errors: List of errors if any
         """
         if not anomalies:
-            return {
-                'success': True,
-                'saved_count': 0,
-                'errors': []
-            }
+            return {'success': True, 'saved_count': 0, 'errors': []}
         
         # Validate vendor
-        if vendor not in cls.VENDOR_MAP:
-            error_msg = f"Invalid vendor: {vendor}"
-            logger.error(error_msg)
-            return {
-                'success': False,
-                'saved_count': 0,
-                'errors': [error_msg]
-            }
+        vendor_error = cls._validate_vendor(vendor)
+        if vendor_error:
+            logger.error(vendor_error)
+            return {'success': False, 'saved_count': 0, 'errors': [vendor_error]}
         
+        # Set Sentry context
+        cls._set_sentry_context(vendor, anomalies)
+        
+        # Save anomalies in transaction
         saved_count = 0
         errors = []
         
         try:
             with transaction.atomic():
                 for anomaly in anomalies:
-                    try:
-                        # Extract data from anomaly dictionary
-                        product_name = anomaly.get('name', '')
-                        product_url = anomaly.get('url', '')
-                        unit = anomaly.get('unit', '')
-                        location = anomaly.get('location', '')
-                        old_price = anomaly.get('old_price', 0)
-                        new_price = anomaly.get('new_price', 0)
-                        change_percent = anomaly.get('change_percent', 0)
-                        
-                        # Validate required fields
-                        if not product_name or not product_url:
-                            error_msg = f"Missing required fields for anomaly: {anomaly}"
-                            logger.warning(error_msg)
-                            errors.append(error_msg)
-                            continue
-                        
-                        # Create PriceAnomaly record
-                        PriceAnomaly.objects.create(
-                            vendor=cls.VENDOR_MAP[vendor],
-                            product_name=product_name,
-                            product_url=product_url,
-                            unit=unit,
-                            location=location,
-                            old_price=old_price,
-                            new_price=new_price,
-                            change_percent=change_percent,
-                            status='pending',
-                            detected_at=timezone.now()
-                        )
-                        
+                    if cls._save_single_anomaly(vendor, anomaly, errors):
                         saved_count += 1
-                        logger.info(
-                            f"Saved price anomaly for {vendor}: {product_name} "
-                            f"({old_price} -> {new_price}, {change_percent}%)"
-                        )
-                        
-                    except Exception as e:
-                        error_msg = f"Error saving anomaly {anomaly.get('name', 'unknown')}: {str(e)}"
-                        logger.error(error_msg)
-                        errors.append(error_msg)
                         
             logger.info(f"Successfully saved {saved_count} anomalies for {vendor}")
+            cls._track_save_errors(errors, saved_count)
+            
             return {
                 'success': True,
                 'saved_count': saved_count,
@@ -119,13 +192,7 @@ class PriceAnomalyService:
             }
             
         except Exception as e:
-            error_msg = f"Transaction error saving anomalies for {vendor}: {str(e)}"
-            logger.error(error_msg)
-            return {
-                'success': False,
-                'saved_count': 0,
-                'errors': [error_msg]
-            }
+            return cls._handle_transaction_error(vendor, e)
     
     @classmethod
     def get_pending_anomalies(cls, vendor: str = None) -> List[PriceAnomaly]:
@@ -169,10 +236,18 @@ class PriceAnomalyService:
             return True
             
         except PriceAnomaly.DoesNotExist:
-            logger.error(f"Anomaly {anomaly_id} not found")
+            logger.error(f"Anomaly {anomaly_id} not found for review")
+            try:
+                PriceAnomalySentryMonitor.track_review_error(anomaly_id, ERROR_ANOMALY_NOT_FOUND, {"status": status})
+            except Exception:
+                logger.debug("Failed to report review error to Sentry")
             return False
         except Exception as e:
             logger.error(f"Error marking anomaly {anomaly_id} as reviewed: {str(e)}")
+            try:
+                PriceAnomalySentryMonitor.capture_exception(e, {"anomaly_id": anomaly_id, "operation": "mark_as_reviewed"})
+            except Exception:
+                logger.debug("Failed to capture review exception to Sentry")
             return False
     
     @classmethod
@@ -261,12 +336,12 @@ class PriceAnomalyService:
                         # Mark anomaly as applied
                         anomaly.status = 'applied'
                         anomaly.save()
-                        
+
                         logger.info(
                             f"Applied approved price for {anomaly.vendor}: {anomaly.product_name} "
                             f"updated to {anomaly.new_price}"
                         )
-                        
+
                         return {
                             'success': True,
                             'message': f'Price updated successfully for {updated_count} product(s)',
@@ -277,21 +352,33 @@ class PriceAnomalyService:
                             f"No matching product found for anomaly {anomaly_id}: "
                             f"{anomaly.product_name}"
                         )
+                        try:
+                            PriceAnomalySentryMonitor.track_apply_result(anomaly.id, False, 0, message=ERROR_NO_MATCHING_PRODUCT)
+                        except Exception:
+                            logger.debug("Failed to report anomaly apply failure to Sentry")
                         return {
                             'success': False,
-                            'message': 'No matching product found to update',
+                            'message': ERROR_NO_MATCHING_PRODUCT,
                             'updated': 0
                         }
                         
         except PriceAnomaly.DoesNotExist:
             logger.error(f"Anomaly {anomaly_id} not found")
+            try:
+                PriceAnomalySentryMonitor.track_apply_result(anomaly_id, False, 0, message=ERROR_ANOMALY_NOT_FOUND)
+            except Exception:
+                logger.debug("Failed to report missing anomaly to Sentry")
             return {
                 'success': False,
-                'message': 'Anomaly not found',
+                'message': ERROR_ANOMALY_NOT_FOUND,
                 'updated': 0
             }
         except Exception as e:
             logger.error(f"Error applying anomaly {anomaly_id}: {str(e)}")
+            try:
+                PriceAnomalySentryMonitor.capture_exception(e, context={"anomaly_id": anomaly_id})
+            except Exception:
+                logger.debug("Failed to capture anomaly apply exception to Sentry")
             return {
                 'success': False,
                 'message': f'Error applying price: {str(e)}',

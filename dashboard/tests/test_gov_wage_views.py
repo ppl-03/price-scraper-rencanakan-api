@@ -1,247 +1,330 @@
 from django.test import TestCase, Client
-from bs4 import BeautifulSoup
 from unittest.mock import patch, MagicMock
+from api.government_wage.scraper import GovernmentWageItem
+import json
 
 from dashboard import gov_wage_views as gvw
-
 
 class GovWageViewsTests(TestCase):
     def setUp(self):
         self.client = Client()
-
-    def test_extract_price_from_text_various(self):
-        self.assertEqual(gvw.extract_price_from_text('Rp 1.053.797,-'), 1053797)
-        self.assertEqual(gvw.extract_price_from_text('1.200.000'), 1200000)
-        self.assertEqual(gvw.extract_price_from_text(''), 0)
-        self.assertEqual(gvw.extract_price_from_text(None), 0)
-
-    def test_build_page_url_and_has_next_page(self):
-        url = gvw.build_page_url('https://example.com/list', 3, {'kabupaten': 'Kab. Test'})
-        self.assertIn('page=3', url)
-        self.assertIn('kabupaten=Kab. Test', url)
-
-        # has_next_page true
-        html = """<a aria-label='Next' class='page-link'></a>"""
-        soup = BeautifulSoup(html, 'html.parser')
-        self.assertTrue(gvw.has_next_page(soup))
-
-        # has_next_page false (disabled)
-        html2 = """<a aria-label='Next' class='disabled'></a>"""
-        soup2 = BeautifulSoup(html2, 'html.parser')
-        self.assertFalse(gvw.has_next_page(soup2))
-
-    def test_parse_hspk_table_parses_rows(self):
-        # Build a simple table with two rows
-        html = '''
-        <table id="example">
-            <tbody>
-                <tr>
-                    <td>1</td><td>A.1.1.1</td><td>Test Work A</td><td>m3</td><td>Rp 100.000,-</td>
-                </tr>
-                <tr>
-                    <td>2</td><td>A.1.1.2</td><td>Test Work B</td><td>m2</td><td>Rp 200.000,-</td>
-                </tr>
-            </tbody>
-        </table>
-        '''
-        soup = BeautifulSoup(html, 'html.parser')
-        items = gvw.parse_hspk_table(soup, 'Kab. Test')
-        self.assertEqual(len(items), 2)
-        self.assertEqual(items[0].work_code, 'A.1.1.1')
-        self.assertEqual(items[1].unit_price_idr, 200000)
+    
+    def create_mock_item(self, item_number='1', work_code='A.1.1.1', description='Test Item', 
+                         unit='m', price=100000, region='Kab. Test'):
+        return GovernmentWageItem(
+            item_number=item_number, work_code=work_code, work_description=description,
+            unit=unit, unit_price_idr=price, region=region, edition='Edisi Ke - 2',
+            year='2025', sector='Bidang Cipta Karya'
+        )
 
     def test_parse_price_range_and_filters_and_sorting(self):
-        # parse price range
-        self.assertEqual(gvw.parse_price_range('0-500000'), (0, 500000))
-        self.assertEqual(gvw.parse_price_range('2000000-'), (2000000, float('inf')))
-        self.assertEqual(gvw.parse_price_range('300000-400000'), (300000, 400000))
+        test_cases = [
+            ('0-500000', (0, 500000)),
+            ('500000-1000000', (500000, 1000000)),
+            ('1000000-2000000', (1000000, 2000000)),
+            ('2000000-', (2000000, float('inf'))),
+            ('300000-400000', (300000, 400000)),
+        ]
+        for price_range, expected in test_cases:
+            self.assertEqual(gvw.parse_price_range(price_range), expected)
 
         data = [
-            {'work_description': 'Pondasi pekerjaan', 'work_code': '1.1', 'unit_price_idr': 100000},
-            {'work_description': 'Bekisting pekerjaan', 'work_code': '1.2', 'unit_price_idr': 600000},
-            {'work_description': 'Lainnya', 'work_code': '1.3', 'unit_price_idr': 1500000},
+            {'work_description': 'Pagar batu', 'work_code': '1.1', 'unit_price_idr': 100000, 'category': 'pagar'},
+            {'work_description': 'Panel Beton', 'work_code': '1.2', 'unit_price_idr': 600000, 'category': 'panel'},
+            {'work_description': 'Lainnya', 'work_code': '1.3', 'unit_price_idr': 1500000, 'category': 'lainnya'},
         ]
 
-        # search filter
-        res = gvw.apply_search_filter(data, 'pondasi')
-        self.assertEqual(len(res), 1)
-
-        # category filter (after categorization)
-        for d in data:
-            d['category'] = gvw.categorize_work_item(d['work_description'])
-        cat = gvw.apply_category_filter(data, 'pondasi')
-        self.assertTrue(all(i['category'] == 'pondasi' for i in cat))
-
-        # price range filter
-        pr_filtered = gvw.apply_price_range_filter(data, '0-500000')
-        self.assertEqual(len(pr_filtered), 1)
-
-        # sorting
+        self.assertEqual(len(gvw.apply_search_filter(data, 'pagar')), 1)
+        self.assertTrue(all(i['category'] == 'pagar' for i in gvw.apply_category_filter(data, 'pagar')))
+        self.assertEqual(len(gvw.apply_price_range_filter(data, '0-500000')), 1)
+        
         sorted_by_price = gvw.apply_sorting(data, 'unit_price_idr', 'asc')
         self.assertEqual(sorted_by_price[0]['unit_price_idr'], 100000)
+        
+        self.assertEqual(len(gvw.apply_price_range_filter(data, 'invalid-range')), 3)
+        bad_data = [{'unit_price_idr': 'not_a_number'}, {'unit_price_idr': 100000}]
+        self.assertEqual(len(gvw.apply_sorting(bad_data, 'unit_price_idr', 'asc')), 2)
 
-    def test_get_pagination_info_and_regions_endpoints(self):
-        resp = self.client.get('/api/gov-wage/pagination/')
+
+    def test_get_regions_endpoint(self):
+        resp = self.client.get('/api/gov-wage/regions/')
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data.get('success'))
-        self.assertEqual(data.get('total_items'), gvw.DEFAULT_TOTAL_ITEMS)
+        self.assertIsInstance(data.get('regions'), list)
 
-        resp2 = self.client.get('/api/gov-wage/regions/')
-        self.assertEqual(resp2.status_code, 200)
-        data2 = resp2.json()
-        self.assertTrue(data2.get('success'))
-        self.assertIsInstance(data2.get('regions'), list)
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_wage_data_handles_scraper_error(self, mock_get_cached):
+        mock_get_cached.side_effect = Exception('scraper not available')
+        resp = self.client.get('/api/gov-wage/data/?region=Kab. Test&page=1')
+        self.assertEqual(resp.status_code, 500)
+        self.assertFalse(resp.json().get('success'))
+        
+        mock_get_cached.side_effect = RuntimeError('Unexpected error')
+        resp = self.client.get('/api/gov-wage/data/?region=Kab. Test&page=1')
+        self.assertEqual(resp.status_code, 500)
+        self.assertFalse(resp.json().get('success'))
 
-    @patch('api.government_wage.scraper.create_government_wage_scraper')
-    def test_get_wage_data_fallback_on_scraper_error(self, mock_create):
-        # Make the scraper factory raise an exception to trigger fallback
-        mock_create.side_effect = Exception('scraper not available')
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_wage_data_with_mock_cache(self, mock_get_cached):
+        mock_items = [
+            self.create_mock_item('1', 'A.1.1.1', 'Test Pagar'),
+            self.create_mock_item('2', 'A.1.1.2', 'Test Panel', 'm2', 200000),
+        ]
+        mock_get_cached.return_value = mock_items
 
         resp = self.client.get('/api/gov-wage/data/?region=Kab. Test&page=1')
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data.get('success'))
-        # fallback uses 387 total items by default
-        self.assertEqual(data['pagination']['total_pages'], 39)
+        self.assertEqual(len(data['data']), 2)
+        self.assertEqual(data['data'][0]['work_code'], 'A.1.1.1')
 
-    @patch('dashboard.gov_wage_views.scrape_all_government_pages')
-    @patch('dashboard.gov_wage_views.get_cache')
-    def test_get_page_data_filtered_uses_scraper_when_no_cache(self, mock_get_cache, mock_scrape):
-        # Mock cache to return empty
-        fake_cache = MagicMock()
-        fake_cache.get.return_value = None
-        fake_cache.set.return_value = None
-        mock_get_cache.return_value = fake_cache
-
-        # Use the module's mock generator for predictable items
-        mock_scrape.side_effect = lambda region: gvw.generate_mock_hspk_data(region, total_items=20)
-
-        resp = gvw.get_page_data_filtered('Kab. Test', '', '', '', 1, 10, 'item_number', 'asc')
-        self.assertEqual(resp.status_code, 200)
-        import json as _json
-        body = _json.loads(resp.content)
-        self.assertTrue(body.get('success'))
-        self.assertIn('data', body)
-        self.assertLessEqual(len(body['data']), 10)
-
-    @patch('dashboard.gov_wage_views.scrape_government_page')
-    @patch('dashboard.gov_wage_views.get_cache')
-    def test_get_page_data_smart_cache_miss(self, mock_get_cache, mock_scrape_page):
-        # Mock cache miss
-        fake_cache = MagicMock()
-        fake_cache.get.return_value = None
-        fake_cache.set.return_value = None
-        mock_get_cache.return_value = fake_cache
-
-        # Mock scraper to return wage data
-        mock_scrape_page.return_value = ([{'item_number': '1', 'work_code': '1.1', 'work_description': 'Test', 'unit': 'm3', 'unit_price_idr': 100000}], 387)
-
-        resp = gvw.get_page_data_smart('Kab. Test', 1, 10)
-        self.assertEqual(resp.status_code, 200)
-        import json as _json
-        body = _json.loads(resp.content)
-        self.assertTrue(body.get('success'))
-        self.assertEqual(body['pagination']['total_items'], 387)
 
     def test_categorize_work_item_categories(self):
-        # Test various categories (order matters - first match wins)
-        self.assertEqual(gvw.categorize_work_item('Pondasi batu belah'), 'pondasi')
-        self.assertEqual(gvw.categorize_work_item('Bekisting kolom'), 'bekisting')
-        self.assertEqual(gvw.categorize_work_item('Beton K-300'), 'beton')
-        self.assertEqual(gvw.categorize_work_item('Besi tulangan'), 'besi')
-        self.assertEqual(gvw.categorize_work_item('Cat rumah'), 'cat')
-        self.assertEqual(gvw.categorize_work_item('Pipa PVC'), 'pipa')
-        self.assertEqual(gvw.categorize_work_item('Plat lantai'), 'plat')
-        self.assertEqual(gvw.categorize_work_item('Dinding bata'), 'dinding')
-        self.assertEqual(gvw.categorize_work_item('Atap genteng'), 'atap')
-        self.assertEqual(gvw.categorize_work_item('Batu kali'), 'batu')
-        self.assertEqual(gvw.categorize_work_item('Unknown item'), 'lainnya')
-        self.assertEqual(gvw.categorize_work_item(''), 'lainnya')
-        self.assertEqual(gvw.categorize_work_item(None), 'lainnya')
-
-    @patch('dashboard.gov_wage_views.scrape_all_government_pages')
-    @patch('dashboard.gov_wage_views.get_cache')
-    def test_get_page_data_filtered_with_cached_data(self, mock_get_cache, mock_scrape):
-        # Mock cache hit with data
-        cached_data = [
-            {'item_number': '1', 'work_code': '1.1', 'work_description': 'Test Pondasi', 'unit': 'm3', 'unit_price_idr': 100000, 'category': 'pondasi'},
-            {'item_number': '2', 'work_code': '1.2', 'work_description': 'Test Bekisting', 'unit': 'm2', 'unit_price_idr': 200000, 'category': 'bekisting'},
+        # Test all categories including edge cases
+        test_cases = [
+            ('Pembuatan pagar sementara', 'pagar'),
+            ('Panel Beton Pracetak', 'panel'),
+            ('Papan nama pekerjaan', 'papan_nama'),
+            ('Kantor sementara', 'bangunan_sementara'),
+            ('Jalan sementara Lapis Macadam', 'jalan_sementara'),
+            ('PAGAR SEMENTARA', 'pagar'),  # Case insensitive
+            ('panel beton', 'panel'),
+            ('Papan Nama Proyek Besi', 'papan_nama'),  # Priority test
+            ('  pagar  ', 'pagar'),  # Whitespace
+            ('Unknown item', 'lainnya'),
+            ('', 'lainnya'),
+            (None, 'lainnya'),
         ]
-        fake_cache = MagicMock()
-        fake_cache.get.return_value = cached_data
-        mock_get_cache.return_value = fake_cache
+        for description, expected_category in test_cases:
+            self.assertEqual(gvw.categorize_work_item(description), expected_category)
 
-        resp = gvw.get_page_data_filtered('Kab. Test', 'pondasi', '', '', 1, 10, 'item_number', 'asc')
-        self.assertEqual(resp.status_code, 200)
-        import json as _json
-        body = _json.loads(resp.content)
-        self.assertTrue(body.get('cached'))
-        # Should filter to only pondasi
-        self.assertEqual(len(body['data']), 1)
-
-    def test_gov_wage_page_renders(self):
-        # Skip template rendering test due to missing static files in test
-        # Test that the view exists and returns correct context instead
-        from django.test import RequestFactory
-        factory = RequestFactory()
-        _ = factory.get('/gov-wage/')
-        from dashboard.gov_wage_views import gov_wage_page
-        # Just verify it doesn't crash - template rendering requires static files
-        # resp = gov_wage_page(request)
-        # self.assertEqual(resp.status_code, 200)
-        self.assertTrue(callable(gov_wage_page))
-
-    def test_generate_mock_hspk_data(self):
-        items = gvw.generate_mock_hspk_data('Kab. Test', total_items=50)
-        self.assertEqual(len(items), 50)
-        # Check structure
-        self.assertEqual(items[0].region, 'Kab. Test')
-        self.assertIn('Pemasangan', items[0].work_description)
-
-    def test_scrape_pages_iteratively_with_next_page(self):
-        # Mock session and responses
-        mock_session = MagicMock()
-        
-        # First page response object
-        html_page1 = '''
-        <table id="example"><tbody>
-            <tr><td>1</td><td>1.1</td><td>Work A</td><td>m3</td><td>100000</td></tr>
-        </tbody></table>
-        <a aria-label='Next' class='page-link'></a>
-        '''
-        # Second page has data, no next link
-        html_page2 = '''
-        <table id="example"><tbody>
-            <tr><td>2</td><td>1.2</td><td>Work B</td><td>m3</td><td>200000</td></tr>
-        </tbody></table>
-        <a aria-label='Next' class='disabled'></a>
-        '''
-        
-        mock_resp1 = MagicMock()
-        mock_resp1.content = html_page1.encode('utf-8')
-        mock_resp1.raise_for_status.return_value = None
-        
-        mock_resp2 = MagicMock()
-        mock_resp2.content = html_page2.encode('utf-8')
-        mock_resp2.raise_for_status.return_value = None
-        
-        # Initial response argument is the first response
-        mock_session.get.side_effect = [mock_resp2]
-        
-        items = gvw.scrape_pages_iteratively(mock_session, 'https://example.com', mock_resp1, {}, 'Kab. Test')
-        # Should have items from both pages
-        self.assertGreaterEqual(len(items), 2)
 
     def test_apply_filters_combined(self):
         data = [
-            {'work_description': 'Pondasi batu', 'work_code': '1.1', 'unit_price_idr': 100000, 'category': 'pondasi'},
-            {'work_description': 'Bekisting kolom', 'work_code': '1.2', 'unit_price_idr': 600000, 'category': 'bekisting'},
-            {'work_description': 'Pondasi sumuran', 'work_code': '1.3', 'unit_price_idr': 1500000, 'category': 'pondasi'},
+            {'work_description': 'Pagar batu', 'work_code': '1.1', 'unit_price_idr': 100000, 'category': 'pagar'},
+            {'work_description': 'Panel kolom', 'work_code': '1.2', 'unit_price_idr': 600000, 'category': 'panel'},
+            {'work_description': 'Pagar besi', 'work_code': '1.3', 'unit_price_idr': 1500000, 'category': 'pagar'},
         ]
         
-        # Apply all filters
-        filtered = gvw.apply_filters(data, 'pondasi', 'pondasi', '0-500000')
-        # Should match: search for 'pondasi', category 'pondasi', price <= 500000
+        filtered = gvw.apply_filters(data, 'pagar', 'pagar', '0-500000')
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]['work_code'], '1.1')
+
+    def test_gov_wage_page_view_exists(self):
+        from dashboard.gov_wage_views import gov_wage_page
+        self.assertTrue(callable(gov_wage_page))
+
+    def test_gov_wage_page_renders(self):
+        resp = self.client.get('/gov-wage/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'HSPK')
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_wage_data_pagination(self, mock_get_cached):
+        mock_items = [self.create_mock_item(str(i), f'A.1.1.{i}', f'Test Item {i}', 
+                      price=100000 + i * 10000) for i in range(1, 26)]
+        mock_get_cached.return_value = mock_items
+
+        resp = self.client.get('/api/gov-wage/data/?region=Kab. Test&page=2&per_page=10')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data['pagination']['current_page'], 2)
+        self.assertEqual(data['pagination']['total_items'], 25)
+        self.assertEqual(len(data['data']), 10)
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_wage_data_with_all_param(self, mock_get_cached):
+        mock_items = [self.create_mock_item(str(i), f'A.1.1.{i}', f'Test Item {i}',
+                      price=100000 + i * 10000) for i in range(1, 16)]
+        mock_get_cached.return_value = mock_items
+
+        resp = self.client.get('/api/gov-wage/data/?region=Kab. Test&all=true')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(len(data['data']), 15)
+        self.assertEqual(data['pagination']['total_pages'], 1)
+        self.assertEqual(data['pagination']['total_items'], 15)
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_search_work_code_view(self, mock_get_cached):
+        mock_items = [
+            self.create_mock_item('1', 'A.1.1.1', 'Test Item 1'),
+            self.create_mock_item('2', 'A.2.2.2', 'Test Item 2', 'm2', 200000),
+        ]
+        mock_get_cached.return_value = mock_items
+
+        resp = self.client.post('/api/gov-wage/search/',
+            data=json.dumps({'work_code': 'A.1.1', 'region': 'Kab. Test'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(len(data['data']), 1)
+        self.assertEqual(data['data'][0]['work_code'], 'A.1.1.1')
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_search_work_code_empty_code(self, mock_get_cached):
+        resp = self.client.post('/api/gov-wage/search/',
+            data=json.dumps({'work_code': '', 'region': 'Kab. Test'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json().get('success'))
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_search_work_code_no_matches(self, mock_get_cached):
+        mock_get_cached.return_value = [self.create_mock_item()]
+
+        resp = self.client.post('/api/gov-wage/search/',
+            data=json.dumps({'work_code': '9.9.9', 'region': 'Kab. Test'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get('success'))
+
+
+    def test_search_work_code_invalid_json(self):
+        resp = self.client.post('/api/gov-wage/search/',
+            data='invalid json', content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json().get('success'))
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_search_work_code_exception(self, mock_get_cached):
+        mock_get_cached.side_effect = Exception('Database error')
+
+        resp = self.client.post('/api/gov-wage/search/',
+            data=json.dumps({'work_code': 'A.1.1', 'region': 'Kab. Test'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 500)
+        self.assertFalse(resp.json().get('success'))
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_pagination_info(self, mock_get_cached):
+        mock_items = [self.create_mock_item(str(i), f'A.1.1.{i}') for i in range(1, 26)]
+        mock_get_cached.return_value = mock_items
+
+        resp = self.client.get('/api/gov-wage/pagination/?region=Kab. Test')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data['total_items'], 25)
+        self.assertEqual(data['total_pages'], 3) 
+ 
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_pagination_info_error(self, mock_get_cached):
+        mock_get_cached.side_effect = Exception('Cache error')
+        resp = self.client.get('/api/gov-wage/pagination/?region=Kab. Test')
+        self.assertEqual(resp.status_code, 500)
+        self.assertFalse(resp.json().get('success'))
+
+    def test_apply_filters_edge_cases(self):
+        data = [
+            {'work_description': 'PAGAR BESI', 'work_code': '1.1', 'category': 'pagar'},
+            {'work_description': 'Panel Beton', 'work_code': '1.2', 'category': 'panel'},
+            {'work_description': 'Test', 'category': 'lainnya'},
+        ]
+        self.assertEqual(len(gvw.apply_search_filter(data, 'pagar')), 1)
+        self.assertEqual(len(gvw.apply_category_filter(data, 'lainnya')), 1)
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_wage_data_with_malformed_item(self, mock_get_cached):
+        class BadItem:
+            @property
+            def item_number(self):
+                raise AttributeError("Bad item")
+        
+        mock_get_cached.return_value = [BadItem()]
+        resp = self.client.get('/api/gov-wage/data/?region=Kab. Test&page=1')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get('success'))
+        self.assertEqual(len(resp.json()['data']), 0)
+
+
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_pagination_info_with_data(self, mock_get_cached):
+        mock_items = [self.create_mock_item(str(i), f'A.1.{i}') for i in range(1, 101)]
+        mock_get_cached.return_value = mock_items
+
+        resp = self.client.get('/api/gov-wage/pagination/?region=Kab. Test&year=2025')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data['total_items'], 100)
+        self.assertEqual(data['total_pages'], 10)
+        self.assertEqual(data['region'], 'Kab. Test')
+        self.assertEqual(data['year'], '2025')
+
+
+    @patch('api.government_wage.scraper.load_from_local_file')
+    def test_test_api_success(self, mock_load):
+        mock_load.return_value = [self.create_mock_item(region='Kab. Cilacap')]
+        resp = self.client.get('/api/gov-wage/test/')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data['item_count'], 1)
+        self.assertIn('first_item', data)
+
+
+    @patch('api.government_wage.scraper.load_from_local_file')
+    def test_test_api_no_cache(self, mock_load):
+        mock_load.return_value = None
+        resp = self.client.get('/api/gov-wage/test/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get('success'))
+        self.assertIn('No cached data', resp.json()['message'])
+
+
+    @patch('api.government_wage.scraper.load_from_local_file')
+    def test_test_api_empty_list(self, mock_load):
+        mock_load.return_value = []
+        resp = self.client.get('/api/gov-wage/test/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get('success'))
+
+
+    @patch('api.government_wage.scraper.load_from_local_file')
+    def test_test_api_exception(self, mock_load):
+        mock_load.side_effect = Exception('File read error')
+        resp = self.client.get('/api/gov-wage/test/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get('success'))
+        self.assertIn('error', resp.json())
+
+
+    @patch('dashboard.gov_wage_views.categorize_work_item')
+    @patch('dashboard.gov_wage_views.get_cached_or_scrape')
+    def test_get_wage_data_categorization_exception(self, mock_get_cached, mock_categorize):
+        mock_items = [
+            GovernmentWageItem(
+                item_number='1',
+                work_code='A.1.1.1',
+                work_description='Test',
+                unit='m',
+                unit_price_idr=100000,
+                region='Kab. Test',
+                edition='Edisi Ke - 2',
+                year='2025',
+                sector='Bidang Cipta Karya'
+            ),
+        ]
+        mock_get_cached.return_value = mock_items
+        mock_categorize.side_effect = Exception('Categorization failed')
+
+        resp = self.client.get('/api/gov-wage/data/?region=Kab. Test&page=1')
+        self.assertEqual(resp.status_code, 200)  
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(len(data['data']), 0)

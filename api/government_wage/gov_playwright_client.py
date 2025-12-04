@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 
 # this playwright client is only for MasPetruk (HSPK) pages
 class GovernmentWagePlaywrightClient(IHttpClient):
-    # CSS selectors
     REGION_SELECT_SELECTOR = "select.form-control"
+    SEARCH_INPUT_SELECTOR = ".dataTables_filter input"
     
     def __init__(
         self,
@@ -17,11 +17,13 @@ class GovernmentWagePlaywrightClient(IHttpClient):
         browser_type: str = "chromium",
         region_label: Optional[str] = "Kab. Cilacap",
         auto_select_region: bool = True,
+        search_keyword: Optional[str] = None,
     ):
         self.headless = headless
         self.browser_type = browser_type
         self.region_label = region_label
         self.auto_select_region = auto_select_region
+        self.search_keyword = search_keyword
 
         self.playwright = None
         self.browser: Optional[Browser] = None
@@ -75,37 +77,35 @@ class GovernmentWagePlaywrightClient(IHttpClient):
     async def _async_get(self, url: str) -> str:
         await self._ensure_browser()
         try:
-            # 1) Load MasPetruk HSPK page
             response = await self.page.goto(url, wait_until="domcontentloaded")
             if not response or not response.ok:
                 raise HttpClientError(f"HTTP {response.status if response else 'Unknown'} for {url}")
 
-            # 2) Ensure region (dropdown exists on this page)
             if self.auto_select_region and self.region_label:
                 try:
                     await self.page.wait_for_selector(self.REGION_SELECT_SELECTOR, timeout=5000)
                     try:
                         await self.page.select_option(self.REGION_SELECT_SELECTOR, label=self.region_label)
                     except Exception:
-                        # fallback click if select_option fails
                         await self.page.click(self.REGION_SELECT_SELECTOR)
                         await self.page.locator(f"{self.REGION_SELECT_SELECTOR} option", has_text=self.region_label).click()
                 except Exception:
                     pass
 
-            # 3) Wait for DataTables rows to render
+            if self.search_keyword:
+                try:
+                    await self.page.wait_for_selector(self.SEARCH_INPUT_SELECTOR, timeout=10000)
+                    await self.page.fill(self.SEARCH_INPUT_SELECTOR, self.search_keyword)
+                    await asyncio.sleep(2)
+                    logger.info(f"Applied search filter: '{self.search_keyword}'")
+                except Exception as e:
+                    logger.warning(f"Could not apply search filter: {e}")
+
             await self.page.wait_for_selector("table.dataTable tbody tr", timeout=60000)
 
-            # 4) Ensure 'Uraian Pekerjaan' anchor texts are present and non-empty
+            # Wait for table to be populated with data
             await self.page.wait_for_function(
-                """
-                () => {
-                    const rows = document.querySelectorAll('table.dataTable tbody tr');
-                    if (rows.length === 0) return false;
-                    const anchors = document.querySelectorAll('table.dataTable tbody tr td:nth-child(3) a.hspk');
-                    return anchors.length > 0 && Array.from(anchors).every(a => (a.textContent || '').trim().length > 0);
-                }
-                """,
+                "() => document.querySelectorAll('table.dataTable tbody tr').length > 0",
                 timeout=60000
             )
 
@@ -127,7 +127,7 @@ class GovernmentWagePlaywrightClient(IHttpClient):
         except Exception as e:
             raise HttpClientError(f"Failed to fetch {url}: {e}")
 
-    # ---------- cleanup ----------
+    # cleanup 
     def close(self):
         if self._loop and not self._loop.is_closed():
             self._loop.run_until_complete(self._async_close())
