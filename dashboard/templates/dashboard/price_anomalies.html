@@ -1011,9 +1011,11 @@
                     document.getElementById('pending-anomalies').textContent = data.data.pending_count;
                     
                     const total = data.data.total_count;
-                    const increases = Object.values(data.data.by_status).reduce((a, b) => a + b, 0);
+                    const increases = data.data.price_increase_count || 0;
+                    const decreases = data.data.price_decrease_count || 0;
+                    
                     document.getElementById('price-increases').textContent = total > 0 ? Math.round((increases / total) * 100) + '%' : '0%';
-                    document.getElementById('price-decreases').textContent = '0%';
+                    document.getElementById('price-decreases').textContent = total > 0 ? Math.round((decreases / total) * 100) + '%' : '0%';
                 }
             })
             .catch(error => console.error('Error loading statistics:', error));

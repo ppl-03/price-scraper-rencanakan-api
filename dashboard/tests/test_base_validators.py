@@ -49,9 +49,15 @@ class BaseUpdateRequestValidatorTests(TestCase):
     
     # ========== Product URL Validation Tests ==========
     
-    def test_validate_product_url_valid(self):
-        """Test that valid HTTPS URL passes validation."""
+    def test_validate_product_url_valid_https(self):
+        """Test that HTTPS URL passes validation."""
         result = self.validator.validate_product_url("https://example.com/product")
+        self.assertTrue(result["valid"])
+    
+    
+    def test_validate_product_url_valid_without_protocol(self):
+        """Test that URL without protocol passes validation (for legacy data)."""
+        result = self.validator.validate_product_url("example.com/product")
         self.assertTrue(result["valid"])
     
     def test_validate_product_url_none(self):
