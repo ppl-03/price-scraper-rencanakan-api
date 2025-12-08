@@ -600,9 +600,12 @@
             {% empty %}
               <tr>
                 <td colspan="8" class="empty-state">
-                  <div class="empty-state-icon">Tidak ada data</div>
+                  <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
                   <h5>Belum ada data harga</h5>
-                  <p class="mb-0">Gunakan form pencarian di atas untuk mulai mencari harga produk</p>
+                  <p class="text-muted mb-3">Data produk belum tersedia. Silakan jalankan scraper menggunakan scheduler untuk mengumpulkan data harga.</p>
+                  <a href="/scheduler/" class="btn btn-brand btn-pill">
+                    <i class="bi bi-clock-history me-2"></i>Buka Scheduler
+                  </a>
                 </td>
               </tr>
             {% endfor %}
@@ -834,38 +837,43 @@
     // ---------- Build data from table ----------
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
     // Make data globally accessible for updates
-    globalThis.tableData = allRows.map(tr => {
-      const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
-      const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
-      const categoryCell = tr.querySelector(".c-category");
-      const category = categoryCell?.dataset.category?.trim() || "Lainnya";
-      const priceText = tr.querySelector(".c-price")?.textContent || "0";
+    globalThis.tableData = allRows
+      .map(tr => {
+        const item = tr.querySelector(".c-item")?.textContent?.trim() || "";
+        const vendor = tr.querySelector(".c-vendor")?.textContent?.trim() || "—";
+        const categoryCell = tr.querySelector(".c-category");
+        const category = categoryCell?.dataset.category?.trim() || "Lainnya";
+        const priceText = tr.querySelector(".c-price")?.textContent || "0";
         const unitText = tr.querySelector(".c-unit")?.textContent?.trim() || "—";
-      const priceNum = toNumber(priceText);
-      const locationCell = tr.querySelector(".c-location");
-      
-      // Extract URL from row data attribute
-      const url = tr.dataset.productUrl || "";
-      
-      // Extract modal data from button if present (updated from span)
-      const modalButton = locationCell?.querySelector("button[data-locations]");
-      const allLocations = modalButton ? modalButton.dataset.locations?.split("|") || [] : [];
-      
-      // Extract location text (excluding button text)
-      let location = "—";
-      if (locationCell) {
-        // Clone the cell and remove the button to get clean text
-        const tempCell = locationCell.cloneNode(true);
-        const tempButton = tempCell.querySelector("button[data-locations]");
-        if (tempButton) tempButton.remove();
-        location = tempCell.textContent?.trim() || "—";
-      }
-      
-      // Normalize empty unit to dash
-      const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
-      
-      return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations, url };
-    });
+        const priceNum = toNumber(priceText);
+        const locationCell = tr.querySelector(".c-location");
+        
+        // Extract URL from row data attribute
+        const url = tr.dataset.productUrl || "";
+        
+        // Extract modal data from button if present (updated from span)
+        const modalButton = locationCell?.querySelector("button[data-locations]");
+        const allLocations = modalButton ? modalButton.dataset.locations?.split("|") || [] : [];
+        
+        // Extract location text (excluding button text)
+        let location = "—";
+        if (locationCell) {
+          // Clone the cell and remove the button to get clean text
+          const tempCell = locationCell.cloneNode(true);
+          const tempButton = tempCell.querySelector("button[data-locations]");
+          if (tempButton) tempButton.remove();
+          location = tempCell.textContent?.trim() || "—";
+        }
+        
+        // Normalize empty unit to dash
+        const normalizedUnit = unitText && unitText.trim() ? unitText.trim() : "—";
+        
+        return { item, category, vendor, price: priceNum, unit: normalizedUnit, location, allLocations, url };
+      })
+      .filter(d => {
+        // Filter out invalid products: must have price > 0 AND a valid vendor
+        return d.price > 0 && d.vendor && d.vendor !== "—" && d.vendor.trim() !== "";
+      });
 
     // Populate vendor dropdown (for…of)
     const vendorSelect = document.getElementById("vendorSelect");
@@ -1182,20 +1190,33 @@
       const tr = document.createElement("tr");
       const hasFilters = filterInput.value || vendorSelect.value || categorySelect.value || 
                         locationSelect.value || minPrice.value || maxPrice.value;
-      const emptyMessage = hasFilters 
-        ? `<div class="empty-state">
+      const hasData = globalThis.tableData && globalThis.tableData.length > 0;
+      
+      let emptyMessage;
+      if (hasFilters && hasData) {
+        // Has data but filters exclude everything
+        emptyMessage = `<div class="empty-state">
              <div class="empty-state-icon"><i class="bi bi-search"></i></div>
              <h6>Tidak ada hasil yang cocok</h6>
-             <p class="text-muted mb-3">Coba ubah atau hapus beberapa filter</p>
-             <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('clearFilters').click()">
+             <p class="text-muted mb-3">Coba ubah atau hapus beberapa filter, atau jalankan scraper untuk menambah data</p>
+             <button class="btn btn-sm btn-outline-primary me-2" onclick="document.getElementById('clearFilters').click()">
                <i class="bi bi-x-circle me-1"></i>Hapus Semua Filter
              </button>
-           </div>`
-        : `<div class="empty-state">
-             <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
-             <h6>Belum ada data</h6>
-             <p class="text-muted">Data produk akan muncul di sini</p>
+             <a href="/scheduler/" class="btn btn-sm btn-brand">
+               <i class="bi bi-clock-history me-1"></i>Buka Scheduler
+             </a>
            </div>`;
+      } else {
+        // No data at all in the database
+        emptyMessage = `<div class="empty-state">
+             <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+             <h6>Belum ada data harga</h6>
+             <p class="text-muted mb-3">Data produk belum tersedia. Silakan jalankan scraper menggunakan scheduler untuk mengumpulkan data harga.</p>
+             <a href="/scheduler/" class="btn btn-brand btn-pill">
+               <i class="bi bi-clock-history me-2"></i>Buka Scheduler
+             </a>
+           </div>`;
+      }
       tr.innerHTML = `<td colspan="8" class="text-center py-4">${emptyMessage}</td>`;
       return tr;
     }

@@ -254,15 +254,62 @@ class BaseScheduler:
         try:
             if use_price_update and hasattr(db_service, 'save_with_price_update'):
                 res = db_service.save_with_price_update(products_data)
-                return self._extract_saved_count_from_price_update(res)
+                saved_count = self._extract_saved_count_from_price_update(res)
             else:
                 res = db_service.save(products_data)
-                return self._extract_saved_count_from_regular_save(res, products_data)
+                saved_count = self._extract_saved_count_from_regular_save(res, products_data)
+            
+            # Auto-categorize newly inserted products
+            inserted_count = 0
+            if isinstance(res, dict):
+                inserted_count = res.get('inserted', 0) or res.get('new_count', 0)
+            elif saved_count > 0:
+                inserted_count = saved_count
+            
+            if inserted_count > 0:
+                self._auto_categorize_products(vendor, inserted_count)
+            
+            return saved_count
         except Exception as e:
             error_msg = f'{vendor} database save failed for keyword "{keyword}": {type(e).__name__}: {str(e)}'
             vendor_result['errors'].append(error_msg)
             logger.error(error_msg)
             return 0
+    
+    def _auto_categorize_products(self, vendor, inserted_count):
+        """Auto-categorize newly inserted products."""
+        try:
+            from db_pricing.auto_categorization_service import AutoCategorizationService
+            from db_pricing.models import (
+                Mitra10Product, GemilangProduct, DepoBangunanProduct,
+                JuraganMaterialProduct, TokopediaProduct
+            )
+            
+            # Map vendor to model
+            model_map = {
+                'mitra10': Mitra10Product,
+                'gemilang': GemilangProduct,
+                'depobangunan': DepoBangunanProduct,
+                'juragan_material': JuraganMaterialProduct,
+                'tokopedia': TokopediaProduct
+            }
+            
+            product_model = model_map.get(vendor)
+            if not product_model:
+                logger.warning(f"No model found for vendor: {vendor}")
+                return
+            
+            # Get recently inserted products with empty category
+            uncategorized_products = product_model.objects.filter(category='').order_by('-id')[:inserted_count]
+            product_ids = list(uncategorized_products.values_list('id', flat=True))
+            
+            if product_ids:
+                categorization_service = AutoCategorizationService()
+                categorization_result = categorization_service.categorize_products(vendor, product_ids)
+                categorized_count = categorization_result.get('categorized', 0)
+                logger.info(f"Auto-categorized {categorized_count} out of {len(product_ids)} new {vendor} products")
+        except Exception as cat_error:
+            logger.warning(f"Auto-categorization failed for {vendor}: {str(cat_error)}")
     
     def _process_scrape_result(self, scraper, result, vendor, keyword, page, vendor_result, db_service, use_price_update, max_products_per_keyword):
         """Process a single scrape result and return products found and saved counts."""

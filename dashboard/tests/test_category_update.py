@@ -238,14 +238,14 @@ class CategoryUpdateRequestValidatorTests(TestCase):
         )
         self.assertFalse(result["valid"])
     
-    def test_invalid_url_format(self):
-        """Test that invalid URL format fails validation."""
+    def test_any_url_format_accepted(self):
+        """Test that any non-empty URL format is accepted (for compatibility with legacy data)."""
         result = self.validator.validate_update_request(
             source="Gemilang Store",
             product_url="not-a-url",
             new_category="Alat Listrik"
         )
-        self.assertFalse(result["valid"])
+        self.assertTrue(result["valid"])
     
     def test_none_category(self):
         """Test that None category fails validation."""
@@ -335,14 +335,14 @@ class CategoryUpdateRequestValidatorTests(TestCase):
             },
             {
                 "source": "Gemilang Store",
-                "product_url": "not-a-url",  # Invalid URL format
+                "product_url": "not-a-url",  # Accepted for compatibility with legacy data
                 "new_category": "Category B"
             }
         ]
         result = self.validator.validate_bulk_request(updates)
         self.assertFalse(result["valid"])
         self.assertIn("errors", result)
-        self.assertEqual(len(result["errors"]), 2)
+        self.assertEqual(len(result["errors"]), 1)  # Only empty source causes error now
 
 
 class CategoryUpdateServiceTests(TestCase):

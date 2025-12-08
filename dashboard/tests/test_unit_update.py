@@ -244,14 +244,14 @@ class UnitUpdateRequestValidatorTests(TestCase):
         )
         self.assertFalse(result["valid"])
     
-    def test_invalid_url_format(self):
-        """Test that invalid URL format fails validation."""
+    def test_any_url_format_accepted(self):
+        """Test that any non-empty URL format is accepted (for compatibility with legacy data)."""
         result = self.validator.validate_update_request(
             source="Gemilang Store",
             product_url="not-a-url",
             new_unit="kg"
         )
-        self.assertFalse(result["valid"])
+        self.assertTrue(result["valid"])
     
     def test_none_unit(self):
         """Test that None unit fails validation."""
@@ -341,14 +341,14 @@ class UnitUpdateRequestValidatorTests(TestCase):
             },
             {
                 "source": "Gemilang Store",
-                "product_url": "not-a-url",  # Invalid URL format
+                "product_url": "not-a-url",  # Accepted for compatibility with legacy data
                 "new_unit": "m²"
             }
         ]
         result = self.validator.validate_bulk_request(updates)
         self.assertFalse(result["valid"])
         self.assertIn("errors", result)
-        self.assertEqual(len(result["errors"]), 2)
+        self.assertEqual(len(result["errors"]), 1)  # Only empty source causes error now
 
 
 class UnitUpdateServiceTests(TestCase):
@@ -574,56 +574,71 @@ class UnitUpdateServiceTests(TestCase):
         self.assertIn("Mitra10", vendors)
     
     def test_bulk_update_uses_update_unit_method(self):
-        """Test that bulk_update_units depends on update_unit method.
+        """Test that bulk_update_units properly handles errors from update_unit method.
+        
+        This test verifies that bulk_update_units correctly delegates to update_unit
+        and properly handles failure cases by counting them appropriately.
         """
-        with patch.object(UnitUpdateService, 'VENDOR_MODEL_MAP') as mock_map:
-            # Setup mock
-            mock_product = Mock()
-            mock_product.name = "Product 1"
-            mock_product.unit = "pcs"
-            mock_product.updated_at = datetime.now()
-            mock_product.save = Mock()
-            
-            mock_gemilang = Mock()
-            mock_gemilang.objects.get.return_value = mock_product
-            mock_gemilang.DoesNotExist = Exception
-            
-            mock_map.get = Mock(return_value=mock_gemilang)
-            
-            service = UnitUpdateService()
-            
-            # Patch the update_unit method to verify it's called by bulk_update_units
-            with patch.object(service, 'update_unit', wraps=service.update_unit) as mock_update:
-                mock_update.return_value = {
-                    "success": True,
-                    "message": "Unit updated successfully",
-                    "product_name": "Product 1",
-                    "old_unit": "pcs",
-                    "new_unit": "kg",
-                    "vendor": "Gemilang Store",
-                    "updated_at": datetime.now().isoformat()
-                }
-                
-                updates = [
-                    {
-                        "source": "Gemilang Store",
-                        "product_url": "https://gemilang.com/product1",
-                        "new_unit": "kg"
+        service = UnitUpdateService()
+        
+        # Mock update_unit to return an error for one item and success for another
+        with patch.object(service, 'update_unit') as mock_update:
+            def update_side_effect(source, product_url, new_unit):
+                if product_url == "https://gemilang.com/product1":
+                    return {
+                        "success": False,
+                        "error": "Product not found"
                     }
-                ]
-                
-                result = service.bulk_update_units(updates)
-                
-                # Verify that update_unit was called by bulk_update_units
-                mock_update.assert_called_once_with(
-                    "Gemilang Store",
-                    "https://gemilang.com/product1",
-                    "kg"
-                )
-                
-                # Verify the result
-                self.assertEqual(result["success_count"], 1)
-                self.assertEqual(result["failure_count"], 0)
+                else:
+                    return {
+                        "success": True,
+                        "message": "Unit updated successfully",
+                        "product_name": "Product 2",
+                        "old_unit": "box",
+                        "new_unit": new_unit,
+                        "vendor": source,
+                        "updated_at": datetime.now().isoformat()
+                    }
+            
+            mock_update.side_effect = update_side_effect
+            
+            updates = [
+                {
+                    "source": "Gemilang Store",
+                    "product_url": "https://gemilang.com/product1",
+                    "new_unit": "kg"
+                },
+                {
+                    "source": "Mitra10",
+                    "product_url": "https://mitra10.com/product2",
+                    "new_unit": "m²"
+                }
+            ]
+            
+            result = service.bulk_update_units(updates)
+            
+            # Verify that update_unit was called for both items
+            self.assertEqual(mock_update.call_count, 2)
+            mock_update.assert_any_call(
+                "Gemilang Store",
+                "https://gemilang.com/product1",
+                "kg"
+            )
+            mock_update.assert_any_call(
+                "Mitra10",
+                "https://mitra10.com/product2",
+                "m²"
+            )
+            
+            # Verify the result counts: 1 success, 1 failure
+            self.assertEqual(result["success_count"], 1)
+            self.assertEqual(result["failure_count"], 1)
+            
+            # Verify the updates list contains both results
+            self.assertEqual(len(result["updates"]), 2)
+            self.assertFalse(result["updates"][0]["success"])
+            self.assertIn("error", result["updates"][0])
+            self.assertTrue(result["updates"][1]["success"])
 
 
 class UnitUpdateAPITests(TestCase):

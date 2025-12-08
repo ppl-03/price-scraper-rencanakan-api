@@ -258,11 +258,17 @@ def get_anomaly_statistics(request):
         # Get pending count
         pending_count = PriceAnomaly.objects.filter(status='pending').count()
         
+        # Get price increase/decrease counts
+        price_increase_count = PriceAnomaly.objects.filter(change_percent__gt=0).count()
+        price_decrease_count = PriceAnomaly.objects.filter(change_percent__lt=0).count()
+        
         return JsonResponse({
             'success': True,
             'data': {
                 'total_count': total_count,
                 'pending_count': pending_count,
+                'price_increase_count': price_increase_count,
+                'price_decrease_count': price_decrease_count,
                 'by_status': status_counts,
                 'by_vendor': vendor_counts,
             }
