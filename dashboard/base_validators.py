@@ -49,10 +49,6 @@ class BaseUpdateRequestValidator:
         if not product_url.strip():
             return {"valid": False, "error": "Product URL cannot be empty"}
         
-        # Validate URL format - only accept HTTPS for security
-        if not product_url.startswith("https://"):
-            return {"valid": False, "error": "Product URL must be a valid HTTPS URL"}
-        
         return {"valid": True}
     
     @staticmethod
