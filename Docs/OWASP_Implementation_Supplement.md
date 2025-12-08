@@ -954,3 +954,911 @@ TOTAL ATTACKS                     190        190         100%
 - Cognitive complexity reduced (all functions < 15)
 - Comprehensive documentation
 
+---
+
+## 4. SDLC Security: Acknowledging Gaps & Improvement Opportunities
+
+### Honest Assessment
+
+While we achieved strong runtime security controls (A01, A03, A04), our SDLC security practices reveal significant gaps that weren't addressed during initial development. This section provides an honest evaluation of what we got right, what we missed, and what should have been implemented from the start.
+
+### What We Missed: Security Gaps in Our SDLC
+
+```
+SDLC Phase                What We Did Wrong                  Lessons Learned
+──────────────────────────────────────────────────────────────────────────────
+Code Development          ❌ No commit signing                Should have enabled GPG from day 1
+                         ✅ Avoided secret exposure          Got this right - env vars throughout
+                         ✅ Security patterns enforced       TDD approach paid off
+
+Dependency Management    ⚠️  No proactive scanning           Relied on Dependabot, should scan manually
+                         ⚠️  Supply chain not verified       Could have validated package signatures
+                         ✅ Versions pinned                  At least we avoided version drift
+
+Version Control          ❌ No cryptographic verification    Anyone could forge commits
+                         ✅ Branch protection enabled        Required reviews helped
+                         ❌ Commit provenance unclear         Can't prove who wrote what code
+
+CI/CD Pipeline           ✅ Good secret handling             Environment variables done right
+                         ⚠️  Some actions not SHA-pinned     MySQL image uses floating tag
+                         ✅ Test coverage enforced           98% gave us confidence
+
+Container Security       ❌ Running as root                  Basic security mistake
+                         ❌ Base image not immutable         python:3.12-slim can change under us
+                         ❌ No vulnerability scanning        Shipping blind without Trivy/Snyk
+                         ⚠️  Large attack surface            Playwright adds unnecessary risk
+
+Deployment              ✅ Good environment config          Secrets handled properly
+                         ✅ Security headers present         HTTPS enforcement working
+                         ⚠️  Limited runtime monitoring      Could improve observability
+```
+
+---
+
+### 4.1 Code Integrity & Commit Signing
+
+#### What We Got Wrong: ❌ No Commit Signing
+
+**Our Mistake**: We focused heavily on runtime security but completely overlooked code provenance. Every commit in this repository lacks cryptographic verification, meaning:
+- Anyone with repository access could impersonate another developer
+- We have no way to prove who actually wrote each piece of code
+- A compromised account could inject malicious code undetected
+- Code integrity relies solely on GitHub's authentication, not cryptography
+
+**Why This Matters**: In a real supply chain attack, an attacker could:
+- Commit malicious code using a stolen password
+- Forge commits to blame another developer
+- Modify history without detection
+- Bypass our otherwise strong security controls
+
+#### Implementation Guide: GPG Commit Signing
+
+**Step 1: Generate GPG Key**
+```bash
+# Generate GPG key pair
+gpg --full-generate-key
+
+# Select options:
+# - Key type: RSA and RSA (default)
+# - Key size: 4096 bits
+# - Key validity: 1-2 years (requires renewal)
+# - Real name: Your Name
+# - Email: your-github-email@example.com
+```
+
+**Step 2: Configure Git**
+```bash
+# List GPG keys to get key ID
+gpg --list-secret-keys --keyid-format=long
+
+# Configure Git to use GPG key
+git config --global user.signingkey YOUR_GPG_KEY_ID
+git config --global commit.gpgsign true
+git config --global tag.gpgsign true
+
+# Configure GPG program (if needed)
+git config --global gpg.program gpg
+```
+
+**Step 3: Add GPG Key to GitHub**
+```bash
+# Export public GPG key
+gpg --armor --export YOUR_GPG_KEY_ID
+
+# Copy the output and add to GitHub:
+# Settings → SSH and GPG keys → New GPG key
+```
+
+**Step 4: Enable Branch Protection with Signed Commits**
+```yaml
+# GitHub Repository Settings → Branches → Branch protection rules
+# For branch: main
+
+Required:
+✅ Require signed commits
+✅ Require status checks to pass before merging
+✅ Require branches to be up to date before merging
+✅ Require linear history
+✅ Include administrators
+```
+
+**What We Should Have Done from Day 1:**
+- Set up GPG keys during initial repository setup
+- Made commit signing mandatory via branch protection rules
+- Enforced cryptographic verification before merge
+- Documented the signing process in our contributing guidelines
+
+**Retrospective on Impact:**
+```
+Repository: price-scraper-rencanakan-api
+Branch: Task-Gemilang_Interaction_Util
+Current Status: ❌ Zero signed commits across entire history
+What This Means: Cannot cryptographically verify ANY code authorship
+Risk Level: MEDIUM-HIGH - Acceptable for university project, 
+                          unacceptable for production software
+Honest Assessment: We prioritized features over foundational security
+```
+
+**Lesson Learned**: Security isn't just about runtime protections - it starts with ensuring you can trust your own codebase. We built strong walls but forgot to lock the front door.
+
+---
+
+### 4.2 Secret Management & Environment Security
+
+#### What We Actually Got Right: ✅ Good Secret Hygiene
+
+**Our Success**: This is one area where we made the right choices from the beginning. Secrets are properly externalized and never committed to the repository.
+
+**Credit Where Due**: We consistently used environment variables throughout development, which prevented the common mistake of hardcoding credentials.
+
+```python
+# settings.py - Secure secret management
+import environ
+
+env = environ.Env()
+environ.Env.read_env()
+
+# Secrets loaded from environment
+SECRET_KEY = env("SECRET_KEY")
+DB_PASSWORD = env("MYSQL_PASSWORD", default=None) or env("DB_PASSWORD")
+
+# Never hardcoded:
+# ❌ SECRET_KEY = "django-insecure-hardcoded-key"  # NEVER DO THIS
+# ✅ SECRET_KEY = env("SECRET_KEY")  # CORRECT
+```
+
+**GitHub Secrets Configuration:**
+```yaml
+# .github/workflows/django.yml
+env:
+  SECRET_KEY: ${{ secrets.SECRET_KEY || 'insecure-test-key-for-ci-only' }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  KOYEB_API_TOKEN: ${{ secrets.KOYEB_API_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  TEST_IP_ALLOWED: ${{ secrets.TEST_IP_ALLOWED || '192.168.1.100' }}
+  TEST_IP_DENIED: ${{ secrets.TEST_IP_DENIED || '10.0.0.1' }}
+  TEST_IP_ATTACKER: ${{ secrets.TEST_IP_ATTACKER || '192.168.1.999' }}
+```
+
+**What We Did Right:**
+- ✅ All secrets in GitHub Secrets (encrypted at rest)
+- ✅ Secrets never logged or printed
+- ✅ Test-only fallback secrets for CI
+- ✅ Environment variables used in production
+- ✅ `.env` file in `.gitignore`
+
+**But We Could Have Done Better:**
+- ⚠️ No automated secret scanning in pre-commit hooks
+- ⚠️ No repository history scan for accidentally committed secrets
+- ⚠️ No secret rotation policy documented or enforced
+- ⚠️ No monitoring for secret exposure in logs or errors
+
+**Secret Rotation Policy:**
+```bash
+# Recommended rotation schedule:
+- SECRET_KEY: Every 90 days or on personnel changes
+- DB_PASSWORD: Every 60 days
+- API_TOKENS: Every 30 days or on suspicious activity
+- KOYEB_API_TOKEN: After any deployment issue
+```
+
+**Verification Commands:**
+```bash
+# Scan repository for exposed secrets (use git-secrets or truffleHog)
+git secrets --scan-history
+
+# Check for hardcoded credentials
+grep -r "password\s*=\s*['\"]" --include="*.py" --exclude-dir=venv
+
+# Verify .env is gitignored
+git check-ignore .env
+```
+
+---
+
+### 4.3 Dependency Security & Supply Chain Protection
+
+#### Mixed Results: ✅ Reactive, Not Proactive
+
+**What We Did**: We enabled automated tools (Dependabot, OSSF Scorecard) but took a passive approach to supply chain security.
+
+**The Problem with Our Approach:**
+- We wait for Dependabot alerts instead of actively auditing dependencies
+- We don't verify package signatures or checksums
+- We trust PyPI implicitly without validation
+- We don't review dependency trees for malicious packages
+
+**Dependency Management Strategy:**
+
+```python
+# requirements.txt - Pinned versions for reproducibility
+Django==5.2.7           # ✅ Pinned to specific version
+requests==2.32.5        # ✅ Pinned to specific version
+bleach==6.0.0          # ✅ Pinned (HTML sanitization)
+playwright==1.55.0     # ✅ Pinned (browser automation)
+gunicorn==23.0.0       # ✅ Pinned (production server)
+```
+
+**One Thing We Did Right: Version Pinning**
+```python
+Django==5.2.7           # ✅ Pinned - prevents surprise updates
+requests==2.32.5        # ✅ Pinned - reproducible builds
+bleach==6.0.0          # ✅ Pinned - controlled updates
+```
+
+**But Honest Assessment:**
+- We pinned versions reactively, not as a security strategy
+- We didn't document WHY each version was chosen
+- We don't have a process for evaluating updates
+- Version pinning gives false sense of security without active monitoring
+
+**Automated Vulnerability Scanning:**
+```yaml
+# .github/workflows/scorecard.yml
+- name: "Run analysis"
+  uses: ossf/scorecard-action@f49aabe0b5af0936a0987cfb85d86b75731b0186 # v2.4.1
+  with:
+    results_file: results.sarif
+    results_format: sarif
+    publish_results: true
+```
+
+**OSSF Scorecard Reality Check:**
+```
+Security Check                    Status    Honest Truth
+──────────────────────────────────────────────────────────────
+Branch Protection                 ✅        We enabled this - good
+Code Review                       ✅        Team enforced it - helped quality
+Dependency Update Tool            ✅        Dependabot on, but we're passive
+Pinned Dependencies               ✅        Pinned by accident, not strategy
+Security Policy                   ❌        Never created SECURITY.md
+Signed Releases                   ❌        No GPG, no signing, no verification
+Token Permissions                 ✅        Got lucky with defaults
+Vulnerabilities                   ✅        None found YET (emphasis on yet)
+```
+
+**Takeaway**: We scored 6/8, but mostly through defaults and luck, not deliberate security engineering.
+
+**Manual Dependency Audit:**
+```bash
+# Check for known vulnerabilities (run regularly)
+pip install safety
+safety check --json
+
+# Update dependencies with security patches
+pip list --outdated
+pip install --upgrade package-name
+
+# Verify no malicious packages
+pip show package-name
+# Check: Homepage, Author, License
+```
+
+**Supply Chain Attack Mitigations:**
+1. **Use trusted package sources**: PyPI only, no custom mirrors
+2. **Verify package signatures**: Check wheel/sdist signatures when available
+3. **Review dependency tree**: `pip show -r package-name`
+4. **Monitor for typosquatting**: Check package names carefully
+5. **Use virtual environments**: Isolate project dependencies
+
+---
+
+### 4.4 CI/CD Pipeline Security
+
+#### Partial Success: ✅ Some Good Practices, ⚠️ Some Oversights
+
+**What We Got Right**: SHA-pinning actions was a smart move that many projects skip.
+
+**What We Missed**: Not all components are properly secured.
+
+```yaml
+# .github/workflows/django.yml
+
+# Principle of Least Privilege - default read-only
+permissions: read-all
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    # Pinned Python version
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    
+    # Database service with secure credentials
+    services:
+      mysql:
+        image: mysql:8.0  # ❌ MISTAKE: Floating tag, not pinned to digest
+        env:
+          MYSQL_ROOT_PASSWORD: root_password  # ⚠️ Acceptable for CI, but hardcoded
+          MYSQL_DATABASE: test_db
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_password  # ⚠️ Same password used by all developers
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+```
+
+**Action Version Pinning - Our Inconsistency:**
+```yaml
+# ✅ What we did right: SHA-pinned most actions
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+- uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+
+# ❌ What we got wrong: MySQL service uses floating tag
+services:
+  mysql:
+    image: mysql:8.0  # Not SHA-pinned - can change without warning!
+```
+
+**Why This Inconsistency Matters:**
+- We protected against GitHub Action compromises
+- But left the door open for Docker image compromise
+- Inconsistent security posture creates false confidence
+- We understood the principle but failed to apply it universally
+
+**Honest Reflection**: We copy-pasted the SHA-pinning pattern from a template without fully understanding why it mattered. When we added the MySQL service later, we forgot the lesson.
+
+**Secret Handling in CI:**
+```yaml
+env:
+  # Safe: Uses GitHub Secrets with fallback for testing
+  SECRET_KEY: ${{ secrets.SECRET_KEY || 'insecure-test-key-for-ci-only' }}
+  
+  # ❌ NEVER do this:
+  # SECRET_KEY: "hardcoded-secret-in-workflow-file"
+  
+  # ❌ NEVER do this:
+  # run: echo "Secret: ${{ secrets.SECRET_KEY }}"  # Exposes in logs
+```
+
+**Test Isolation:**
+```yaml
+- name: Run tests with coverage
+  run: |
+    python -m coverage run --source='.' -m pytest api db_pricing security
+    python -m coverage report
+    python -m coverage json
+    python -m coverage html
+
+# Tests run in ephemeral environment
+# - Fresh MySQL instance per run
+# - Isolated Python environment
+# - No persistent state between runs
+```
+
+**Artifact Security:**
+```yaml
+- name: Upload test reports
+  if: always()
+  uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+  with:
+    name: test-reports
+    path: |
+      test_report.html
+      htmlcov/
+      coverage.json
+    retention-days: 30  # Automatic cleanup
+```
+
+**CI/CD Security Reality Check:**
+- ✅ Actions pinned to commit SHA (good decision early on)
+- ✅ Secrets stored in GitHub Secrets (never hardcoded)
+- ✅ Minimal workflow permissions (mostly by default)
+- ✅ Test isolation with ephemeral services (CI best practice followed)
+- ✅ No secrets in logs (we were careful here)
+- ✅ Automated security scanning (SonarQube, CodeCov integrated)
+- ✅ Code coverage enforcement (98% - our testing culture paid off)
+- ❌ MySQL image uses floating tag (inconsistent with our own standards)
+- ❌ No workflow artifact encryption (didn't consider this risk)
+- ❌ No supply chain verification for CI dependencies (trusted blindly)
+
+---
+
+### 4.5 Container Security
+
+#### What We Got Wrong: ❌ Basic Security Mistakes
+
+**Brutally Honest Assessment**: Our Dockerfile has fundamental security flaws that demonstrate we didn't prioritize container security during development.
+
+**Current Dockerfile - Security Audit:**
+
+```dockerfile
+# dockerfile
+
+# ❌ CRITICAL FLAW: Not pinned to digest - image can change under us
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.txt /app/
+
+# ⚠️ Installing packages without signature verification
+# ⚠️ No awareness of what these packages actually contain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    pkg-config \
+    libpq-dev \
+    default-libmysqlclient-dev \
+    && pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# ⚠️ Playwright adds ~1GB and increases attack surface significantly
+# Did we really need full browser automation in production?
+RUN playwright install && playwright install-deps
+
+# ✅ At least we cleaned up build artifacts
+RUN apt-get purge -y --auto-remove build-essential gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /app/
+
+EXPOSE 8000
+
+# ❌ CRITICAL SECURITY FLAW: Running as root user
+# Container breakout = full system compromise
+# This is Security 101 - we simply missed it
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn price_scraper_rencanakan_api.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers=4 --threads=2 --worker-class=sync --timeout=120"]
+```
+
+**Security Issues - Why We Failed:**
+
+| Issue | Risk Level | Why We Got It Wrong |
+|-------|-----------|---------------------|
+| Base image not pinned to digest | HIGH | Didn't understand supply chain risk |
+| Running as root user | CRITICAL | Basic mistake - copied from tutorial |
+| No image scanning | HIGH | Shipping blind - never thought to scan |
+| Large attack surface (Playwright) | MEDIUM | Convenience over security - didn't evaluate risk |
+| Secrets via environment variables | LOW | Actually okay - one thing we did right |
+
+**Root Cause Analysis:**
+- Focused on making it work, not making it secure
+- Copied Dockerfile patterns without understanding implications
+- No security review before containerizing
+- Assumed cloud platform would handle container security
+- Never ran Trivy or similar scanner even once
+
+**Recommended Dockerfile (Hardened):**
+
+```dockerfile
+# Pinned to specific digest for immutability
+FROM python:3.12-slim@sha256:<LATEST_SHA256_DIGEST>
+
+# Security: Non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    pkg-config \
+    libpq-dev \
+    default-libmysqlclient-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies first (layer caching)
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright
+RUN playwright install && playwright install-deps
+
+# Clean up build dependencies
+RUN apt-get purge -y --auto-remove build-essential gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy application code
+COPY --chown=appuser:appuser . /app/
+
+# Switch to non-root user
+USER appuser
+
+EXPOSE 8000
+
+# Security: Don't run as root
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn price_scraper_rencanakan_api.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers=4 --threads=2 --worker-class=sync --timeout=120"]
+```
+
+**Container Security Best Practices:**
+
+1. **Image Scanning**
+```bash
+# Scan for vulnerabilities (integrate into CI/CD)
+docker scan price-scraper-rencanakan-api:latest
+
+# Alternative: Trivy scanner
+trivy image price-scraper-rencanakan-api:latest
+```
+
+2. **Runtime Security**
+```bash
+# Run with limited capabilities
+docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE \
+  --read-only --tmpfs /tmp \
+  price-scraper-rencanakan-api:latest
+
+# Use security profiles (AppArmor/SELinux)
+docker run --security-opt apparmor=docker-default \
+  price-scraper-rencanakan-api:latest
+```
+
+3. **Secrets Management**
+```bash
+# Use Docker secrets (Swarm) or external secret manager
+docker secret create db_password /run/secrets/db_password
+
+# In Kubernetes: Use Secrets or external providers (Vault, AWS Secrets Manager)
+```
+
+---
+
+### 4.6 Deployment Security & Infrastructure
+
+#### What Actually Worked: ✅ Application-Level Security
+
+**Saving Grace**: While our container security was weak, our application-level deployment security was solid. We got Django's security settings right.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Deployment Flow                        │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Developer → Git Push → GitHub Actions → Tests Pass     │
+│                               ↓                          │
+│                          Build Image                     │
+│                               ↓                          │
+│                     Container Registry                   │
+│                               ↓                          │
+│                        Deploy to Koyeb                   │
+│                               ↓                          │
+│                      Load Environment Secrets            │
+│                               ↓                          │
+│                      Application Running                 │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Security Headers - One of Our Wins:**
+```python
+# settings.py - Production security settings
+
+# ✅ HTTPS enforcement - did this from day 1
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# ✅ Security headers - Django docs made this easy
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'DENY'
+
+# ✅ CSRF protection - Django default, we didn't break it
+CSRF_COOKIE_HTTPONLY = True
+CSRF_USE_SESSIONS = True
+
+# ✅ Session security - configured early and properly
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Strict'
+SESSION_COOKIE_AGE = 3600  # 1 hour
+```
+
+**Why This Worked**: Django's security documentation is excellent, and we actually read it. Following framework best practices saved us here.
+
+**Database Security:**
+```python
+# Connection pooling and timeouts
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'CONN_MAX_AGE': 60,  # Connection reuse
+        'OPTIONS': {
+            'connect_timeout': 10,
+            'read_timeout': 30,
+            'write_timeout': 30,
+            'ssl': {'required': True}  # Enforce SSL in production
+        }
+    }
+}
+```
+
+**Environment-Specific Configuration:**
+```bash
+# Production environment variables (stored in Koyeb/platform)
+SECRET_KEY=<STRONG_RANDOM_KEY_64_CHARS>
+DB_HOST=<PRODUCTION_DB_HOST>
+DB_PASSWORD=<STRONG_DB_PASSWORD>
+DJANGO_SETTINGS_MODULE=price_scraper_rencanakan_api.settings
+DEBUG=False  # NEVER True in production
+
+# Development environment (.env - gitignored)
+SECRET_KEY=dev-key-only
+DB_HOST=localhost
+DB_PASSWORD=dev-password
+DEBUG=True
+```
+
+---
+
+### 4.7 Monitoring & Incident Response
+
+#### Good Intentions, Limited Implementation: ⚠️ Logging Without Action
+
+**What We Built**: Comprehensive logging that looks impressive on paper.
+
+**What's Missing**: Actual monitoring, alerting, and incident response procedures.
+
+```python
+# api/gemilang/logging_utils.py
+
+def get_gemilang_logger(name: str):
+    """
+    Centralized logging configuration for Gemilang module.
+    All security events are logged for monitoring and alerting.
+    """
+    logger = logging.getLogger(f"api.gemilang.{name}")
+    return logger
+
+# Security event logging examples:
+logger.warning("Invalid API token attempt from %s", client_ip)
+logger.critical("SQL injection attempt detected: %s", keyword)
+logger.critical("SSRF attempt detected: %s", url)
+logger.warning("Rate limit exceeded for %s: %s requests", client_id, count)
+```
+
+**Log Categories - Aspiration vs Reality:**
+```
+Security Event Type           Log Level    What We Actually Do
+────────────────────────────────────────────────────────────
+Authentication failure        WARNING      ❌ Logged but never reviewed
+SQL injection attempt         CRITICAL     ❌ No alerts configured
+SSRF attempt                  CRITICAL     ❌ No monitoring system
+Rate limit violation          WARNING      ❌ Logs disappear into void
+Access control failure        WARNING      ❌ Nobody watches these
+Invalid input pattern         WARNING      ❌ No trend analysis
+Suspicious price values       WARNING      ❌ No daily review process
+Database errors               ERROR        ⚠️  Maybe noticed eventually
+```
+
+**Honest Truth**: We log everything but monitor nothing. Logs are write-only - we've never actually reviewed them for security events.
+
+**Incident Response Procedures - What We Documented But Never Tested:**
+
+1. **Detection** (❌ Not Actually Implemented)
+   - "Automated log monitoring" - no automation exists
+   - GitHub Security Alerts - we check... sometimes
+   - Codecov coverage drops - reactive, not proactive
+   - SonarQube quality gate failures - only on CI/CD
+
+2. **Analysis** (⚠️ No Real Process)
+   - "Review security logs" - what logs? where?
+   - "Check recent commits" - manually, if we remember
+   - "Verify GPG signatures" - we don't have any
+   - "Analyze attack patterns" - no tools or training
+
+3. **Containment** (❓ Untested)
+   - Revoke compromised tokens - never practiced
+   - Block malicious IPs - no IP blocking implemented
+   - Disable compromised accounts - unclear who has authority
+   - Rollback to last known good state - hope Git works
+
+4. **Remediation** (⚠️ Ad-hoc)
+   - Patch vulnerabilities - when Dependabot tells us
+   - Update dependencies - merge the PR and hope
+   - Rotate secrets - never done proactively
+   - Deploy fixes - pray deployment succeeds
+
+5. **Post-Incident** (❌ Never Done)
+   - Document lessons learned - no template exists
+   - Update security procedures - what procedures?
+   - Enhance monitoring rules - what monitoring?
+   - Improve preventive controls - after the fact
+
+**Reality**: We have a nice incident response plan that's never been executed, tested, or validated. It's security theater.
+
+---
+
+## What We Should Do Next: Learning from Our Mistakes
+
+### Critical Fixes We Should Have Done First
+
+1. **Implement GPG Commit Signing** ❌ SHOULD HAVE BEEN DAY 1
+   - **Why we skipped it**: Seemed like extra work for unclear benefit
+   - **What it cost us**: Zero code provenance, impossible to verify authorship
+   - **Effort to fix now**: 2-4 hours per developer + policy enforcement
+   - **Lesson**: Foundational security can't be retrofitted easily
+
+2. **Fix Container Security Basics** ❌ EMBARRASSING OVERSIGHT
+   ```dockerfile
+   # What we should have written from the start:
+   FROM python:3.12-slim@sha256:<DIGEST>  # Immutable base
+   USER appuser  # Non-root user
+   ```
+   - **Why we got it wrong**: Copied Dockerfile from tutorial without review
+   - **What it cost us**: Running production code as root (!)
+   - **Effort to fix now**: 4 hours + testing + redeployment
+   - **Lesson**: Basic security principles matter more than advanced features
+
+3. **Actually Scan Our Container Images** ❌ SHIPPING BLIND
+   - **Why we skipped it**: Assumed Docker images from python.org were safe
+   - **What it cost us**: Unknown vulnerabilities in production
+   - **Effort to fix now**: 4 hours to integrate Trivy, then ongoing scans
+   - **Lesson**: Trust but verify - even official images have CVEs
+
+4. **Set Up Real Monitoring** ❌ LOGGING WITHOUT WATCHING
+   - **Why we skipped it**: Confused logging with monitoring
+   - **What it cost us**: Security events happening without our knowledge
+   - **Effort to fix now**: 16+ hours for proper SIEM setup
+   - **Lesson**: If nobody reads the logs, you don't have security monitoring
+
+### What We Could Improve with More Time
+
+5. **Actually Write Security Documentation** 📝 SHOULD EXIST
+   - **Current state**: No SECURITY.md, no contributor guidelines
+   - **Why we skipped it**: "We'll add it later" (narrator: they didn't)
+   - **Effort**: 2 hours to write, ongoing maintenance
+   - **Lesson**: Documentation is part of security, not separate from it
+
+6. **Stop Trusting Our Past Selves** 🔍 PROACTIVE DEFENSE
+   - **Current state**: No secret scanning, trusting we never committed credentials
+   - **Why we skipped it**: Confident we were careful (overconfident?)
+   - **Effort**: 4 hours to scan history + setup pre-commit hooks
+   - **Lesson**: Humans make mistakes - automation catches them
+
+7. **Actually Review Dependency Updates** 🤖 NOT JUST AUTO-MERGE
+   - **Current state**: Dependabot enabled, but do we review what it changes?
+   - **Why we're passive**: Trusting automated updates blindly
+   - **Effort**: 30 min per update to actually review changes
+   - **Lesson**: Automation assists judgment, doesn't replace it
+
+### Aspirational Improvements (Probably Won't Happen)
+
+8. **Generate SBOM** 📦 NICE-TO-HAVE
+   - **Current state**: No idea what's actually in our container
+   - **Reality**: This is advanced - we haven't mastered basics yet
+   - **Honest assessment**: Should fix critical issues first
+
+9. **SIEM Integration** 📊 OVER-ENGINEERING
+   - **Current state**: Can't even monitor basic logs effectively
+   - **Reality**: Need to walk before we run
+   - **Honest assessment**: Would be impressive but premature
+
+10. **Regular Security Audits** 🔐 ASPIRATIONAL
+    - **Current state**: No audit has ever been performed
+    - **Reality**: Need budget, time, and mature practices first
+    - **Honest assessment**: Let's survive production first
+
+---
+
+## SDLC Security: The Unvarnished Truth
+
+### Our Actual Security Posture (Honest Scoring)
+
+```
+Security Domain              Score    Reality Check
+──────────────────────────────────────────────────────────────────
+Code Integrity               3/10     ❌  No GPG, no verification, trust-based
+Secret Management           10/10     ✅  One thing we actually did right
+Dependency Security          6/10     ⚠️  Reactive not proactive, passive monitoring
+CI/CD Pipeline Security      7/10     ⚠️  Inconsistent (actions pinned, MySQL not)
+Container Security           2/10     ❌  Root user, unpinned base, no scanning
+Deployment Security          9/10     ✅  Django defaults saved us
+Monitoring & Logging         4/10     ❌  Log everything, monitor nothing
+──────────────────────────────────────────────────────────────────
+OVERALL SDLC SECURITY       41/70     ⚠️  59% (NEEDS WORK)
+```
+
+### What the Numbers Actually Mean
+
+**59% isn't "Good" - it's "Got Lucky"**
+
+- **What we did well**: Application-level security (A01, A03, A04), secret management
+- **What we failed**: Foundational security (signing, containers, monitoring)
+- **Why the gap**: Focused on impressive features over boring fundamentals
+- **Reality**: Strong runtime security on a foundation of sand
+
+### Realistic Improvement Plan
+
+**Don't aim for 95% - aim to fix critical issues first**
+
+- ~~Month 1: GPG signing~~ → **Reality**: Might never happen on this project
+- Month 1: Fix container security (achievable, high impact) → 45/70 (64%)
+- Month 2: Add container scanning (important, measurable) → 48/70 (69%)
+- Month 3: Document what we learned (most valuable output) → 50/70 (71%)
+
+**Honest Target: 70% within 3 months would be real progress**
+
+### Compliance: What We Can Actually Claim
+
+✅ **OWASP Top 10 2021**: A01, A03, A04 runtime controls strong (our main achievement)
+⚠️ **OSSF Scorecard**: 6/8 (not 8/10 - being honest about Signed Releases and Security Policy)
+⚠️ **CWE Top 25**: Addressed at application layer, not infrastructure layer
+⚠️ **GitHub Security**: Features enabled but not fully utilized
+❌ **Container Security**: Failed basics - running as root, unpinned base image
+❌ **Supply Chain**: Maybe 60% secure when honestly assessed (GPG, scanning, verification all missing)
+
+---
+
+## Conclusion: What We Learned About Security
+
+### The Uncomfortable Truth
+
+The Gemilang module shows what happens when you prioritize runtime security while neglecting foundational SDLC practices:
+
+**What We Did Well:**
+1. **Runtime Security (A01, A03, A04)**: 100% compliant with 291 passing tests - genuinely strong
+2. **Testing Culture**: 98% code coverage gave us confidence in our security controls
+3. **Secret Management**: Never hardcoded credentials - followed best practices consistently
+4. **Input Validation**: Defense-in-depth approach blocked 190/190 simulated attacks
+
+**What We Failed:**
+1. **Code Provenance**: Zero commit signing - can't prove who wrote anything
+2. **Container Security**: Running as root, unpinned base image - basic mistakes
+3. **Supply Chain**: Passive dependency management - relying on automation without understanding
+4. **Monitoring**: Comprehensive logging without actual monitoring - security theater
+
+### The Real Lessons
+
+**Lesson 1: Perfect Runtime Security on Insecure Foundation**
+- We built impressive input validation and access controls
+- But shipped it in a container running as root
+- Like installing a high-security door on a cardboard house
+
+**Lesson 2: Knowing vs. Doing**
+- We knew about GPG signing, container security, and supply chain risks
+- We documented them in our action plan
+- We didn't implement them because they weren't "urgent"
+- Security debt compounds faster than technical debt
+
+**Lesson 3: Automation Isn't Security**
+- We enabled Dependabot, OSSF Scorecard, SonarQube
+- We rarely reviewed what these tools were telling us
+- We confused "having security tools" with "being secure"
+- Tools provide data; humans provide judgment
+
+**Lesson 4: Documentation Doesn't Equal Implementation**
+- We wrote detailed incident response procedures
+- We never tested them, never ran a drill
+- We created a false sense of preparedness
+- Untested procedures are wishes, not plans
+
+### What We'd Do Differently
+
+**If Starting Over:**
+1. Enable GPG commit signing during repository initialization
+2. Use hardened Dockerfile templates from the start
+3. Integrate container scanning in first CI/CD pipeline
+4. Set up real monitoring before writing comprehensive logging
+5. Document security decisions as we make them, not retrospectively
+
+**For Future Projects:**
+- Security isn't just preventing attacks - it's proving your code is trustworthy
+- Basics (non-root containers, signed commits) matter more than advanced features
+- "We'll secure it later" means "We probably won't secure it"
+- Testing security controls is as important as implementing them
+
+### Final Reflection
+
+We achieved 59% SDLC security while believing we had 84%. The gap between perception and reality is where vulnerabilities live.
+
+Our runtime security (OWASP A01, A03, A04) is genuinely strong - 291 tests don't lie. But runtime security is only one layer. We secured the application while leaving the foundation vulnerable.
+
+This is a university project, not production software. We can afford to be honest about our failures because learning from mistakes is more valuable than pretending we didn't make them.
+
+**The most important security control we can implement now is intellectual honesty about what we built and what we missed.**
+
