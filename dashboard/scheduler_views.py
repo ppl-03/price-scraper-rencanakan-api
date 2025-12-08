@@ -105,7 +105,8 @@ def run_scraping_task(vendors, keyword):
             summary = scheduler.run(
                 server_time=timezone.now(),
                 vendors=[vendor_key],
-                search_keyword=keyword
+                search_keyword=keyword,
+                use_price_update=True
             )
             print("Summary:",summary)
             
